@@ -18,6 +18,23 @@ function setup(props: Partial<Parameters<typeof Composer>[0]> = {}) {
 const type = (textarea: HTMLTextAreaElement, value: string) =>
   fireEvent.change(textarea, { target: { value } })
 
+describe('화살표 소유권', () => {
+  // ⌘↑ 는 셸 드로어 것이다. preventDefault 는 전파를 막지 않으므로, 입력창이 수식키를
+  // 안 보면 **드로어가 열리면서 쓰던 글까지 이전 프롬프트로 바뀐다.**
+  it('⌘↑ 는 히스토리를 건드리지 않는다', () => {
+    const { textarea } = setup({ history: ['이전 프롬프트'] })
+    type(textarea, '쓰던 글')
+    fireEvent.keyDown(textarea, { key: 'ArrowUp', metaKey: true })
+    expect(textarea.value).toBe('쓰던 글')
+  })
+
+  it('맨 ↑ 는 그대로 히스토리로 간다', () => {
+    const { textarea } = setup({ history: ['이전 프롬프트'] })
+    fireEvent.keyDown(textarea, { key: 'ArrowUp' })
+    expect(textarea.value).toBe('이전 프롬프트')
+  })
+})
+
 describe('기본 형태', () => {
   it('기존 .composer 클래스를 그대로 쓴다', () => {
     const { container } = setup()

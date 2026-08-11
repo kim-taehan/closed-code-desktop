@@ -20,6 +20,15 @@ export interface ShortcutHandlers {
   /** ⌘/Ctrl + Alt + → / ← — 프로젝트 탭 전환 (크롬 macOS 탭 전환 조합) */
   onNextProject: () => void
   onPrevProject: () => void
+  /**
+   * ⌘/Ctrl + ↓ / ↑ — 하단 셸 칸을 펴고 접는다.
+   *
+   * 입력창의 히스토리 되짚기(맨 ↑/↓)와 **같은 키를 노린다.** 임자는 `composerArrowKeys.ts`
+   * 가 가른다 — 입력창이 수식키를 안 보면 ⌘↑ 한 번에 드로어가 열리면서 쓰던 글까지
+   * 이전 프롬프트로 바뀐다 (preventDefault 는 전파를 막지 않는다).
+   */
+  onShellDown: () => void
+  onShellUp: () => void
   /** Esc — 응답 중단. 중단 버튼(TurnControls)이 이미 "응답 중단 (Esc)" 로 광고하는 그 키다. */
   onCancelTurn: () => void
   /** ⌘/Ctrl+Enter — 활성 턴 리뷰 전체 적용 */
@@ -73,6 +82,14 @@ export function useShortcuts(
       if ((key === 'arrowleft' || key === 'arrowright') && event.altKey) {
         event.preventDefault()
         ;(key === 'arrowright' ? handlers.onNextProject : handlers.onPrevProject)()
+        return
+      }
+      // 셸 칸. macOS 에서 ⌘↑/⌘↓ 는 텍스트 영역의 "문서 처음/끝으로" 기본 동작이기도 한데
+      // preventDefault 로 그쪽을 취소한다 (버블 단계도 디스패치 중이다).
+      // Alt 를 요구하지 않는다 — 프로젝트 전환(←·→)과 축이 달라 부딪히지 않는다.
+      if ((key === 'arrowdown' || key === 'arrowup') && !event.altKey) {
+        event.preventDefault()
+        ;(key === 'arrowdown' ? handlers.onShellDown : handlers.onShellUp)()
         return
       }
       if (key === 'w' && !event.shiftKey) {

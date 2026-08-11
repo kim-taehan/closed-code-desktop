@@ -23,6 +23,8 @@ import { useToasts } from './state/useToasts'
 import { useDevPhrase } from './state/devMode'
 import { useNotifications } from './state/useNotifications'
 import { useSidebarWidth } from './state/useSidebarWidth'
+import { useShellDrawer } from './state/useShellDrawer'
+import { ShellDrawer } from './components/ShellDrawer'
 import { SidebarResizer } from './components/SidebarResizer'
 import { useFavoriteWithToast } from './state/useGitActions'
 import { useAppGit } from './state/useAppGit'
@@ -55,6 +57,8 @@ export function App() {
   const tree = useFileTree(projects.activeId)
   const toasts = useToasts()
   const sidebar = useSidebarWidth()
+  // 하단 셸 칸 (⌘↓/⌘↑). 앱 전체가 하나를 나눠 쓴다 — 프로젝트마다 다르면 본문 높이가 튄다
+  const shell = useShellDrawer()
   const appSettings = useAppSettings()
   const devPhrase = useDevPhrase(appSettings) // 개발자 모드 이스터에그 (스펙 11_spec_devmode)
   // 작업 완료 알림 설정을 그대로 쓴다 — 같은 성격(내 작업 결과)이라 토글을 새로 만들지 않는다
@@ -136,6 +140,8 @@ export function App() {
       onPrevTab: () => nav.prev(),
       onNextProject: projectNav.next,
       onPrevProject: projectNav.prev,
+      onShellDown: shell.goDown,
+      onShellUp: shell.goUp,
       onCancelTurn: () => void window.davis.cancelChat(),
       onAcceptReview: () => {
         if (reviewTarget) sendReviewDecision(reviewTarget.review.turnId, 'accept')
@@ -232,6 +238,9 @@ export function App() {
         slice={sessions.active}
         scrollRef={scrollRef}
       />
+
+      {/* 본문과 입력창 사이. 한 번도 편 적 없으면 아예 안 그린다 (`everOpened`) */}
+      <ShellDrawer projectId={projects.activeId} drawer={shell} theme={theme.choice} />
 
       <AppDialogs
         palette={palette}

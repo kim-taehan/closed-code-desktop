@@ -79,6 +79,25 @@ export const Channel = {
   PROJECT_SEARCH: 'project:search',
   /** renderer → main: `!명령` 로컬 실행 */
   SHELL_RUN: 'shell:run',
+  /**
+   * 하단 셸 드로어 (⌘↓ 열기 / ⌘↑ 접기).
+   *
+   * 셸은 **opencode 서버가 굴린다** (`/api/pty`) — 앱은 바이트를 나르기만 한다.
+   * 그래서 `SHELL_RUN`(`!명령` 한 번 실행)과 성격이 다르다: 저쪽은 결과를 대화에 남기고,
+   * 이쪽은 살아 있는 셸에 붙는다.
+   *
+   * 렌더러가 WS 를 직접 열지 않는 이유는 `electron/pty/drawerBridge.ts` 머리말 (CSP).
+   * projectId 를 renderer 가 보내지 않는다 — main 이 활성 프로젝트로 푼다.
+   */
+  PTY_OPEN: 'pty:open',
+  PTY_INPUT: 'pty:input',
+  PTY_RESIZE: 'pty:resize',
+  /** 드로어를 접는다. **셸은 죽이지 않는다** — 다시 펴면 스크롤백째 돌아온다 */
+  PTY_DETACH: 'pty:detach',
+  /** main → renderer: 터미널 바이트 (겉봉 있음 — 프로젝트를 옮기면 남의 출력이 섞이면 안 된다) */
+  PTY_DATA: 'pty:data',
+  /** main → renderer: 셸이 끝났다. 종료 코드는 프레임에 없어 main 이 다시 물어 온다 */
+  PTY_EXIT: 'pty:exit',
   /** renderer → main: 대화에 붙일 것을 고른다 (이미지·파일 구분 없이) */
   ATTACH_PICK: 'attach:pick',
   ATTACH_RESOLVE: 'attach:resolve', // 드래그드롭 경로 판별 (다이얼로그 없이)

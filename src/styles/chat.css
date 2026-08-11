@@ -4773,3 +4773,93 @@ body {
   margin: 0;
   color: var(--dc-text);
 }
+
+/* ── 하단 셸 드로어 (⌘↓ 열기 / ⌘↑ 접기) ───────────────────────────────
+   본문과 입력창 사이에 끼어 앉는다. 접어도 **언마운트하지 않고 숨기기만** 한다 —
+   내리면 xterm 이 사라져 그리던 화면이 통째로 날아간다 (ShellDrawer.tsx 머리말).
+   높이는 인라인 스타일로 온다 (드래그로 재는 값이라 CSS 가 정하지 않는다). */
+.drawer {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: none;
+  border-top: 1px solid var(--dc-border);
+  background: var(--dc-bg);
+}
+
+.drawer--off {
+  display: none;
+}
+
+/* 사이드바 손잡이와 같은 규칙 — 띠는 얇게, 잡는 영역은 넓게 */
+.drawer__grip {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -4px;
+  height: 9px;
+  z-index: 5;
+  cursor: row-resize;
+}
+
+.drawer__grip::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 4px;
+  height: 1px;
+  background: transparent;
+  transition: background 120ms ease;
+}
+
+.drawer__grip:hover::after,
+.drawer__grip--on::after {
+  background: var(--dc-accent);
+}
+
+.drawer__bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 10px;
+  font-size: 12px;
+  color: var(--dc-text-muted);
+  background: var(--dc-surface);
+}
+
+.drawer__title {
+  font-weight: 600;
+}
+
+/* 힌트는 남는 자리를 밀어 닫기 버튼을 오른쪽 끝으로 보낸다 */
+.drawer__hint {
+  flex: 1;
+}
+
+.drawer__close {
+  border: none;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 2px 6px;
+}
+
+.drawer__close:hover {
+  color: var(--dc-text);
+}
+
+/* xterm 은 부모 크기를 재서 칸 수를 정한다 — min-height:0 이 없으면 flex 안에서
+   내용만큼 늘어나 FitAddon 이 계속 커지는 값을 잰다. */
+.drawer__body {
+  flex: 1;
+  min-height: 0;
+  padding: 4px 8px;
+}
+
+.drawer__term {
+  height: 100%;
+}

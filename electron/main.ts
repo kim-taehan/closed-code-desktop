@@ -19,6 +19,7 @@ import { startExtensionHost } from './extensions/appHost'
 import type { ExtensionAskText } from './extensions/serviceDispatch'
 import { ExtensionViewHost, VIEW_SCHEME } from './extensions/viewHost'
 import { DesktopMcp } from './mcp/desktopMcp'
+import { PtyDrawerBridge } from './pty/drawerBridge'
 import { toActiveFile } from './ipc/extensionActiveFile'
 import { logStore } from './logs/logStore'
 
@@ -37,6 +38,8 @@ const DEV_SERVER_URL = process.env['DAVIS_DEV_SERVER_URL']
 let bridge: SessionBridge | null = null
 let projects: ProjectBridge | null = null
 let logs: LogBridge | null = null
+/** 하단 셸 드로어. 창에 매인다 (webContents.send) */
+let drawer: PtyDrawerBridge | null = null
 let git: GitBridge | null = null
 let extensions: ExtensionService | null = null
 /** 확장이 앱에 닿는 포트들. `cancel` 을 확장 브리지도 써서 서비스 밖에 둔다 */
@@ -125,7 +128,11 @@ async function createWindow(): Promise<void> {
     registry,
     {
       onActivate: (project) => void bridge?.activate(project),
-      onClose: (id) => void bridge?.closeProject(id),
+      // 탭을 닫으면 그 프로젝트의 셸도 거둔다 — 안 그러면 서버에 죽은 셸이 쌓인다
+      onClose: (id) => {
+        void bridge?.closeProject(id)
+        void drawer?.closeProject(id)
+      },
       onReconnect: (project) => bridge?.reconnect(project) ?? Promise.resolve(),
       onRestartRuntime: (open) => bridge?.restartRuntime(open) ?? Promise.resolve(),
       onRuntimeConfigChange: (runtime, open) =>
@@ -134,6 +141,18 @@ async function createWindow(): Promise<void> {
     settings,
   )
   projects.register()
+
+  // 셸 드로어(⌘↓/⌘↑). 셸은 opencode 서버가 굴리므로 여기는 배선뿐이다.
+  drawer = new PtyDrawerBridge({
+    window,
+    // 드로어는 **앞에 나와 있는 프로젝트의 것**이다 (`drawerBridge.ts` 머리말)
+    activeProject: () => {
+      const active = registry.active
+      return active === null ? null : { id: active.id, root: active.root }
+    },
+    opencodeUrl: async () => (await settings.load()).opencodeUrl,
+  })
+  drawer.register()
 
   logs = new LogBridge()
   logs.register()
@@ -249,6 +268,9 @@ app.on('window-all-closed', () => {
   projects = null
   logs?.dispose()
   logs = null
+  // 창이 사라지면 드로어도 없다. 서버 쪽 pty 는 그대로 둔다 — 창을 다시 만들면 되찾는다.
+  void drawer?.dispose()
+  drawer = null
   git?.dispose()
   git = null
   // 창이 다시 만들어지면 register() 가 다시 불린다 — 안 풀면 두 번째 등록에서 던진다

@@ -77,6 +77,7 @@ describe('IPC 배선', () => {
     const { LogBridge } = await import('./logBridge')
     const { GitBridge } = await import('./gitBridge')
     const { ExtensionBridge } = await import('./extensionBridge')
+    const { PtyDrawerBridge } = await import('../pty/drawerBridge')
     const { ProjectRegistry } = await import('../projects/projectRegistry')
     const { ProjectStore } = await import('../projects/projectStore')
     const { SettingsStore } = await import('../settings/settingsStore')
@@ -124,11 +125,19 @@ describe('IPC 배선', () => {
       settings,
     })
 
+    // 셸 드로어. 서버에 닿지 않는다 — 이 시험이 보는 것은 채널 등록/해제뿐이다.
+    const drawer = new PtyDrawerBridge({
+      window,
+      activeProject: () => null,
+      opencodeUrl: () => Promise.resolve('http://127.0.0.1:4096'),
+    })
+
     session.register()
     projects.register()
     logs.register()
     git.register()
     extensions.register()
+    drawer.register()
 
     return {
       dispose: async () => {
@@ -137,6 +146,7 @@ describe('IPC 배선', () => {
         logs.dispose()
         git.dispose()
         extensions.dispose()
+        await drawer.dispose()
       },
     }
   }

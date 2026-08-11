@@ -26,6 +26,8 @@ function makeHandlers(): ShortcutHandlers &
     onPrevTab: vi.fn(),
     onNextProject: vi.fn(),
     onPrevProject: vi.fn(),
+    onShellDown: vi.fn(),
+    onShellUp: vi.fn(),
     onCancelTurn: vi.fn(),
     onAcceptReview: vi.fn(),
   }

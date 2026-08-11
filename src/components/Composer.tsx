@@ -3,6 +3,7 @@ import { MODE_HINT, detectComposerMode } from '../state/composerMode'
 import { mentionAtCaret, replaceMention } from '../state/atMentions'
 import { openArgAtCaret, replaceSlashContext, slashContextAtCaret } from '../state/composerMode'
 import { findSlashCommand, type SlashChoice } from '../state/slashCommands'
+import { wantsHistoryNav } from '../state/composerArrowKeys'
 import { categoryInsertText } from '../state/slashNamespace'
 import { useAutoGrow, useDoubleEscape } from './composerHooks'
 import { MentionPopup } from './MentionPopup'
@@ -197,15 +198,9 @@ export function Composer({
   }
 
   function onKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>) {
-    // 자동완성 팝업이 떠 있으면 화살표는 팝업이 먹는다 (window capture 리스너)
-    if (
-      (event.key === 'ArrowUp' || event.key === 'ArrowDown') &&
-      mention === null &&
-      slash === null &&
-      openArg === null
-    ) {
-      if (navigateHistory(event)) return
-    }
+    // 이 화살표가 누구 것인지는 `composerArrowKeys` 가 정한다 — 자동완성 팝업(window capture
+    // 리스너)과 셸 드로어(⌘↑/⌘↓)가 같은 키를 노리고, 그 판정이 한 곳에 있어야 한다.
+    if (wantsHistoryNav(event, { mention, slash, openArg }) && navigateHistory(event)) return
 
     if (event.key === 'Escape') {
       // 빈 입력창을 지울 건 없다 — 카운트만 이어간다

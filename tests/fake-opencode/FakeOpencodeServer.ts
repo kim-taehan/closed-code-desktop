@@ -1,4 +1,5 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
+import { FakePtyStore } from './fakePty'
 import { turnScript } from './turnScript'
 
 // 가짜 opencode 헤드리스 서버. davis 시절 `tests/fake-runtime` 이 하던 자리를 대신한다.
@@ -35,6 +36,8 @@ export class FakeOpencodeServer {
 
   /** 받은 요청 기록 — 테스트가 "무엇을 보냈나"를 확인한다 */
   readonly calls: Array<{ method: string; url: string; body: unknown }> = []
+  /** 셸 드로어가 쓰는 `/api/pty` (`fakePty.ts`). 격리는 디렉토리로 갈린다 — 실물과 같다. */
+  readonly pty = new FakePtyStore()
 
   constructor(private readonly options: FakeOpencodeOptions = {}) {}
 
@@ -73,6 +76,8 @@ export class FakeOpencodeServer {
 
     const body = await readJson(request)
     this.calls.push({ method: request.method ?? 'GET', url, body })
+
+    if (this.pty.matches(url)) return this.pty.handle(request, url, body, response)
 
     if (request.method === 'POST' && url === '/api/session') return this.createSession(body, response)
 

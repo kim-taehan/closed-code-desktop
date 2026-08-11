@@ -1,0 +1,131 @@
+import WebSocket from 'ws'
+
+// pty 하나에 붙는 WebSocket. **원시 바이트를 그대로 나른다.**
+//
+// ⚠️ 실측(1.17.18)으로 알아낸 것 셋. 문서를 믿고 짜면 전부 밟는다.
+//
+// 1. **JSON 봉투가 아니다.** 처음에 `{type:'input',data:…}` 로 보냈더니 그 JSON 문자열이
+//    셸에 **그대로 타이핑됐다.** 보낼 것은 사용자가 누른 키 바이트뿐이다.
+// 2. **제어 프레임은 바이너리이고 첫 바이트가 0x00 이다** (`\x00{"cursor":0}`).
+//    터미널 바이트는 전부 텍스트 프레임으로 온다. 이 둘을 안 가르면 화면 맨 앞에
+//    `{"cursor":0}` 이 찍힌다.
+// 3. **프로세스 종료는 제어 프레임이 아니라 WS close(1000)** 다. `exit 7` 을 치면
+//    close code 는 그냥 1000 이고 종료 코드는 `GET /api/pty/{id}` 의 `exitCode` 에 있다.
+//
+// **자동 재연결을 하지 않는다.** close 의 가장 흔한 원인이 "셸이 끝났다" 이고, 그때 다시
+// 붙어 봐야 404 이거나 이미 죽은 pty 에 붙는다. 다시 열지 말지는 수명을 쥔
+// `drawerBridge.ts` 가 pty 상태를 확인하고 정한다 — 여기서 혼자 되붙으면 종료가 화면에
+// 안 보이는 채로 조용히 재시도만 돈다.
+
+export interface PtySocketOptions {
+  url: string
+  /** HTTP 와 **같은 헤더**를 실어야 한다 (`opencodeAuthHeaders`). 없으면 401 로 끊긴다. */
+  headers?: Record<string, string>
+  /** 테스트가 가짜 소켓을 끼우는 자리 */
+  create?: (url: string, headers: Record<string, string>) => PtyLikeSocket
+}
+
+/** `ws` 중 우리가 쓰는 만큼만. 가짜를 만들기 쉬우라고 좁혀 뒀다 (ISP). */
+export interface PtyLikeSocket {
+  on(event: 'open', handler: () => void): void
+  on(event: 'message', handler: (data: unknown, isBinary: boolean) => void): void
+  on(event: 'close', handler: (code: number, reason: Buffer) => void): void
+  on(event: 'error', handler: (error: Error) => void): void
+  send(data: string): void
+  close(): void
+  terminate(): void
+}
+
+export interface PtyCloseInfo {
+  code: number
+  reason: string
+}
+
+export class PtySocket {
+  private socket: PtyLikeSocket | null = null
+  private closedByUs = false
+
+  private dataHandler: (chunk: string) => void = () => {}
+  private controlHandler: (payload: unknown) => void = () => {}
+  private closeHandler: (info: PtyCloseInfo) => void = () => {}
+  private errorHandler: (error: Error) => void = () => {}
+
+  constructor(private readonly options: PtySocketOptions) {}
+
+  onData(handler: (chunk: string) => void): void {
+    this.dataHandler = handler
+  }
+  /** 0x00 을 앞세운 제어 프레임. 지금 오는 것은 `{cursor}` 하나다. */
+  onControl(handler: (payload: unknown) => void): void {
+    this.controlHandler = handler
+  }
+  onClose(handler: (info: PtyCloseInfo) => void): void {
+    this.closeHandler = handler
+  }
+  onError(handler: (error: Error) => void): void {
+    this.errorHandler = handler
+  }
+
+  open(): void {
+    if (this.socket !== null) return
+    this.closedByUs = false
+    const headers = this.options.headers ?? {}
+    const socket = this.options.create
+      ? this.options.create(this.options.url, headers)
+      : (new WebSocket(this.options.url, { headers }) as unknown as PtyLikeSocket)
+    this.socket = socket
+
+    socket.on('message', (data, isBinary) => this.onMessage(data, isBinary))
+    socket.on('error', (error) => this.errorHandler(error))
+    socket.on('close', (code, reason) => {
+      this.socket = null
+      // 우리가 접은 것(드로어 닫기)은 화면에 "셸이 끝났다" 로 보이면 안 된다
+      if (this.closedByUs) return
+      this.closeHandler({ code, reason: String(reason ?? '') })
+    })
+  }
+
+  /** 사용자가 누른 키를 그대로 보낸다. 아직 안 열렸으면 버린다 — 큐를 만들면 순서가 꼬인다. */
+  write(data: string): boolean {
+    if (this.socket === null) return false
+    this.socket.send(data)
+    return true
+  }
+
+  /** 드로어를 접을 때. **pty 는 죽이지 않는다** — 다시 펴면 스크롤백째 돌아와야 한다. */
+  close(): void {
+    const socket = this.socket
+    this.socket = null
+    if (socket === null) return
+    this.closedByUs = true
+    socket.close()
+  }
+
+  private onMessage(data: unknown, isBinary: boolean): void {
+    // 바이너리 = 제어 프레임. 첫 바이트 0x00 을 떼고 나머지를 JSON 으로 읽는다.
+    if (isBinary) {
+      const bytes = toBuffer(data)
+      if (bytes === null || bytes[0] !== 0x00) return
+      try {
+        this.controlHandler(JSON.parse(bytes.subarray(1).toString('utf8')))
+      } catch {
+        // 모르는 제어 프레임은 버린다. 터미널 바이트로 흘리면 화면에 쓰레기가 찍힌다.
+      }
+      return
+    }
+    this.dataHandler(toText(data))
+  }
+}
+
+function toBuffer(data: unknown): Buffer | null {
+  if (Buffer.isBuffer(data)) return data
+  if (data instanceof ArrayBuffer) return Buffer.from(data)
+  if (Array.isArray(data)) return Buffer.concat(data as Buffer[])
+  return null
+}
+
+/** `ws` 는 텍스트도 Buffer 로 줄 수 있다 (`binaryType` 기본값). 둘 다 받는다. */
+function toText(data: unknown): string {
+  const buffer = toBuffer(data)
+  return buffer === null ? String(data) : buffer.toString('utf8')
+}

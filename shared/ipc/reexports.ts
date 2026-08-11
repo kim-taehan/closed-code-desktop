@@ -33,6 +33,8 @@ export type {
   ProjectStatePayload,
 }
 export type * from './diagnosticsTypes'
+// 셸 드로어 (⌘↓/⌘↑) — opencode `/api/pty` 를 나르는 값들
+export type * from './ptyPayloads'
 
 // 소스 관리·확장 — 채널 상수와 함께 늘어나는 쪽이라 여기로 옮겨 뒀다
 export type {
