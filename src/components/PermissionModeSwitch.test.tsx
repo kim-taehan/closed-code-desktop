@@ -92,12 +92,25 @@ describe('메뉴', () => {
 })
 
 describe('전환', () => {
+  /** 입력창 안에서 누른 것처럼 — 실제 화면에서 이 스위치는 `.composer` 안에 산다 */
+  function pressInComposer(init: KeyboardEventInit): boolean {
+    const box = document.createElement('div')
+    box.className = 'composer'
+    const area = document.createElement('textarea')
+    box.appendChild(area)
+    document.body.appendChild(box)
 
-  it('Shift+Tab 으로도 전환된다', () => {
+    const event = new KeyboardEvent('keydown', { cancelable: true, bubbles: true, ...init })
+    area.dispatchEvent(event)
+    box.remove()
+    return event.defaultPrevented
+  }
+
+  it('입력창에서 Shift+Tab 을 누르면 전환된다', () => {
     const onChange = vi.fn()
     render(<PermissionModeSwitch mode={PermissionMode.PLAN} onChange={onChange} />)
 
-    fireEvent.keyDown(window, { key: 'Tab', shiftKey: true })
+    expect(pressInComposer({ key: 'Tab', shiftKey: true })).toBe(true)
     expect(onChange).toHaveBeenCalledWith(PermissionMode.DEFAULT)
   })
 
@@ -105,8 +118,40 @@ describe('전환', () => {
     const onChange = vi.fn()
     render(<PermissionModeSwitch mode={PermissionMode.DEFAULT} onChange={onChange} />)
 
-    fireEvent.keyDown(window, { key: 'Tab' })
+    expect(pressInComposer({ key: 'Tab' })).toBe(false)
     expect(onChange).not.toHaveBeenCalled()
+  })
+
+  // **이 케이스가 G1 의 본체다.** 예전에는 창 어디서 눌러도 가로채고 preventDefault 해서
+  // 앱 전체에서 ⇧Tab 역방향 포커스 이동이 죽어 있었다 — 세션이 붙어 있는 동안 내내.
+  it('입력창 밖의 Shift+Tab 은 그대로 둔다 — 역방향 포커스 이동이 살아야 한다', () => {
+    const onChange = vi.fn()
+    render(<PermissionModeSwitch mode={PermissionMode.DEFAULT} onChange={onChange} />)
+
+    const event = new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, cancelable: true })
+    window.dispatchEvent(event)
+
+    expect(onChange).not.toHaveBeenCalled()
+    expect(event.defaultPrevented).toBe(false)
+  })
+
+  // 드로어의 포커스도 숨은 textarea 다 — 태그로 갈랐으면 여기서 새어 셸에 Tab 이 못 간다
+  it('셸 드로어 안의 Shift+Tab 도 그대로 둔다', () => {
+    const onChange = vi.fn()
+    render(<PermissionModeSwitch mode={PermissionMode.DEFAULT} onChange={onChange} />)
+
+    const term = document.createElement('div')
+    term.className = 'xterm'
+    const hidden = document.createElement('textarea')
+    term.appendChild(hidden)
+    document.body.appendChild(term)
+
+    const event = new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, cancelable: true, bubbles: true })
+    hidden.dispatchEvent(event)
+    term.remove()
+
+    expect(onChange).not.toHaveBeenCalled()
+    expect(event.defaultPrevented).toBe(false)
   })
 
   it('비활성이면 클릭도 단축키도 안 먹는다', () => {
@@ -114,7 +159,7 @@ describe('전환', () => {
     render(<PermissionModeSwitch mode={PermissionMode.DEFAULT} onChange={onChange} disabled />)
 
     fireEvent.click(screen.getByRole('button'))
-    fireEvent.keyDown(window, { key: 'Tab', shiftKey: true })
+    pressInComposer({ key: 'Tab', shiftKey: true })
 
     expect(onChange).not.toHaveBeenCalled()
     // 비활성이면 메뉴도 열리지 않는다
