@@ -80,8 +80,11 @@ describe('PtyClient', () => {
   })
 
   // 실측: `rows`·`cols` 는 `exclusiveMinimum: 0` 이라 0 이면 HTTP 400 이다.
-  // **접힌 드로어에서 addon-fit 이 0 을 내놓으므로 정상 흐름에서 밟는다** — 그때 400 이
-  // 나면 로그만 더럽고 할 수 있는 일이 없다. 보낼 것이 없으니 안 보내는 것이 맞다.
+  //
+  // **지금의 유일한 호출자(addon-fit)로는 여기 안 걸린다** — 그쪽이 스스로 클램프한다
+  // (근거는 `isSendableSize` 주석). 이 그물이 지키는 것은 **다음 호출자**다:
+  // `drawerBridge` 가 resize 실패를 `.catch(() => {})` 로 삼키므로, 가드가 사라지면
+  // 400 이 아무 흔적 없이 없어진다. 그래서 "안 보낸다" 를 단언한다.
   it('0 이하 크기는 아예 보내지 않는다', async () => {
     const fetchImpl = fake({ data: pty })
     const client = new PtyClient({ baseUrl: 'http://127.0.0.1:4096', fetchImpl })

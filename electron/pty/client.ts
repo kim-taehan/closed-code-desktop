@@ -138,10 +138,12 @@ export class PtyClient {
   /**
    * 크기 변경. WS 로 보내는 길은 없다 (머리말 3번).
    *
-   * ⚠️ **0 이하는 아예 보내지 않는다.** 스키마의 `rows`·`cols` 가 둘 다 필수이고
-   * `exclusiveMinimum: 0` 이라 0 이면 **HTTP 400** 이다 (실측). 드로어를 접으면
-   * `display:none` 이 되어 addon-fit 이 0 에 가까운 값을 내놓으므로, 정상 흐름에서 밟는다.
-   * 보낼 것이 없으니 조용히 돌아가는 것이 맞다 — 여기서 던지면 접을 때마다 오류가 뜬다.
+   * ⚠️ **못 보낼 크기는 아예 안 보낸다** — 판단과 그 근거는 전부 `isSendableSize` 에 있다.
+   * 여기서 다시 적지 않는다: 같은 사실을 두 벌로 적었다가 한쪽만 갱신돼 **한 파일 안의 두
+   * 주석이 정반대를 말하는** 상태를 실제로 만들었다 (contract-qa 가 잡았다).
+   *
+   * 던지지 않고 조용히 돌아간다 — 보낼 것이 없을 뿐 실패가 아니다. 여기서 던지면
+   * 드로어를 접을 때마다 오류가 뜬다.
    */
   async resize(directory: string, ptyId: string, size: { rows: number; cols: number }): Promise<void> {
     if (!isSendableSize(size)) return
