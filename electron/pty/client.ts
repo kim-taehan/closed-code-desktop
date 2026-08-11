@@ -18,6 +18,14 @@ import { opencodeAuthHeaders } from '../opencode/client'
 //    `args:["-l"]` 을 주면 `["-l","-l"]` 이 된다. 안 주면 `["-l"]` 이다.
 // 3. **크기 변경은 WS 가 아니라 `PUT /api/pty/{id}`** 의 `{size:{rows,cols}}` 다.
 
+/**
+ * 서버가 받아 주는 크기인가. `PUT` 스키마가 `exclusiveMinimum: 0` 이라 **0 이면 400** 이다.
+ * 접힌 드로어에서 addon-fit 이 0 을 내놓으므로 정상 흐름에서 밟는 자리다.
+ */
+export function isSendableSize(size: { rows: number; cols: number }): boolean {
+  return Number.isInteger(size.rows) && Number.isInteger(size.cols) && size.rows > 0 && size.cols > 0
+}
+
 /** `GET /api/pty` 등이 돌려주는 pty 하나 (opencode 스키마 `Pty`) */
 export interface PtySession {
   id: string
@@ -117,8 +125,16 @@ export class PtyClient {
     }
   }
 
-  /** 크기 변경. WS 로 보내는 길은 없다 (머리말 3번). */
+  /**
+   * 크기 변경. WS 로 보내는 길은 없다 (머리말 3번).
+   *
+   * ⚠️ **0 이하는 아예 보내지 않는다.** 스키마의 `rows`·`cols` 가 둘 다 필수이고
+   * `exclusiveMinimum: 0` 이라 0 이면 **HTTP 400** 이다 (실측). 드로어를 접으면
+   * `display:none` 이 되어 addon-fit 이 0 에 가까운 값을 내놓으므로, 정상 흐름에서 밟는다.
+   * 보낼 것이 없으니 조용히 돌아가는 것이 맞다 — 여기서 던지면 접을 때마다 오류가 뜬다.
+   */
   async resize(directory: string, ptyId: string, size: { rows: number; cols: number }): Promise<void> {
+    if (!isSendableSize(size)) return
     await this.call('PUT', `/api/pty/${ptyId}?${this.query(directory)}`, { size })
   }
 

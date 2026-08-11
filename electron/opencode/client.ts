@@ -226,6 +226,17 @@ export class OpencodeClient {
    * `/api` 판이 아예 없어 선택지가 없다. 레거시 표면이라 `{data:...}` 래핑도 없다 —
    * 응답은 `{"<이름>":{"status":"connected"}}` 그대로다 (실측).
    *
+   * ⚠️⚠️ **질의 이름이 평문 `directory=` 다.** 옆의 pty 표면은 `location[directory]=` 이고
+   * **둘은 서로 바꿔 쓸 수 없는데 잘못 써도 HTTP 200 이 난다** (contract-qa 실측):
+   *
+   *   POST /mcp?location[directory]=<A>  → 200 `{"...":{"status":"connected"}}`  ← 성공처럼 보인다
+   *   그런데 GET /mcp?directory=<A>      → 없음. 서버 cwd 쪽에 등록돼 있다.
+   *
+   * 증상은 "로그에 connected 가 찍히는데 세션에 도구가 안 뜬다" 뿐이다. 그래서
+   * `register.test.ts` 는 응답이 아니라 **요청 URL 문자열 자체**를 단언한다. 같은 이유로
+   * `electron/pty/client.ts` 와 URL 조립 헬퍼를 **공유하지 않는다** — 한쪽 규칙이 다른 쪽으로
+   * 새면 두 표면이 조용히 같이 틀어진다.
+   *
    * `directory` 를 빼면 서버가 `process.cwd()` 로 떨어져 **엉뚱한 프로젝트에 등록된다.**
    * 실측: `GET /mcp?directory=<다른 프로젝트>` 는 `{}` 를 준다 — 등록은 디렉토리별로 갈린다.
    */
@@ -233,7 +244,7 @@ export class OpencodeClient {
     directory: string,
     name: string,
     config: McpRemoteConfig,
-  ): Promise<Record<string, { status?: string }>> {
+  ): Promise<Record<string, { status?: string; error?: string }>> {
     return this.post(`/mcp?directory=${encodeURIComponent(directory)}`, { name, config })
   }
 

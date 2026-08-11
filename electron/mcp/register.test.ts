@@ -24,7 +24,7 @@ function callOf(impl: typeof fetch): { url: string; body: Record<string, unknown
 describe('registerMcpServer', () => {
   it('디렉토리를 질의로 싣고 우리 주소를 config 에 담는다', async () => {
     const impl = fakeFetch({ [SERVER_NAME]: { status: 'connected' } })
-    const status = await registerMcpServer({
+    const result = await registerMcpServer({
       opencodeUrl: 'http://127.0.0.1:4096',
       directory: '/Users/me/projA',
       projectId: 'proj-1',
@@ -33,8 +33,12 @@ describe('registerMcpServer', () => {
     })
 
     const { url, body } = callOf(impl)
-    // `/api/mcp` 는 없다 (1.17.18 `/doc` 전수 확인) — 이 한 건만 레거시 표면이다
+    // **URL 문자열 자체를 단언한다.** 응답 코드로는 못 잡는다 — `location[directory]=`(pty 표면
+    // 이름)를 잘못 써도 opencode 는 HTTP 200 에 `connected` 를 준다. 그러고는 서버 cwd 쪽에
+    // 등록돼 있어, 증상이 "로그는 connected 인데 세션에 도구가 안 뜬다" 로만 나온다.
+    // `/api/mcp` 는 없다 (1.17.18 `/doc` 전수 확인) — 이 한 건만 레거시 표면이다.
     expect(url).toBe(`http://127.0.0.1:4096/mcp?directory=${encodeURIComponent('/Users/me/projA')}`)
+    expect(url).not.toContain('location')
     expect(body['name']).toBe(SERVER_NAME)
     expect(body['config']).toEqual({
       // ⚠️ `http` 가 아니라 `remote` 다 — 공여가 claude 에 넘기던 모양과 이름만 다르다
@@ -43,7 +47,7 @@ describe('registerMcpServer', () => {
       headers: { Authorization: 'Bearer tok-1' },
       enabled: true,
     })
-    expect(status).toBe('connected')
+    expect(result.status).toBe('connected')
   })
 
   it('디렉토리에 공백·한글이 있어도 질의로 안전하게 실린다', async () => {
@@ -58,30 +62,52 @@ describe('registerMcpServer', () => {
     expect(callOf(impl).url).toContain(encodeURIComponent('/Users/me/내 프로젝트'))
   })
 
-  // 우리 서버가 안 떠 있으면 opencode 는 실패가 아니라 `disabled` 로 답한다 (실측).
-  // 부르는 쪽이 이걸 보고 다시 시도할 수 있어야 한다.
-  it('붙지 못하면 그 상태를 그대로 돌려준다', async () => {
-    const impl = fakeFetch({ [SERVER_NAME]: { status: 'disabled' } })
-    const status = await registerMcpServer({
+  // 우리 서버가 안 떠 있으면 `failed` + `error` 가 온다 (실측).
+  //
+  // **`error` 를 함께 돌려준다.** 등록 실패는 화면에 아무 증상이 없다 — 도구가 그냥 안 뜬다.
+  // 로그가 유일한 단서인데 상태만 남기면 방화벽·포트 충돌·주소 오타를 구별할 수 없다.
+  it('붙지 못하면 상태와 사유를 함께 돌려준다', async () => {
+    const impl = fakeFetch({
+      [SERVER_NAME]: { status: 'failed', error: 'SSE error: Unable to connect.' },
+    })
+    const result = await registerMcpServer({
       opencodeUrl: 'http://127.0.0.1:4096',
       directory: '/Users/me/projA',
       projectId: 'proj-1',
       address,
       fetchImpl: impl,
     })
-    expect(status).toBe('disabled')
+    expect(result).toEqual({ status: 'failed', error: 'SSE error: Unable to connect.' })
+  })
+
+  // **응답은 서버가 아는 MCP 전체 맵이다** (실측). 사용자가 따로 등록해 둔 서버가 함께 온다.
+  // `Object.values(res)[0]` 로 읽으면 남의 서버 상태를 우리 것으로 착각한다 — 이 케이스가
+  // 없으면 그 퇴화가 초록으로 통과한다.
+  it('남의 서버가 섞인 맵에서 우리 것만 이름으로 골라낸다', async () => {
+    const impl = fakeFetch({
+      'somebody-elses-mcp': { status: 'failed', error: '남의 서버 사정' },
+      [SERVER_NAME]: { status: 'connected' },
+    })
+    const result = await registerMcpServer({
+      opencodeUrl: 'http://127.0.0.1:4096',
+      directory: '/Users/me/projA',
+      projectId: 'proj-1',
+      address,
+      fetchImpl: impl,
+    })
+    expect(result).toEqual({ status: 'connected' })
   })
 
   it('우리 이름이 응답에 없으면 unknown 이다', async () => {
     const impl = fakeFetch({})
-    const status = await registerMcpServer({
+    const result = await registerMcpServer({
       opencodeUrl: 'http://127.0.0.1:4096',
       directory: '/Users/me/projA',
       projectId: 'proj-1',
       address,
       fetchImpl: impl,
     })
-    expect(status).toBe('unknown')
+    expect(result.status).toBe('unknown')
   })
 })
 

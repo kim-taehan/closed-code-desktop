@@ -1,7 +1,7 @@
 import { ipcMain, type BrowserWindow } from 'electron'
 import { Channel, type ProjectScoped } from '../../shared/ipc/channels'
 import type { PtyInputPayload, PtyOpenResult, PtyResizePayload } from '../../shared/ipc/ptyPayloads'
-import { PtyClient } from './client'
+import { isSendableSize, PtyClient } from './client'
 import { PtySocket } from './socket'
 
 // 셸 드로어의 IPC 배선과 **프로젝트별 pty 수명**. 만든 자리가 정리하는 자리다.
@@ -16,6 +16,21 @@ import { PtySocket } from './socket'
 // **드로어는 활성 프로젝트의 것이다.** 렌더러는 projectId 를 보내지 않고, 여기서 활성
 // 프로젝트로 푼다 — 세션 핸들러(`sessionHandlers.ts`)와 같은 규칙이다. 나가는 프레임에는
 // 겉봉을 씌워, 프로젝트를 옮기는 순간 도착한 이전 프로젝트의 출력이 화면에 섞이지 않게 한다.
+//
+// ## cwd 는 **프로젝트 루트**다 (사용자 결정)
+//
+// 셸을 띄우는 곳도, pty 를 조회하는 곳도 전부 `ProjectRecord.root` 하나다. 루트의 정본은
+// `electron/projects/projectRegistry.ts` 이고 여기서 새로 정의하지 않는다 —
+// main.ts 가 `registry.active` 를 그대로 넘긴다.
+//
+// "마지막으로 본 파일의 폴더" 는 채택하지 않았다: cwd 가 조용히 바뀌면 방금 친 명령과
+// 다른 곳에서 다음 명령이 돌고, 터미널에는 그 사실이 안 보인다.
+//
+// **이 결정 덕에 pty 격리가 프로젝트 경계와 정확히 일치한다.** 실측(1.17.18):
+// `GET /api/pty?location[directory]=A` 는 A 의 pty 만 주고, 틀린 디렉토리로 하나를 물으면
+// **404** 다. 즉 아래 `open()` 의 "이미 있으면 되찾는다" 가 남의 프로젝트 셸을 집어 올
+// 수 없다 — 목록 자체가 이 프로젝트 것뿐이다. 이 성질이 깨지면 되찾기가 곧 유출이 되므로,
+// opencode 를 올릴 때 `electron/pty/isolation.test.ts` 를 먼저 본다.
 
 /** 우리가 만든 pty 를 알아보는 이름. 앱을 껐다 켜도 이걸로 되찾는다. */
 export const DRAWER_TITLE = 'open-code-desktop 드로어'
@@ -118,8 +133,14 @@ export class PtyDrawerBridge {
   /**
    * 크기 변경. **묶어서 보낸다** — FitAddon 이 창 크기를 끄는 동안 계속 부르는데
    * 그때마다 HTTP 를 때리면 요청이 수십 개 쌓인다.
+   *
+   * ⚠️ **0 은 보내지 않는다.** opencode 의 `PUT` 은 `rows`·`cols` 가 둘 다 필수이고
+   * `exclusiveMinimum: 0` 이라 **0 이면 HTTP 400** 이다 (실측). 드로어를 접으면
+   * `display:none` 이 되어 addon-fit 이 0 에 가까운 값을 내놓는다 — 렌더러에도 하한이
+   * 있지만(`DrawerTerminal` 의 MIN_COLS) 서버에 실제로 나가는 자리가 여기라 여기서도 막는다.
    */
   private resize(payload: PtyResizePayload): void {
+    if (!isSendableSize(payload)) return
     const project = this.options.activeProject()
     const state = project === null ? undefined : this.drawers.get(project.id)
     if (state === undefined) return

@@ -41,14 +41,30 @@ export function mcpUrlOf(address: McpAddress, projectId: string): string {
   return `http://127.0.0.1:${address.port}/mcp/${encodeURIComponent(projectId)}`
 }
 
+/** 등록 결과. **실패 사유는 `error` 에만 있다** — 버리면 원인을 알 길이 없다. */
+export interface McpRegistrationResult {
+  status: string
+  error?: string
+}
+
 /**
- * opencode 에 우리 서버를 등록한다. 상태 문자열을 그대로 돌려준다.
+ * opencode 에 우리 서버를 등록한다.
  *
  * 같은 이름으로 다시 불러도 새로 붙을 뿐이라 멱등에 가깝다 (실측으로 두 번 등록해 확인).
- * 우리 서버가 안 떠 있는 채로 등록하면 `connected` 가 아니라 **`disabled`** 가 온다 (실측) —
- * 실패가 아니라 "붙어 보고 못 붙었다" 로 표시되므로, 부르는 쪽이 상태를 봐야 한다.
+ *
+ * ⚠️ **응답은 등록한 것 하나가 아니라 서버가 아는 MCP 전체 맵이다** (실측 — 사용자가 따로
+ * 등록해 둔 서버가 있으면 그것도 함께 온다). 반드시 **이름으로 인덱싱**한다.
+ * `Object.values(res)[0]` 로 하면 남의 서버 상태를 우리 것으로 읽는다.
+ *
+ * 못 붙었을 때의 상태는 (실측, contract-qa 재계측으로 정정):
+ *   · 주소에 안 닿음 + `enabled:true` → **`failed`** + `error: "SSE error: Unable to connect…"`
+ *   · `enabled:false` 로 등록          → `disabled`
+ * 우리는 늘 `enabled:true` 를 보내므로 실제로 보는 것은 `failed` 다. `disabled` 는 사용자가
+ * 자기 설정으로 꺼 둔 서버에서나 나온다.
  */
-export async function registerMcpServer(registration: McpRegistration): Promise<string> {
+export async function registerMcpServer(
+  registration: McpRegistration,
+): Promise<McpRegistrationResult> {
   const client = new OpencodeClient({
     baseUrl: registration.opencodeUrl,
     ...(registration.password !== undefined ? { password: registration.password } : {}),
@@ -63,5 +79,10 @@ export async function registerMcpServer(registration: McpRegistration): Promise<
     enabled: true,
   })
 
-  return status[SERVER_NAME]?.status ?? 'unknown'
+  // 이름으로 인덱싱한다 (머리말) — 우리 이름이 맵에 없으면 등록 자체가 안 먹은 것이다
+  const ours = status[SERVER_NAME]
+  return {
+    status: ours?.status ?? 'unknown',
+    ...(ours?.error !== undefined ? { error: ours.error } : {}),
+  }
 }

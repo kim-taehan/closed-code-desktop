@@ -53,6 +53,10 @@ describe('PtyClient', () => {
     const body = JSON.parse(String(init.body)) as Record<string, unknown>
     expect(body).toEqual({ cwd: DIR, title: '드로어' })
     expect(body['args']).toBeUndefined()
+    // `command` 도 안 보낸다 — 서버가 사용자 기본 셸을 고른다 (공여의 셸 탐색 32줄이 없어지는 자리).
+    // `size` 는 스키마에 아예 없다. 넣으면 400 이므로 첫 크기는 `PUT` 으로 따로 간다.
+    expect(body['command']).toBeUndefined()
+    expect(body['size']).toBeUndefined()
   })
 
   it('`{location, data}` 래핑을 벗겨서 준다', async () => {
@@ -73,6 +77,23 @@ describe('PtyClient', () => {
     expect(init.method).toBe('PUT')
     expect(url).toContain('/api/pty/pty_1?')
     expect(JSON.parse(String(init.body))).toEqual({ size: { rows: 24, cols: 100 } })
+  })
+
+  // 실측: `rows`·`cols` 는 `exclusiveMinimum: 0` 이라 0 이면 HTTP 400 이다.
+  // **접힌 드로어에서 addon-fit 이 0 을 내놓으므로 정상 흐름에서 밟는다** — 그때 400 이
+  // 나면 로그만 더럽고 할 수 있는 일이 없다. 보낼 것이 없으니 안 보내는 것이 맞다.
+  it('0 이하 크기는 아예 보내지 않는다', async () => {
+    const fetchImpl = fake({ data: pty })
+    const client = new PtyClient({ baseUrl: 'http://127.0.0.1:4096', fetchImpl })
+
+    await client.resize(DIR, 'pty_1', { rows: 0, cols: 80 })
+    await client.resize(DIR, 'pty_1', { rows: 24, cols: 0 })
+    await client.resize(DIR, 'pty_1', { rows: -1, cols: -1 })
+    await client.resize(DIR, 'pty_1', { rows: 1.5, cols: 80 })
+    expect(calls(fetchImpl)).toHaveLength(0)
+
+    await client.resize(DIR, 'pty_1', { rows: 1, cols: 1 })
+    expect(calls(fetchImpl)).toHaveLength(1)
   })
 
   // 끝난 셸의 exitCode 를 물으러 가는 자리다 — 없어졌으면 던지지 않고 null 이어야

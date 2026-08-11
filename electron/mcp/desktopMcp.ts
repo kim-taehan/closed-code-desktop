@@ -59,7 +59,7 @@ export class DesktopMcp {
       const address = this.server.address()
       if (address === null) throw new Error('MCP 서버가 포트를 잡지 못했습니다')
 
-      const status = await registerMcpServer({
+      const result = await registerMcpServer({
         opencodeUrl: settings.opencodeUrl,
         directory: project.root,
         projectId: project.id,
@@ -67,9 +67,13 @@ export class DesktopMcp {
         ...(this.options.password !== undefined ? { password: this.options.password } : {}),
         ...(this.options.fetchImpl !== undefined ? { fetchImpl: this.options.fetchImpl } : {}),
       })
-      this.log(`opencode 에 MCP 등록: ${project.root} → ${status}`)
+      // **사유를 함께 남긴다.** 등록 실패는 화면에 아무 증상이 없는 종류다 — 도구가 그냥
+      // 안 뜬다. 로그가 유일한 단서인데 `failed` 만 남기면 방화벽인지 포트 충돌인지
+      // 주소 오타인지 구별할 수 없다. 원인은 opencode 가 주는 `error` 에만 있다.
+      const why = result.error === undefined ? '' : ` (${result.error})`
+      this.log(`opencode 에 MCP 등록: ${project.root} → ${result.status}${why}`)
       // connected 가 아니면 붙지 못한 것이다. 다음 ready 에 다시 시도하게 자리를 비운다.
-      if (status !== 'connected') this.registered.delete(project.id)
+      if (result.status !== 'connected') this.registered.delete(project.id)
     } catch (error) {
       this.registered.delete(project.id)
       this.log(`MCP 등록 실패 (${project.root}): ${describe(error)}`)

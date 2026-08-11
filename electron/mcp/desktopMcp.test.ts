@@ -8,11 +8,12 @@ import { SERVER_NAME } from './rpc'
 // 수명이라(실측: `POST /instance/dispose` 뒤 `GET /mcp` 가 `{}`) 한 번 등록하고 끝내면
 // 서버가 재기동된 뒤 도구가 조용히 사라진다 — 화면에는 아무 증상이 없다.
 
-function fakeFetch(status = 'connected'): typeof fetch {
+function fakeFetch(status = 'connected', error?: string): typeof fetch {
+  const ours = error === undefined ? { status } : { status, error }
   return vi.fn().mockResolvedValue({
     ok: true,
     status: 200,
-    text: () => Promise.resolve(JSON.stringify({ [SERVER_NAME]: { status } })),
+    text: () => Promise.resolve(JSON.stringify({ [SERVER_NAME]: ours })),
   }) as unknown as typeof fetch
 }
 
@@ -116,13 +117,31 @@ describe('DesktopMcp', () => {
     expect((fetchImpl as unknown as { mock: { calls: unknown[] } }).mock.calls.length).toBe(1)
   })
 
-  // connected 가 아니면 붙지 못한 것이다 — 다음 ready 에 다시 시도해야 한다
+  // connected 가 아니면 붙지 못한 것이다 — 다음 ready 에 다시 시도해야 한다.
+  // 우리 서버에 안 닿으면 오는 상태는 `failed` 다 (실측 — `disabled` 는 `enabled:false` 쪽이다).
   it('붙지 못한 등록은 다음 ready 에 다시 시도한다', async () => {
-    const { mcp, calls } = make({ status: 'disabled' })
+    const { mcp, calls } = make({ status: 'failed' })
     running = mcp
     await mcp.onProjectReady(projectA)
     await mcp.onProjectReady(projectA)
     expect(calls()).toBe(2)
+  })
+
+  // 등록 실패는 화면에 아무 증상이 없다 — 로그가 유일한 단서인데, 사유는 opencode 가 주는
+  // `error` 에만 있다. 그걸 버리면 방화벽·포트 충돌·주소 오타를 구별할 수 없다.
+  it('실패 사유를 로그에 싣는다', async () => {
+    const lines: string[] = []
+    const mcp = new DesktopMcp({
+      settings: () => Promise.resolve({ desktopMcp: true, opencodeUrl: 'http://127.0.0.1:4096' }),
+      ports,
+      fetchImpl: fakeFetch('failed', 'SSE error: Unable to connect.'),
+      log: (line) => lines.push(line),
+    })
+    running = mcp
+
+    await mcp.onProjectReady(projectA)
+    expect(lines[0]).toContain('failed')
+    expect(lines[0]).toContain('SSE error: Unable to connect.')
   })
 
   // MCP 는 있으면 좋은 것이지 앱의 조건이 아니다 — 실패가 세션을 죽이면 안 된다
