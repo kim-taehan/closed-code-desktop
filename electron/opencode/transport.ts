@@ -1,8 +1,10 @@
 import { randomUUID } from 'node:crypto'
-import { Action, AuthState, Kind, WorkspaceState } from '../../shared/protocol/kinds'
+import { Action, AuthState, Kind, PermissionMode, WorkspaceState } from '../../shared/protocol/kinds'
 import { parseInbound } from '../../shared/protocol/envelope'
 import { HandlerSet, type CloseInfo, type Transport, type Unsubscribe } from '../ws/transport'
 import { OpencodeClient, type PermissionReply } from './client'
+import { SessionModel, toModelRef } from './models'
+import { applyPermissionMode } from './agents'
 import { SseStream } from './sse'
 import { translate, type TranslateContext } from './translate'
 import type { OpencodeEvent } from './events'
@@ -27,10 +29,13 @@ export interface OpencodeTransportOptions {
 
 export class OpencodeTransport implements Transport {
   private readonly client: OpencodeClient
+  private readonly model: SessionModel
   protected readonly sse: SseStream
   private sessionId: string | null = null
   private streamId: string | null = null
   private started = false
+  /** 세션에 실제로 걸린 권한 모드. 요청이 거절되면 이 값이 화면을 되돌린다. */
+  private permissionMode: PermissionMode = PermissionMode.DEFAULT
 
   private readonly openHandlers = new HandlerSet<[]>()
   private readonly messageHandlers = new HandlerSet<[string]>()
@@ -44,6 +49,7 @@ export class OpencodeTransport implements Transport {
       ...(options.fetchImpl !== undefined ? { fetchImpl: options.fetchImpl } : {}),
     }
     this.client = new OpencodeClient(clientOptions)
+    this.model = new SessionModel(this.client)
     this.sse = new SseStream({
       url: this.client.eventUrl,
       headers: this.client.headers,
@@ -114,7 +120,13 @@ export class OpencodeTransport implements Transport {
         return await this.onApproval(data)
       }
       if (kind === Kind.CHAT && action === Action.USER_ANSWER) return await this.onUserAnswer(data)
-      // 나머지(ping/pong·mcp_config·llm_config…)는 opencode 에 대응이 없다. 조용히 버린다.
+      if (kind === Kind.LLM_CONFIG && action === Action.LLM_CONFIG_STATUS) {
+        return await this.onLlmStatus()
+      }
+      if (kind === Kind.WORKSPACE && action === Action.SET_PERMISSION_MODE) {
+        return await this.onPermissionMode(data)
+      }
+      // 나머지(ping/pong·mcp_config…)는 opencode 에 대응이 없다. 조용히 버린다.
     } catch (error) {
       this.fail(kind, error)
     }
@@ -170,6 +182,7 @@ export class OpencodeTransport implements Transport {
       ...(this.options.agent ? { agent: this.options.agent } : {}),
     })
     this.sessionId = session.id
+    this.model.adopt(session.model)
     this.emit({
       kind: Kind.WORKSPACE,
       action: Action.WORKSPACE_STATE,
@@ -197,7 +210,40 @@ export class OpencodeTransport implements Transport {
     this.streamId = randomUUID()
     this.emit({ kind: Kind.CHAT, action: Action.STREAM_START, data: {}, streamId: this.streamId })
 
-    this.client.prompt(sessionId, query).catch((error: unknown) => this.fail(Kind.CHAT, error))
+    // 모델 오버라이드는 **보내기 직전에** 세션에 건다. davis 는 요청마다 실어 보냈고
+    // runtime 이 기억하지 않았지만, opencode 의 모델은 세션에 남는다 — 그래서 오버라이드가
+    // 빠진 요청에서는 기본 모델로 되돌린다. 안 되돌리면 한 번 고른 모델이 영영 붙는다.
+    const requested = typeof data['model'] === 'string' ? toModelRef(data['model']) : null
+    this.model
+      .apply(sessionId, requested)
+      .then(() => this.client.prompt(sessionId, query))
+      .catch((error: unknown) => this.fail(Kind.CHAT, error))
+  }
+
+  /** 모델 스위처가 목록을 물었다 (davis 는 status → models 두 왕복이었다 — `models.ts`). */
+  private async onLlmStatus(): Promise<void> {
+    this.emit({
+      kind: Kind.LLM_CONFIG,
+      action: Action.LLM_CONFIG_STATUS,
+      data: await this.model.status(),
+    })
+  }
+
+  /** 권한 모드 → 에이전트. **걸린 값을 되돌려 보낸다** (`agents.ts` 머리말). */
+  private async onPermissionMode(data: Record<string, unknown>): Promise<void> {
+    if (this.sessionId) {
+      this.permissionMode = await applyPermissionMode(
+        this.client,
+        this.sessionId,
+        data['mode'],
+        this.permissionMode,
+      )
+    }
+    this.emit({
+      kind: Kind.WORKSPACE,
+      action: Action.PERMISSION_MODE_CHANGED,
+      data: { mode: this.permissionMode },
+    })
   }
 
   private async onCancel(): Promise<void> {

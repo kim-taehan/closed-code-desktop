@@ -44,11 +44,11 @@ describe('모드 전환', () => {
 
   it('set 하면 runtime 에 mode 를 보낸다', async () => {
     const ctx = await setup()
-    ctx.controller.set(PermissionMode.ACCEPT_EDITS)
+    ctx.controller.set(PermissionMode.PLAN)
 
     await vi.waitFor(() => {
       const sent = ctx.server.received.find((f) => f.action === 'set_permission_mode')
-      expect(sent?.data).toEqual({ mode: 'acceptEdits' })
+      expect(sent?.data).toEqual({ mode: 'plan' })
     })
     ctx.handshake.dispose()
   })
@@ -73,8 +73,8 @@ describe('모드 전환', () => {
 
   it('runtime 이 다른 값을 확정하면 그쪽을 따른다', async () => {
     const ctx = await setup()
-    ctx.controller.set(PermissionMode.ACCEPT_EDITS)
-    await vi.waitFor(() => expect(ctx.controller.acknowledged).toBe(PermissionMode.ACCEPT_EDITS))
+    ctx.controller.set(PermissionMode.PLAN)
+    await vi.waitFor(() => expect(ctx.controller.acknowledged).toBe(PermissionMode.PLAN))
 
     // 서버가 임의로 default 로 되돌린 상황
     ctx.server.push([
@@ -89,8 +89,8 @@ describe('모드 전환', () => {
 describe('재연결 후 재적용', () => {
   it('기본값이 아니면 다시 보낸다 — runtime 은 세션 메모리만 쓴다', async () => {
     const ctx = await setup()
-    ctx.controller.set(PermissionMode.ACCEPT_EDITS)
-    await vi.waitFor(() => expect(ctx.controller.acknowledged).toBe(PermissionMode.ACCEPT_EDITS))
+    ctx.controller.set(PermissionMode.PLAN)
+    await vi.waitFor(() => expect(ctx.controller.acknowledged).toBe(PermissionMode.PLAN))
 
     const before = ctx.server.received.filter((f) => f.action === 'set_permission_mode').length
     ctx.controller.reapply()

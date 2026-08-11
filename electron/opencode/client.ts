@@ -16,9 +16,21 @@ export interface OpencodeClientOptions {
   fetchImpl?: typeof fetch
 }
 
+/** opencode 가 모델을 가리키는 방식. 프로바이더와 모델 id 가 따로다. */
+export interface ModelRef {
+  id: string
+  providerID: string
+}
+
+/** `GET /config/providers` 응답. `default` 는 프로바이더별 기본 모델 id 다. */
+export interface ProvidersResponse {
+  providers: { id: string; name?: string; models?: Record<string, unknown> }[]
+  default?: Record<string, string>
+}
+
 export interface CreateSessionInput {
   directory: string
-  model?: { id: string; providerID: string }
+  model?: ModelRef
   agent?: string
 }
 
@@ -57,6 +69,14 @@ export class OpencodeClient {
     }
   }
 
+  private async get<T>(path: string): Promise<T> {
+    const response = await this.fetchImpl(`${this.baseUrl}${path}`, { headers: this.headers })
+    if (!response.ok) {
+      throw new Error(`opencode ${path} 실패: HTTP ${response.status} ${await response.text()}`)
+    }
+    return (await response.json()) as T
+  }
+
   private async post<T>(path: string, body: unknown): Promise<T> {
     const response = await this.fetchImpl(`${this.baseUrl}${path}`, {
       method: 'POST',
@@ -81,9 +101,14 @@ export class OpencodeClient {
     return parsed as T
   }
 
-  /** 세션을 만든다. directory 가 곧 워크스페이스다. */
-  async createSession(input: CreateSessionInput): Promise<{ id: string }> {
-    const session = await this.post<{ id?: string }>('/api/session', {
+  /**
+   * 세션을 만든다. directory 가 곧 워크스페이스다.
+   *
+   * **응답의 `model` 을 함께 돌려준다** — 이게 이 세션의 기본 모델이다. 모델 스위처가
+   * 오버라이드를 풀 때 되돌아갈 자리라 만들 때 붙잡아 둬야 한다 (`models.ts` 머리말).
+   */
+  async createSession(input: CreateSessionInput): Promise<{ id: string; model: ModelRef | null }> {
+    const session = await this.post<{ id?: string; model?: ModelRef }>('/api/session', {
       location: { directory: input.directory },
       ...(input.model ? { model: input.model } : {}),
       ...(input.agent ? { agent: input.agent } : {}),
@@ -93,7 +118,42 @@ export class OpencodeClient {
     if (typeof session.id !== 'string' || !session.id) {
       throw new Error(`opencode 세션 생성 응답에 id 가 없습니다: ${JSON.stringify(session).slice(0, 200)}`)
     }
-    return { id: session.id }
+    const model = session.model
+    return {
+      id: session.id,
+      model: model && typeof model.id === 'string' && typeof model.providerID === 'string' ? model : null,
+    }
+  }
+
+  /**
+   * 설정된 프로바이더와 그 모델 목록.
+   *
+   * ⚠️ **`/api` 가 아니라 `/config/providers` 다** — 그래서 `{data:...}` 래핑도 없다.
+   * `/api/config/providers` 는 없다 (실측 1.17.18, `curl /doc`).
+   */
+  async providers(): Promise<ProvidersResponse> {
+    return this.get<ProvidersResponse>('/config/providers')
+  }
+
+  /**
+   * 서버 설정. 여기서 필요한 것은 기본 모델(`model`) 하나다.
+   *
+   * ⚠️ **모델을 주지 않고 세션을 만들면 응답에 `model` 이 없다** (실측 1.17.18 — 줘서
+   * 만들면 있다). 그 세션의 기본이 무엇인지는 이 설정값으로만 알 수 있고, 모르면
+   * 스위처에서 오버라이드를 풀었을 때 되돌아갈 자리가 없다.
+   */
+  async config(): Promise<{ model?: string }> {
+    return this.get<{ model?: string }>('/config')
+  }
+
+  /**
+   * 이 세션이 쓸 모델을 바꾼다.
+   *
+   * **세션에 남는다** — davis 는 요청별 오버라이드였고 runtime 이 기억하지 않았다.
+   * 그 차이는 어댑터가 흡수한다 (`models.ts` — 오버라이드를 풀면 기본 모델로 되돌린다).
+   */
+  async setModel(sessionId: string, model: ModelRef): Promise<void> {
+    await this.post(`/api/session/${sessionId}/model`, { model })
   }
 
   /**
@@ -105,6 +165,16 @@ export class OpencodeClient {
    */
   async prompt(sessionId: string, text: string): Promise<void> {
     await this.post(`/api/session/${sessionId}/prompt`, { prompt: { text } })
+  }
+
+  /**
+   * 이 세션이 쓸 에이전트를 바꾼다 (davis 권한 모드 대응 — `agents.ts`).
+   *
+   * ⚠️ **없는 이름도 204 로 받아 그대로 저장한다** (실측). 서버가 검증해 주지 않으므로
+   * 부르는 쪽이 아는 이름만 넘겨야 한다.
+   */
+  async setAgent(sessionId: string, agent: string): Promise<void> {
+    await this.post(`/api/session/${sessionId}/agent`, { agent })
   }
 
   /** 진행 중인 턴을 끊는다 (davis stream_cancel 대응) */

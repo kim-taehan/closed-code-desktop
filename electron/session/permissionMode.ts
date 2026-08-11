@@ -7,6 +7,9 @@ import { HandlerSet, type Transport, type Unsubscribe } from '../ws/transport'
 // runtime 은 세션 메모리에만 보관하므로 **연결이 새로 맺어지면 default 로 돌아간다.**
 // 그래서 사용자가 고른 값을 여기서 들고 있다가 재연결 후 다시 보낸다 —
 // 안 그러면 재연결 한 번에 조용히 default 로 되돌아가 승인 요청이 다시 쏟아진다.
+//
+// opencode 에서도 같다: 세션을 새로 만들면 에이전트가 기본값(build)이라, plan 으로 두고
+// 재연결하면 편집이 열린 채로 돌아간다 — reapply() 가 그것을 막는 자리다.
 
 export class PermissionModeController {
   private desired: PermissionMode = PermissionMode.DEFAULT
@@ -82,5 +85,5 @@ export class PermissionModeController {
 }
 
 export function isPermissionMode(value: unknown): value is PermissionMode {
-  return value === PermissionMode.DEFAULT || value === PermissionMode.PLAN || value === PermissionMode.ACCEPT_EDITS
+  return value === PermissionMode.DEFAULT || value === PermissionMode.PLAN
 }

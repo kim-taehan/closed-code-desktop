@@ -91,16 +91,20 @@ export type WorkspaceState = (typeof WorkspaceState)[keyof typeof WorkspaceState
 
 /**
  * 전역 동작 모드 (ADR-011 §4).
- *   default     — 룰 기반 평가. 편집·실행 도구에서 승인을 묻는다
- *   plan        — 읽기 전용. 탐색·계획 단계
- *   acceptEdits — 편집 도구 자동 승인
+ *   default — 룰 기반 평가. 편집·실행 도구에서 승인을 묻는다
+ *   plan    — 읽기 전용. 탐색·계획 단계
  *
- * runtime 은 이 세 값만 받는다. 다른 값을 보내면 BAD_REQUEST 로 거부된다.
+ * **davis 에는 `acceptEdits`(편집 도구 자동 승인)가 하나 더 있었다.** opencode 로 옮기며
+ * 뺐다 — 모드에 해당하는 것이 opencode 에서는 primary 에이전트인데(`opencode/agents.ts`),
+ * build·plan 둘뿐이고 acceptEdits 에 해당하는 에이전트가 없다. opencode 에서 편집 자동
+ * 승인은 서버 설정 파일의 permission 규칙이라 데스크탑이 세션 단위로 켤 수 없다.
+ *
+ * **고를 수 없는 것을 목록에 두지 않는다.** 남겨 두면 켜 놓고 "자동 승인 중" 이라고 믿는데
+ * 실제로는 매번 승인을 묻거나(잘해야 성가심), 반대로 서버에 엉뚱한 에이전트 이름이 박힌다.
  */
 export const PermissionMode = {
   DEFAULT: 'default',
   PLAN: 'plan',
-  ACCEPT_EDITS: 'acceptEdits',
 } as const
 
 export type PermissionMode = (typeof PermissionMode)[keyof typeof PermissionMode]
@@ -114,24 +118,21 @@ export const ALL_PERMISSION_MODES: readonly PermissionMode[] = Object.values(Per
 export const PERMISSION_MODE_LABEL: Record<PermissionMode, string> = {
   default: 'default',
   plan: 'plan',
-  acceptEdits: 'acceptEdits',
 }
 
 /** 모드를 한눈에 알아보게 하는 기호 */
 export const PERMISSION_MODE_ICON: Record<PermissionMode, string> = {
   default: '⚡',
   plan: '🔒',
-  acceptEdits: '</>',
 }
 
 /**
- * 한 줄 설명. **문구를 줄이지 않는다** —
- * acceptEdits 의 "파일 편집 도구를" 은 정확한 진술이다.
- * run_command 는 자동 승인 대상이 아니다 (runtime permission.py).
- * "전부 자동 승인" 처럼 줄이면 셸도 자동으로 도는 줄 알고 켠다.
+ * 한 줄 설명. **문구를 줄이지 않는다** — plan 의 "편집 전" 은 정확한 진술이다.
+ * opencode 의 plan 에이전트는 편집 도구를 **막을 뿐** 셸·탐색까지 막지는 않는다
+ * ("Disallows all edit tools" — `GET /agent` 실측). "아무것도 안 한다" 로 줄이면
+ * 명령이 도는 것을 보고 모드가 안 걸린 줄 안다.
  */
 export const PERMISSION_MODE_HINT: Record<PermissionMode, string> = {
   default: '편집 전 승인을 요청',
   plan: '코드를 탐색하고 편집 전 계획을 수립',
-  acceptEdits: '파일 편집 도구를 자동으로 승인',
 }

@@ -7,10 +7,10 @@ import { PermissionModeSwitch, nextMode } from './PermissionModeSwitch'
 afterEach(cleanup)
 
 describe('모드 순환', () => {
-  it('default → plan → acceptEdits → default 로 돈다', () => {
+  // acceptEdits 는 opencode 에 대응 에이전트가 없어 목록에서 뺐다 (kinds.ts) — 두 칸만 돈다
+  it('default → plan → default 로 돈다', () => {
     expect(nextMode(PermissionMode.DEFAULT)).toBe(PermissionMode.PLAN)
-    expect(nextMode(PermissionMode.PLAN)).toBe(PermissionMode.ACCEPT_EDITS)
-    expect(nextMode(PermissionMode.ACCEPT_EDITS)).toBe(PermissionMode.DEFAULT)
+    expect(nextMode(PermissionMode.PLAN)).toBe(PermissionMode.DEFAULT)
   })
 })
 
@@ -21,11 +21,11 @@ describe('표시', () => {
     expect(screen.getByText('plan')).toBeTruthy()
   })
 
-  it('모드별 클래스가 붙는다 — 위험한 모드는 눈에 띄어야 한다', () => {
+  it('모드별 클래스가 붙는다 — 기본이 아닌 모드는 눈에 띄어야 한다', () => {
     const { container } = render(
-      <PermissionModeSwitch mode={PermissionMode.ACCEPT_EDITS} onChange={() => {}} />,
+      <PermissionModeSwitch mode={PermissionMode.PLAN} onChange={() => {}} />,
     )
-    expect(container.querySelector('.modes-btn--acceptEdits')).toBeTruthy()
+    expect(container.querySelector('.modes-btn--plan')).toBeTruthy()
   })
 
   it('기본 모드에는 강조 클래스를 붙이지 않는다', () => {
@@ -50,13 +50,13 @@ describe('메뉴', () => {
     expect(screen.queryByRole('menu')).toBeNull()
   })
 
-  it('누르면 세 모드를 설명과 함께 펼친다', () => {
+  it('누르면 두 모드를 설명과 함께 펼친다', () => {
     render(<PermissionModeSwitch mode={PermissionMode.DEFAULT} onChange={() => {}} />)
     fireEvent.click(screen.getByRole('button'))
 
-    expect(screen.getAllByRole('menuitemradio')).toHaveLength(3)
-    // 문구를 줄이지 않는다 — run_command 는 자동 승인 대상이 아니다
-    expect(screen.getByText('파일 편집 도구를 자동으로 승인')).toBeTruthy()
+    expect(screen.getAllByRole('menuitemradio')).toHaveLength(2)
+    // 문구를 줄이지 않는다 — plan 은 편집만 막고 셸·탐색은 돈다
+    expect(screen.getByText('코드를 탐색하고 편집 전 계획을 수립')).toBeTruthy()
   })
 
   it('지금 모드를 선택됨으로 표시한다', () => {
@@ -75,9 +75,9 @@ describe('메뉴', () => {
     render(<PermissionModeSwitch mode={PermissionMode.DEFAULT} onChange={onChange} />)
 
     fireEvent.click(screen.getByRole('button'))
-    fireEvent.click(screen.getByText('acceptEdits'))
+    fireEvent.click(screen.getByText('plan'))
 
-    expect(onChange).toHaveBeenCalledWith(PermissionMode.ACCEPT_EDITS)
+    expect(onChange).toHaveBeenCalledWith(PermissionMode.PLAN)
     expect(screen.queryByRole('menu')).toBeNull()
   })
 
@@ -98,7 +98,7 @@ describe('전환', () => {
     render(<PermissionModeSwitch mode={PermissionMode.PLAN} onChange={onChange} />)
 
     fireEvent.keyDown(window, { key: 'Tab', shiftKey: true })
-    expect(onChange).toHaveBeenCalledWith(PermissionMode.ACCEPT_EDITS)
+    expect(onChange).toHaveBeenCalledWith(PermissionMode.DEFAULT)
   })
 
   it('Shift 없는 Tab 은 건드리지 않는다 — 일반 포커스 이동은 그대로 둔다', () => {
