@@ -37,6 +37,20 @@ export interface CreateSessionInput {
 /** 승인 응답값 (PermissionV2Reply). davis 의 approved/followUp 을 여기로 접는다. */
 export type PermissionReply = 'once' | 'always' | 'reject'
 
+/**
+ * `POST /mcp` 가 받는 원격 MCP 서버 설정 (opencode 스키마 `McpRemoteConfig`).
+ *
+ * ⚠️ `type` 은 **`remote`** 다. 공여(develop-desktop)가 claude 에 넘기던 `{type:"http"}` 와
+ * 나머지 필드는 같고 이름만 다르다 — 그대로 베끼면 400 이 난다.
+ */
+export interface McpRemoteConfig {
+  type: 'remote'
+  url: string
+  headers?: Record<string, string>
+  enabled?: boolean
+  timeout?: number
+}
+
 export class OpencodeClient {
   private readonly baseUrl: string
   private readonly fetchImpl: typeof fetch
@@ -185,6 +199,25 @@ export class OpencodeClient {
   /** 도구 승인 응답. 보내지 않으면 턴이 그 자리에서 멈춘다. */
   async replyPermission(sessionId: string, requestId: string, reply: PermissionReply): Promise<void> {
     await this.post(`/api/session/${sessionId}/permission/${requestId}/reply`, { reply })
+  }
+
+  /**
+   * MCP 서버를 **런타임에** 등록한다 (데스크톱이 MCP 서버 노릇을 하는 쪽 — `electron/mcp/`).
+   *
+   * ⚠️ **이 한 건만 `/api` 가 아니다.** `/api/mcp` 는 없다 (1.17.18 `/doc` 162경로 전수 확인).
+   * 다른 곳에서 두 API 세대를 섞지 말라고 해 둔 것과 겉으로 충돌해 보이지만, MCP 는
+   * `/api` 판이 아예 없어 선택지가 없다. 레거시 표면이라 `{data:...}` 래핑도 없다 —
+   * 응답은 `{"<이름>":{"status":"connected"}}` 그대로다 (실측).
+   *
+   * `directory` 를 빼면 서버가 `process.cwd()` 로 떨어져 **엉뚱한 프로젝트에 등록된다.**
+   * 실측: `GET /mcp?directory=<다른 프로젝트>` 는 `{}` 를 준다 — 등록은 디렉토리별로 갈린다.
+   */
+  async addMcpServer(
+    directory: string,
+    name: string,
+    config: McpRemoteConfig,
+  ): Promise<Record<string, { status?: string }>> {
+    return this.post(`/mcp?directory=${encodeURIComponent(directory)}`, { name, config })
   }
 
   /** ask_user 대응. answer 가 null 이면 거절 경로로 보낸다. */

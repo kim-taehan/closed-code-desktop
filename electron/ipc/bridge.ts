@@ -14,6 +14,19 @@ import { diagnose, noEndpointDiagnostics } from '../runtime/diagnostics'
 /** 세션이 프로젝트별로 갈리므로 라이선스·기동 방법만 앱 단위로 받는다 */
 export type BridgeConfig = Omit<ProjectSessionConfig, 'workspacePath' | 'projectName'>
 
+/**
+ * 세션이 opencode 에 **실제로 붙었다/떨어졌다**를 앱 단위 관심사에 알린다.
+ *
+ * 지금 듣는 곳은 데스크톱 MCP 자동 등록 하나다 (`electron/mcp/desktopMcp.ts`).
+ * opencode 의 MCP 등록이 instance 수명이라 **붙을 때마다 다시 등록해야** 하는데,
+ * 그 신호를 낼 수 있는 곳이 여기다 — 여기만 프로젝트 신원(id·root)과 핸드셰이크
+ * 상태를 동시에 안다. `electron/session/*` 은 이 흐름을 몰라도 된다.
+ */
+export interface SessionBridgeHooks {
+  onSessionReady?(project: ProjectRecord): void
+  onSessionLost?(projectId: string): void
+}
+
 const HANDLED_CHANNELS = [...SESSION_CHANNELS, Channel.SESSION_DIAGNOSE]
 
 export class SessionBridge {
@@ -26,6 +39,7 @@ export class SessionBridge {
     private readonly window: BrowserWindow,
     // 갱신 가능 — Admin 주소·포트가 설정탭에서 바뀌면 앱 재시작 없이 여기 반영한다
     private config: BridgeConfig,
+    private readonly hooks: SessionBridgeHooks = {},
   ) {}
 
   register(): void {
@@ -86,7 +100,13 @@ export class SessionBridge {
         projectName: project.name,
       },
       {
-        onState: (state) => this.push(Channel.SESSION_STATE, project.id, state),
+        onState: (state) => {
+          this.push(Channel.SESSION_STATE, project.id, state)
+          // ready 를 오갈 때마다 알린다. 같은 상태가 여러 번 올라올 수 있으므로
+          // 중복을 거르는 일은 듣는 쪽에 맡긴다 (여기서 걸면 이 클래스가 상태를 하나 더 진다).
+          if (state.handshake.stage === 'ready') this.hooks.onSessionReady?.(project)
+          else this.hooks.onSessionLost?.(project.id)
+        },
         onTurnEvent: (event) => this.push(Channel.TURN_EVENT, project.id, event),
         onSnapshot: (snapshot) => this.push(Channel.CHAT_SNAPSHOT, project.id, snapshot),
         onPermissionMode: (mode) => this.push(Channel.PERMISSION_MODE_CHANGED, project.id, { mode }),
@@ -153,6 +173,7 @@ export class SessionBridge {
     if (!session) return
     this.sessions.delete(id)
     if (this.activeId === id) this.activeId = null
+    this.hooks.onSessionLost?.(id)
     await session.dispose(options)
   }
 

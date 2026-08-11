@@ -8,6 +8,7 @@ import {
   type LocalNoticePayload,
   type TaskNoticePayload,
   type ChatSnapshotPayload,
+  type DesktopMcpOpenFilePayload,
   type PermissionModePayload,
   type WorkingDirPayload,
   type HistoryIdPayload,
@@ -172,6 +173,8 @@ const bridge: DesktopBridge = {
   testMcpCredentials: (payload: { serverName: string; credentials: Record<string, string> }) =>
     ipcRenderer.invoke(Channel.MCP_TEST, payload) as Promise<void>,
   onMcpState: (handler: ProjectHandler<McpState>) => subscribe<McpState>(Channel.MCP_STATE, handler),
+  onDesktopMcpOpenFile: (handler: ProjectHandler<DesktopMcpOpenFilePayload>) =>
+    subscribe<DesktopMcpOpenFilePayload>(Channel.DESKTOP_MCP_OPEN_FILE, handler),
   requestModelOptions: () => ipcRenderer.invoke(Channel.MODEL_OPTIONS_REQUEST) as Promise<void>,
   onModelState: (handler: ProjectHandler<LlmModelStatePayload>) =>
     subscribe<LlmModelStatePayload>(Channel.MODEL_STATE, handler),

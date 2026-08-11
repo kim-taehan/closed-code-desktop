@@ -18,6 +18,9 @@ import type { ExtensionService } from './extensions/service'
 import { startExtensionHost } from './extensions/appHost'
 import type { ExtensionAskText } from './extensions/serviceDispatch'
 import { ExtensionViewHost, VIEW_SCHEME } from './extensions/viewHost'
+import { DesktopMcp } from './mcp/desktopMcp'
+import { toActiveFile } from './ipc/extensionActiveFile'
+import { logStore } from './logs/logStore'
 
 // 확장 화면을 서빙할 스킴. **app ready 전에** 등록해야 한다 (Electron 규칙) —
 // 그래서 이 한 줄만 모듈 최상위에 있다. 이유는 `viewHost.ts` 머리말.
@@ -44,6 +47,8 @@ let extensionIpc: ExtensionBridge | null = null
 let projectRegistry: ProjectRegistry | null = null
 /** 확장 호스트가 "꺼 둔 확장" 을 물어보는 곳. 호스트는 창보다 오래 살아 여기 둔다. */
 let appSettings: SettingsStore | null = null
+/** 에이전트가 이 앱을 조작하는 문 (`electron/mcp/`). 창이 다시 만들어져도 포트는 하나다. */
+let desktopMcp: DesktopMcp | null = null
 
 async function createWindow(): Promise<void> {
   const window = new BrowserWindow({
@@ -80,7 +85,39 @@ async function createWindow(): Promise<void> {
   // 세션은 프로젝트마다 하나다. 목록이 세션 수명을 이끈다 (설계 §3).
   // opencode 서버는 사용자가 띄운 것에 붙기만 한다 — 주소가 설정의 전부다.
   const stored = await settings.load()
-  bridge = new SessionBridge(window, { opencodeUrl: stored.opencodeUrl })
+  // 에이전트가 이 앱을 조작하는 문. 창마다 새로 만들지 않는다 — 포트와 토큰이 둘이 되면
+  // opencode 에 등록된 옛 주소가 죽는다 (`electron/mcp/desktopMcp.ts`).
+  desktopMcp ??= new DesktopMcp({
+    settings: async () => {
+      const current = await settings.load()
+      return { desktopMcp: current.desktopMcp, opencodeUrl: current.opencodeUrl }
+    },
+    ports: {
+      // **열린 프로젝트만** 안다. 탭을 닫으면 그 순간 아무 파일도 못 건드린다.
+      rootOf: (id) => registry.openProjects.find((project) => project.id === id)?.root ?? null,
+      focusedProjectId: () => registry.active?.id ?? null,
+      // 값의 주인은 렌더러다 — main 이 짐작하지 않는다 (`extensionActiveFile.ts` 머리말).
+      // 브리지는 창과 함께 생기므로 값이 아니라 함수로 읽는다.
+      activeFile: () => toActiveFile(extensionIpc?.currentActiveFile() ?? null),
+      // 겉봉(ProjectScoped)을 씌워 보낸다 — 화면은 지금 보고 있는 프로젝트 것만 받는다
+      openInView: (projectId, target) => {
+        if (window.isDestroyed()) return false
+        window.webContents.send(Channel.DESKTOP_MCP_OPEN_FILE, { projectId, payload: target })
+        return true
+      },
+    },
+    log: (line) => logStore.add('desktop', line),
+  })
+  const mcp = desktopMcp
+  bridge = new SessionBridge(
+    window,
+    { opencodeUrl: stored.opencodeUrl },
+    {
+      // opencode 의 MCP 등록은 instance 수명이라 **붙을 때마다** 다시 해야 한다
+      onSessionReady: (project) => void mcp.onProjectReady(project),
+      onSessionLost: (id) => mcp.onProjectLost(id),
+    },
+  )
   bridge.register()
 
   projects = new ProjectBridge(
@@ -231,4 +268,7 @@ app.on('before-quit', () => {
   // (기존 dispose 들도 `void` 로 흘린다). 종료 시 유예는 §2-6 J 로 미결이다.
   extensions?.dispose()
   extensions = null
+  // 듣던 포트를 닫는다. opencode 쪽 등록은 우리가 지우지 않아도 instance 와 함께 사라진다.
+  void desktopMcp?.dispose()
+  desktopMcp = null
 })

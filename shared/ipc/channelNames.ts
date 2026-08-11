@@ -26,6 +26,14 @@ export const Channel = {
   MCP_TEST: 'mcp:test',
   /** main → renderer: MCP 서버 상태 */
   MCP_STATE: 'mcp:state',
+  /**
+   * main → renderer: **데스크톱 MCP 서버의 `open_file` 도구가 파일을 열라고 했다.**
+   *
+   * ⚠️ 위의 `MCP_*` 넷과 **다른 뜻의 MCP** 다. 저쪽은 앱이 MCP 클라이언트로서 개인
+   * 자격증명을 다루는 화면(`McpDialog`)이고, 이쪽은 앱이 MCP **서버**가 되어 에이전트가
+   * 앱을 조작하는 쪽이다 (`electron/mcp/`). 이름을 갈라 두 뜻이 섞이지 않게 한다.
+   */
+  DESKTOP_MCP_OPEN_FILE: 'desktopMcp:openFile',
   MODEL_OPTIONS_REQUEST: 'llm:modelOptions', // renderer → main: 모델 스위처 상태 재조회 (DC-1322)
   MODEL_STATE: 'llm:modelState', // main → renderer: 모델 스위처 상태 (llm_config status/models 결과)
   NOTIFICATION: 'notification:push',

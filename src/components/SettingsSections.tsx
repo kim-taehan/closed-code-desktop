@@ -1,5 +1,7 @@
 import type { ThemeChoice } from '../state/useTheme'
+import type { AppSettings } from '../../shared/settings/appSettings'
 import { ThemeSelect } from './ThemeSelect'
+import { SettingsToggle } from './SettingsToggle'
 import { t } from '../i18n/messages'
 import { LANGS, LANG_LABEL, type Lang } from '../i18n/messages'
 
@@ -42,6 +44,38 @@ export function DisplaySection({ theme, onTheme, lang, onLang }: DisplaySectionP
         </select>
         <p className="dc-settings__hint">{t('고르는 즉시 화면 문구가 바뀝니다.')}</p>
       </div>
+    </section>
+  )
+}
+
+export interface AgentSectionProps {
+  settings: AppSettings
+  onSave: (settings: AppSettings) => void
+}
+
+/**
+ * 에이전트가 이 앱을 조작하게 열어 두는 문의 스위치 (`electron/mcp/`).
+ *
+ * ⚠️ 설정 창의 「연결」 아래에 있는 **개인 MCP 자격**(`McpDialog`)과 다른 것이다.
+ * 저쪽은 앱이 MCP 클라이언트로서 남의 서버에 붙는 이야기이고, 이쪽은 앱이 MCP
+ * **서버**가 되는 이야기다. 문구에서 그 차이가 드러나야 사용자가 헷갈리지 않는다.
+ *
+ * 끌 수 있어야 하는 이유를 힌트에 적는다 — 등록 대상이 **사용자가 띄운 공용 서버**라,
+ * 같은 프로젝트 폴더로 그 서버에 붙은 다른 클라이언트도 이 도구를 본다.
+ */
+export function AgentSection({ settings, onSave }: AgentSectionProps) {
+  return (
+    <section className="dc-settings__section">
+      <h3 className="dc-settings__heading">{t('에이전트 연동')}</h3>
+
+      <SettingsToggle
+        label={t('내 화면을 에이전트에게 열어 주기')}
+        hint={t(
+          '프로젝트가 opencode 에 붙을 때 이 앱을 도구로 등록합니다. 에이전트가 "지금 뭐 보고 있어?" 에 답하거나 파일을 화면에 띄울 수 있게 됩니다. 서버는 127.0.0.1 에만 열리고 토큰은 앱을 켤 때마다 새로 만듭니다. 다만 같은 프로젝트 폴더로 그 opencode 서버에 붙은 다른 클라이언트에게도 이 도구가 보입니다.',
+        )}
+        checked={settings.desktopMcp}
+        onChange={(value) => onSave({ ...settings, desktopMcp: value })}
+      />
     </section>
   )
 }

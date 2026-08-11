@@ -7,6 +7,17 @@
 /** opencode 서버 기본 주소. `opencode serve` 의 기본 포트다. */
 export const DEFAULT_OPENCODE_URL = 'http://127.0.0.1:4096'
 
+/**
+ * 데스크톱 MCP 서버 자동 등록의 기본값. **이 상수 한 곳에서만 읽는다** —
+ * 켜고 끄는 판단이 바뀌면 여기 한 줄만 고친다.
+ *
+ * 켜 두는 근거: 사용자가 명시적으로 요청한 기능이고, 서버는 127.0.0.1 에만 바인딩하며
+ * 토큰은 실행마다 새로 만든다. 대신 노출 대상이 공여보다 넓다 — 같은 프로젝트 폴더로
+ * 그 opencode 서버에 붙은 **다른 클라이언트**(TUI·다른 편집기)도 우리 도구를 본다
+ * (`electron/mcp/server.ts` 머리말). 그래서 끌 수 있어야 한다.
+ */
+export const DEFAULT_DESKTOP_MCP = true
+
 /** UI 표시 언어. 기본 한국어. */
 export type Language = 'ko' | 'en' | 'zh'
 
@@ -17,6 +28,11 @@ export interface AppSettings {
   language: Language
   /** 창이 비활성일 때 작업(턴)이 끝나면 OS 알림을 띄울지. */
   taskDoneNotify: boolean
+  /**
+   * 프로젝트가 opencode 에 붙을 때 **데스크톱 MCP 서버를 자동 등록**할지
+   * (`electron/mcp/` — 앱이 MCP **서버**가 되는 쪽이다. `McpDialog` 의 개인 자격 설정과 무관).
+   */
+  desktopMcp: boolean
   /**
    * 개발자 모드. 로그 보기 등 개발자용 UI 를 노출한다.
    * 설정 화면에는 없다 — 전환 경로는 채팅 이스터에그뿐 (스펙 11_spec_devmode).
@@ -42,6 +58,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   opencodeUrl: DEFAULT_OPENCODE_URL,
   language: 'ko',
   taskDoneNotify: true,
+  desktopMcp: DEFAULT_DESKTOP_MCP,
   developerMode: false,
   extensionRegistries: [],
   disabledExtensions: [],
@@ -62,6 +79,7 @@ export function normalizeSettings(parsed: unknown): AppSettings {
       typeof opencode === 'string' && opencode.trim() !== '' ? opencode.trim() : DEFAULT_OPENCODE_URL,
     language: toLanguage(source['language']),
     taskDoneNotify: toBool(source['taskDoneNotify'], DEFAULT_SETTINGS.taskDoneNotify),
+    desktopMcp: toBool(source['desktopMcp'], DEFAULT_SETTINGS.desktopMcp),
     developerMode: toBool(source['developerMode'], DEFAULT_SETTINGS.developerMode),
     extensionRegistries: toRegistries(source['extensionRegistries']),
     disabledExtensions: toNames(source['disabledExtensions']),

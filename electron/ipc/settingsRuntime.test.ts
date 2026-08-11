@@ -32,6 +32,7 @@ const BASE: AppSettings = {
   opencodeUrl: DEFAULT_OPENCODE_URL,
   language: 'ko',
   taskDoneNotify: true,
+  desktopMcp: true,
   developerMode: false,
   extensionRegistries: [],
   disabledExtensions: [],

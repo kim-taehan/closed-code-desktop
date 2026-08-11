@@ -8,6 +8,7 @@ import type {
   LocalNoticePayload,
   TaskNoticePayload,
   ChatSnapshotPayload,
+  DesktopMcpOpenFilePayload,
   DiagnosticsPayload,
   FileListPayload,
   HistoryIdPayload,
@@ -164,6 +165,11 @@ export interface DesktopBridge extends GitHistoryBridge, ExtensionRegistryBridge
     credentials: Record<string, string>
   }): Promise<void>
   onMcpState(handler: ProjectHandler<McpState>): () => void
+  /**
+   * 데스크톱 MCP 서버의 `open_file` 도구가 파일을 열라고 했다 (`electron/mcp/`).
+   * 위의 `*McpCredentials`·`onMcpState` 와 **다른 뜻의 MCP** 다 — `channelNames.ts` 참조.
+   */
+  onDesktopMcpOpenFile(handler: ProjectHandler<DesktopMcpOpenFilePayload>): () => void
   /** 모델 스위처 상태를 다시 받아온다 (연결돼 있으면 push 로 돌아온다) */
   requestModelOptions(): Promise<void>
   /** 모델 스위처 상태 (llm_config status/models 결과, DC-1322) */

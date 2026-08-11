@@ -82,6 +82,16 @@ export interface HistoryIdPayload {
   chatId: string
 }
 
+/**
+ * 데스크톱 MCP 서버의 `open_file` 도구가 연 파일 (`electron/mcp/openFile.ts`).
+ * 경로는 **프로젝트 루트 기준 상대경로**다 — 화면은 이 모양으로만 파일을 연다.
+ */
+export interface DesktopMcpOpenFilePayload {
+  path: string
+  /** 열면서 옮겨 갈 줄 (1부터). 없으면 파일 첫머리. */
+  line?: number
+}
+
 export interface HistoryRenamePayload {
   chatId: string
   title: string
