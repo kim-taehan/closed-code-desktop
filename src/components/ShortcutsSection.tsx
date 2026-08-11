@@ -56,6 +56,7 @@ const SHORTCUTS: { group: string; items: Shortcut[] }[] = [
     items: [
       { keys: `${MOD} + Alt + →`, what: '다음 프로젝트', where: '창 전체' },
       { keys: `${MOD} + Alt + ←`, what: '이전 프로젝트', where: '창 전체' },
+      { keys: `${MOD} + 1…9`, what: 'n번째 프로젝트로 바로 — 9 는 마지막', where: '창 전체' },
     ],
   },
   {

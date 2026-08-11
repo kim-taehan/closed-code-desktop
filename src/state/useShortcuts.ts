@@ -21,6 +21,17 @@ export interface ShortcutHandlers {
   onNextProject: () => void
   onPrevProject: () => void
   /**
+   * ⌘/Ctrl + 1..9 — **n번째 프로젝트로 바로 간다** (1-based, 9 는 "마지막").
+   *
+   * 안 하면: 프로젝트가 서넛을 넘는 순간 ⌘⌥←→ 순환으로만 가야 한다 — 다섯 번째 탭에
+   * 가려고 네 번을 누른다. 공여에는 있는 길이(`shortcuts.ts:104`) 수용에는 없었다.
+   *
+   * **밀어내는 것이 없다.** Electron 앱에는 브라우저 탭이 없어 OS 기본도, 앱 코드도
+   * 이 조합을 안 쓴다 (`_workspace/05_keymap.md` §5.0 리더 질문 2). 그래서 ⌘←→ 와 달리
+   * 편집 동작을 하나도 뺏지 않는다 — 이 항목만 가져오는 이유다.
+   */
+  onProjectAt: (index: number) => void
+  /**
    * ⌘/Ctrl + ↓ / ↑ — 하단 셸 칸을 펴고 접는다.
    *
    * 입력창의 히스토리 되짚기(맨 ↑/↓)와 **같은 키를 노린다.** 임자는 `composerArrowKeys.ts`
@@ -82,6 +93,14 @@ export function useShortcuts(
       if ((key === 'arrowleft' || key === 'arrowright') && event.altKey) {
         event.preventDefault()
         ;(key === 'arrowright' ? handlers.onNextProject : handlers.onPrevProject)()
+        return
+      }
+      // 프로젝트 직행. **⌥ 를 안 본다** — 화살표 쪽과 달리 이 조합에는 임자가 없다.
+      // 크롬 관례대로 9 는 개수와 무관하게 **마지막**이다 (`projectAtIndex` 가 자른다).
+      // shift 는 배제한다 — ⌘⇧1 은 자판에 따라 `!` 로 오는 데다 뜻도 다르다.
+      if (key >= '1' && key <= '9' && !event.shiftKey && !event.altKey) {
+        event.preventDefault()
+        handlers.onProjectAt(Number(key))
         return
       }
       // 셸 칸. macOS 에서 ⌘↑/⌘↓ 는 텍스트 영역의 "문서 처음/끝으로" 기본 동작이기도 한데

@@ -19,6 +19,7 @@ function makeHandlers(): ShortcutHandlers &
     onPrevTab: vi.fn(),
     onNextProject: vi.fn(),
     onPrevProject: vi.fn(),
+    onProjectAt: vi.fn(),
     onShellDown: vi.fn(),
     onShellUp: vi.fn(),
     onCancelTurn: vi.fn(),
@@ -159,6 +160,32 @@ describe('단축키 — 켜져 있을 때', () => {
     const prevented = press({ key: 'ArrowLeft', metaKey: true })
     expect(handlers.onPrevProject).not.toHaveBeenCalled()
     expect(prevented).toBe(false)
+  })
+
+  // ⌘1..9 — 탭이 서넛을 넘으면 순환만으로는 다섯 번째에 네 번 눌러야 간다.
+  // 자리를 고르는 일(9=마지막, 빈 자리는 무시)은 projectCycle.test.ts 가 본다.
+  it('Cmd+1..9 는 그 자리 프로젝트로 간다', () => {
+    mount()
+    const prevented = press({ key: '3', metaKey: true })
+    expect(handlers.onProjectAt).toHaveBeenCalledWith(3)
+    expect(prevented).toBe(true)
+    press({ key: '9', metaKey: true })
+    expect(handlers.onProjectAt).toHaveBeenLastCalledWith(9)
+  })
+
+  it('Cmd+0 은 건드리지 않는다 — 앱 메뉴의 배율 초기화다', () => {
+    mount()
+    const prevented = press({ key: '0', metaKey: true })
+    expect(handlers.onProjectAt).not.toHaveBeenCalled()
+    expect(prevented).toBe(false)
+  })
+
+  // ⌘⇧1 은 자판에 따라 `!` 로 오고 뜻도 다르다. ⌥ 는 화살표 쪽 조합의 표식이다.
+  it('Shift·Alt 가 끼면 프로젝트 직행이 아니다', () => {
+    mount()
+    press({ key: '1', metaKey: true, shiftKey: true })
+    press({ key: '1', metaKey: true, altKey: true })
+    expect(handlers.onProjectAt).not.toHaveBeenCalled()
   })
 
   it('입력창·편집기 안에서도 먹는다 — Alt 를 끼워 충돌이 없기 때문', () => {

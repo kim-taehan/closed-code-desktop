@@ -140,6 +140,7 @@ export function App() {
       onPrevTab: () => nav.prev(),
       onNextProject: projectNav.next,
       onPrevProject: projectNav.prev,
+      onProjectAt: projectNav.at,
       onShellDown: shell.goDown,
       onShellUp: shell.goUp,
       onCancelTurn: () => void window.davis.cancelChat(),
