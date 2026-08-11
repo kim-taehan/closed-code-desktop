@@ -19,8 +19,18 @@ import { opencodeAuthHeaders } from '../opencode/client'
 // 3. **크기 변경은 WS 가 아니라 `PUT /api/pty/{id}`** 의 `{size:{rows,cols}}` 다.
 
 /**
- * 서버가 받아 주는 크기인가. `PUT` 스키마가 `exclusiveMinimum: 0` 이라 **0 이면 400** 이다.
- * 접힌 드로어에서 addon-fit 이 0 을 내놓으므로 정상 흐름에서 밟는 자리다.
+ * 서버가 받아 주는 크기인가. `PUT` 스키마가 `exclusiveMinimum: 0` 이라 **0 이면 400** 이다
+ * (실측 — 생 `PUT {size:{rows:0,cols:80}}` 로 확인).
+ *
+ * **지금의 유일한 생산자(addon-fit)로는 여기 안 걸린다.** 설치본 소스를 펴 보면
+ * `proposeDimensions` 가 셀 크기가 0 이면 `undefined` 를 주고, 아니면
+ * `{cols: Math.max(2, …), rows: Math.max(1, …)}` 로 **스스로 클램프한다.**
+ * 접혀서 `display:none` 이 되면 폭·높이가 **함께** NaN 이 되므로 `rows` 만 0/NaN 인
+ * 경우도 없고, 그건 `DrawerTerminal` 의 `Number.isNaN(cols) || cols < MIN_COLS` 가 잡는다.
+ *
+ * 그래도 여기 두는 이유: **서버에 실제로 나가는 자리가 여기 하나**이고, `drawerBridge` 는
+ * resize 실패를 `.catch(() => {})` 로 삼킨다(크기 조절 때문에 드로어를 죽이지 않으려고).
+ * 즉 addon-fit 말고 다른 호출자가 생기는 순간 **400 이 조용히 사라진다.** 그 자리를 막는다.
  */
 export function isSendableSize(size: { rows: number; cols: number }): boolean {
   return Number.isInteger(size.rows) && Number.isInteger(size.cols) && size.rows > 0 && size.cols > 0

@@ -134,10 +134,9 @@ export class PtyDrawerBridge {
    * 크기 변경. **묶어서 보낸다** — FitAddon 이 창 크기를 끄는 동안 계속 부르는데
    * 그때마다 HTTP 를 때리면 요청이 수십 개 쌓인다.
    *
-   * ⚠️ **0 은 보내지 않는다.** opencode 의 `PUT` 은 `rows`·`cols` 가 둘 다 필수이고
-   * `exclusiveMinimum: 0` 이라 **0 이면 HTTP 400** 이다 (실측). 드로어를 접으면
-   * `display:none` 이 되어 addon-fit 이 0 에 가까운 값을 내놓는다 — 렌더러에도 하한이
-   * 있지만(`DrawerTerminal` 의 MIN_COLS) 서버에 실제로 나가는 자리가 여기라 여기서도 막는다.
+   * ⚠️ **0 은 보내지 않는다** (`isSendableSize` — 왜 지금은 도달 불가인데도 두는지가 거기 있다).
+   * 여기서 먼저 걸러 디바운스 타이머조차 걸지 않는다. 아래 `.catch(() => {})` 가 실패를
+   * 삼키므로, 못 보낼 값이 여기까지 오면 **아무 흔적 없이 사라진다.**
    */
   private resize(payload: PtyResizePayload): void {
     if (!isSendableSize(payload)) return
