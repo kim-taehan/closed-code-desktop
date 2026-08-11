@@ -144,15 +144,25 @@ describe('DesktopMcp', () => {
     expect(lines[0]).toContain('SSE error: Unable to connect.')
   })
 
-  // MCP 는 있으면 좋은 것이지 앱의 조건이 아니다 — 실패가 세션을 죽이면 안 된다
-  it('등록이 실패해도 던지지 않는다', async () => {
-    const fetchImpl = vi.fn().mockRejectedValue(new Error('서버 없음')) as unknown as typeof fetch
+  // MCP 는 있으면 좋은 것이지 앱의 조건이 아니다 — 실패가 세션을 죽이면 안 된다.
+  //
+  // **던지지 않는 것만으로는 부족하다.** 조용히 삼키면 등록이 안 된 사실이 아무 데도 안 남고,
+  // 화면에는 증상이 없다(도구가 그냥 안 뜬다). 사유가 로그에 닿는지까지 본다 —
+  // 실제로 이 경로로 오는 흔한 실패가 **비밀번호 건 서버에 비밀번호 없이 붙는 것**이고,
+  // 그때 유일한 단서가 `HTTP 401` 한 줄이다 (contract-qa 실측).
+  it('등록이 실패해도 던지지 않는다 — 대신 사유를 로그에 남긴다', async () => {
+    const lines: string[] = []
+    const fetchImpl = vi.fn().mockRejectedValue(new Error('HTTP 401')) as unknown as typeof fetch
     const mcp = new DesktopMcp({
       settings: () => Promise.resolve({ desktopMcp: true, opencodeUrl: 'http://127.0.0.1:4096' }),
       ports,
       fetchImpl,
+      log: (line) => lines.push(line),
     })
     running = mcp
+
     await expect(mcp.onProjectReady(projectA)).resolves.toBeUndefined()
+    expect(lines[0]).toContain('MCP 등록 실패')
+    expect(lines[0]).toContain('HTTP 401')
   })
 })
