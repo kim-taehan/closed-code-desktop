@@ -3,6 +3,15 @@
 // **실제로 등록된 것만 적는다.** 목록에 있는데 안 먹는 단축키는
 // 없는 것보다 나쁘다 — 사용자는 자기가 잘못 눌렀다고 생각한다.
 // 새 단축키를 만들 때 여기 한 줄을 함께 더한다.
+//
+// ⚠️ **반대 방향으로도 어긋난다.** 화면은 "지금 동작하는 것만 적혀 있습니다" 라고
+// 광고하는데(아래 `dc-settings__hint`), 실제로 도는 Esc(응답 중단)·⌘Enter(리뷰 적용)·
+// ↑↓(입력 되짚기)·⌘↓⌘↑(셸 칸) 넷이 빠져 있었다. 빠진 것은 위 규칙만큼 나쁘지는 않지만
+// 같은 약속을 깨는 일이라 함께 채웠다 — **적힌 것이 도는가**와 **도는 것이 적혔는가**는
+// 둘 다 이 파일의 몫이다.
+//
+// `where` 는 실제 등록 범위와 맞춰야 한다. ⇧Tab 을 「창 전체」로 적어 뒀던 것이
+// `PermissionModeSwitch` 가 창 전체를 가로채던 시절의 흔적이었다.
 
 import { t } from '../i18n/messages'
 // 수식키 표기는 ⚙ 메뉴와 나눠 쓴다 (modKey.ts) — 판정을 복사하면 두 화면이 갈린다.
@@ -24,7 +33,16 @@ const SHORTCUTS: { group: string; items: Shortcut[] }[] = [
       { keys: 'Enter', what: '보내기', where: '입력창' },
       { keys: 'Shift + Enter', what: '줄바꿈', where: '입력창' },
       { keys: 'Esc Esc', what: '입력 지우기 (두 번 연속)', where: '입력창' },
-      { keys: 'Shift + Tab', what: '권한 모드 순환', where: '창 전체' },
+      // 「창 전체」였는데 실제로는 입력창 안에서만 먹는다 — 밖에서는 역방향 포커스 이동이다
+      { keys: 'Shift + Tab', what: '권한 모드 순환', where: '입력창' },
+      { keys: '↑ ↓', what: '이전에 보낸 입력 되짚기 — 첫 줄/끝 줄에서만', where: '입력창' },
+    ],
+  },
+  {
+    group: '응답 중',
+    items: [
+      { keys: 'Esc', what: '응답 중단', where: '창 전체' },
+      { keys: `${MOD} + Enter`, what: 'turn 리뷰 전체 적용', where: '창 전체' },
     ],
   },
   {
@@ -62,6 +80,8 @@ const SHORTCUTS: { group: string; items: Shortcut[] }[] = [
   {
     group: '창',
     items: [
+      { keys: `${MOD} + ↓`, what: '아래 셸 칸 열기', where: '창 전체' },
+      { keys: `${MOD} + ↑`, what: '셸 칸 접고 본문으로', where: '창 전체' },
       { keys: `${MOD} + N`, what: '새 대화', where: '창 전체' },
       { keys: `${MOD} + ,`, what: '설정 열기', where: '창 전체' },
       { keys: `${MOD} + L`, what: '로그 보기', where: '창 전체', dev: true },
