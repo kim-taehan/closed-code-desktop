@@ -13,8 +13,11 @@
 | **`electron/opencode/` 어댑터** | ✅ 핸드셰이크·텍스트·추론·도구·턴 종료·취소·승인·질문 |
 | **앱 배선** (`sessionWiring` → `OpencodeConnection`) | ✅ **앱이 opencode 로 붙는다.** davis WS 경로는 안 쓴다 |
 | **가짜 opencode 서버** (`tests/fake-opencode/`) | ✅ 세션 격리·생사 신호 테스트가 이걸로 돈다 |
+| **`electron/mcp/` 데스크톱 MCP 서버** | ✅ 앱이 **MCP 서버**가 되어 프로젝트가 붙을 때마다 opencode 에 자동 등록된다 (`AppSettings.desktopMcp`) |
+| **`electron/pty/` 셸 드로어 (⌘↓/⌘↑)** | ✅ opencode 의 `/api/pty` 에 붙는다. **네이티브 모듈 없음** |
 | `electron/runtime/` 프로세스 수명관리 | ⬜ 미전환 — 서버는 사용자가 직접 띄운다 |
-| 채팅 이력 · 턴 리뷰(diff) · MCP · 모델 스위처 | ⬜ 미착수 — 프레임은 나가지만 opencode 대응이 없어 조용히 버려진다 |
+| 채팅 이력 · 턴 리뷰(diff) · 모델 스위처 | ⬜ 미착수 — 프레임은 나가지만 opencode 대응이 없어 조용히 버려진다 |
+| MCP **클라이언트** 설정 (`McpDialog`·`session/mcpConfig.ts`) | ⬜ 미착수 — 위의 `electron/mcp/` 와 **다른 것이다** (아래 「두 가지 MCP」) |
 | 확장 질의 레인 (`agentLane`) | ⬜ 미전환 — 아직 davis WS 소켓을 연다 |
 
 어댑터는 **실제 opencode 서버로 한 턴을 끝까지 돌려 검증**했다 (`electron/opencode/live.test.ts`).
@@ -99,7 +102,42 @@ session/*  ──davis 봉투(kind/action)──▶  OpencodeTransport  ──HT
 7. **`textID` 는 메시지 안에서만 유일하다** (`text-0` 이 매번 재사용됨).
    버블 묶기 키는 `assistantMessageID:textID` 여야 한다.
 
+8. **`POST /mcp` 는 `/api` 판이 없다.** 1번("두 API 세대를 섞지 말 것")과 겉으로 충돌해 보이지만
+   `/api/mcp` 가 아예 존재하지 않는다 (162경로 전수 확인) — 선택지가 없다. 레거시 표면이라
+   `{data:...}` 래핑도 없다. `electron/opencode/client.ts` 의 `addMcpServer` 한 곳뿐이다.
+
+9. **비밀번호 인증은 Bearer 가 아니라 HTTP Basic 이고 사용자명이 `opencode` 로 고정이다.**
+   `OPENCODE_SERVER_PASSWORD` 를 건 서버에 네 가지를 다 넣어 봤고 통과한 것은 하나뿐이다:
+   `Bearer <pw>` → 401, `x-opencode-password` → 401, `Basic <"":pw>` → 401,
+   **`Basic <"opencode":pw>` → 200**. HTTP 와 WebSocket 이 같은 헤더를 쓴다.
+   `POST /api/pty/{id}/connect-token` 은 비밀번호를 걸든 안 걸든 403 을 주므로 쓰지 않는다.
+
+10. **pty 는 서버가 굴린다 — 그리고 인자를 스스로 붙인다.** `POST /api/pty` 에 `args:["-l"]`
+    을 주면 `["-l","-l"]` 이 된다. **`args` 를 보내지 않는다.** 크기 변경은 WS 가 아니라
+    `PUT /api/pty/{id}` 의 `{size:{rows,cols}}` 이고, 셸 종료는 제어 프레임이 아니라
+    **WS close(1000)** 으로 온다 (종료 코드는 `GET /api/pty/{id}` 의 `exitCode`).
+
 > 버전을 올리면 `curl http://127.0.0.1:4096/doc` 을 다시 떠서 대조할 것.
+
+## davis 대응이 없는 신규 표면
+
+아래 둘은 **매핑표에 줄이 없다.** davis 런타임에 대응 개념이 아예 없고, opencode 서버가
+이미 갖고 있어서 그대로 쓴다 — 번역이 아니라 새로 붙인 계층이다.
+
+| 표면 | 우리 쪽 | 무엇을 안 하게 됐나 |
+|---|---|---|
+| `/api/pty` (셸) | `electron/pty/` | **`node-pty` 를 안 들인다.** `electron-rebuild`·arm64/x64 재빌드·`asarUnpack` 이 통째로 없다. 새 의존은 `@xterm/xterm`·`@xterm/addon-fit` (둘 다 순수 JS) |
+| `POST /mcp` (MCP 등록) | `electron/mcp/` | **사용자 `~/.config/opencode/opencode.json` 을 안 고친다.** 등록이 instance 수명이라 앱을 끄면 죽은 항목이 남지 않는다 — 대신 **재연결마다 다시 등록**한다 |
+
+### 두 가지 MCP — 같은 낱말, 다른 뜻
+
+| | 앱이 MCP **서버** | 앱이 MCP **클라이언트** |
+|---|---|---|
+| 자리 | `electron/mcp/`, `Channel.DESKTOP_MCP_*` | `electron/session/mcpConfig.ts`, `src/components/McpDialog.tsx`, `Channel.MCP_*` |
+| 하는 일 | 에이전트가 우리 앱을 조작한다 (`open_file`·`current_view`) | 사용자가 남의 MCP 서버에 쓸 개인 자격을 넣는다 |
+| 상태 | ✅ 동작 | ⬜ 프레임이 조용히 버려진다 (`opencode/transport.ts:129`) |
+
+**둘은 아무 관계가 없다.** 채널·타입·설정 문구를 갈라 뒀고, 새 파일 머리주석마다 이 구분을 적는다.
 
 ## 개발
 
