@@ -1,0 +1,690 @@
+/* 소스 관리 탭 (본문 전체).
+   사이드바 패널은 git.css 다 — 브랜치 줄(.git-bar)·빈 상태(.git-empty)는 거기 것을 그대로 쓴다.
+   여기는 탭 껍데기(갈래 줄·본문 자리)만 둔다. 색은 --dc-* 토큰만 쓴다. */
+
+.scm-tab {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 탭에서는 브랜치 줄이 본문 폭을 통째로 쓴다 — 아래 갈래 줄과 경계를 나눈다 */
+.scm-tab .git-bar {
+  border-bottom: 1px solid var(--dc-border);
+}
+
+.scm-views {
+  display: flex;
+  gap: 4px;
+  padding: 0 10px;
+  flex: none;
+  border-bottom: 1px solid var(--dc-border);
+  background: var(--dc-surface);
+}
+
+.scm-view {
+  position: relative;
+  padding: 8px 12px 9px;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--dc-text-muted);
+  cursor: pointer;
+}
+
+.scm-view--active {
+  color: var(--dc-text);
+}
+
+/* 밑줄은 갈래 줄의 테두리 위에 겹친다 — 지금 갈래가 본문과 이어져 보이게 */
+.scm-view--active::after {
+  content: '';
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: -1px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--dc-accent);
+}
+
+.scm-view__count {
+  margin-left: 4px;
+  font-family: var(--dc-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 11px;
+  opacity: 0.8;
+}
+
+/* 갈래 본문 자리. 스크롤을 여기가 쥔다 — 안에 들어올 FileDiffView 는 스크롤을 소유하지 않는다. */
+.scm-pane {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+/* ── 변경사항 갈래 ─────────────────────────────────── */
+
+/* 세 덩어리(고를 것·볼 것·쓸 것)를 한 화면에 둔다. 커밋바는 바닥에 고정이고
+   위 두 칸이 각자 스크롤한다 — 그래서 .scm-pane 의 스크롤은 여기서 안 돈다. */
+.scm-changes {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.scm-split {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(200px, 320px) 1fr;
+}
+
+/* ── 왼쪽: 파일 목록 ───────────────────────────────── */
+
+.scm-files {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--dc-border);
+}
+
+.scm-filter {
+  flex: none;
+  padding: 8px 10px;
+}
+
+.scm-filter__input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 4px 8px;
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius-sm);
+  background: var(--dc-bg);
+  color: var(--dc-text);
+  font: inherit;
+  font-size: 12px;
+}
+
+.scm-files__body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+/* ── 오른쪽: 고른 파일의 변경 내용 ─────────────────── */
+
+.scm-diff {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.scm-diff__head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--dc-border);
+}
+
+/* 경로는 뒤쪽(파일명)이 살아남아야 해 앞을 자른다 — .git-row__path 와 같은 규칙 */
+.scm-diff__path {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--dc-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+}
+
+.scm-diff__body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+/* ── 덩어리 ────────────────────────────────────────── */
+
+.scm-hunk {
+  border-bottom: 1px solid var(--dc-border);
+}
+
+.scm-hunk__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: var(--dc-layer);
+}
+
+/* 머리는 원문 그대로다 (되만들지 않는다) — 길면 자르되 줄바꿈하지 않는다 */
+.scm-hunk__title {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--dc-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 11px;
+  color: var(--dc-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scm-hunk__actions {
+  flex: none;
+  display: inline-flex;
+  gap: 4px;
+}
+
+/* ── 버튼 (한 벌만 둔다) ───────────────────────────── */
+
+.scm-btn {
+  flex: none;
+  padding: 3px 9px;
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius-sm);
+  background: var(--dc-surface);
+  color: var(--dc-text);
+  font: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+.scm-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--dc-accent) 20%, transparent);
+}
+
+.scm-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.scm-btn--ghost {
+  border-color: transparent;
+  background: transparent;
+  color: var(--dc-text-muted);
+}
+
+.scm-btn--primary {
+  border-color: color-mix(in srgb, var(--dc-accent) 55%, transparent);
+  background: color-mix(in srgb, var(--dc-accent) 22%, transparent);
+}
+
+/* ── 히스토리 갈래 ─────────────────────────────────── */
+
+/* 변경사항 갈래와 같은 골격(좌 목록 / 우 상세). 왼쪽 폭만 조금 넓다 — 커밋 한 줄은
+   해시·작성자·시각이 함께 들어가 파일 경로보다 길다. */
+.scm-history {
+  height: 100%;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(240px, 360px) 1fr;
+}
+
+.scm-commits {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--dc-border);
+}
+
+.scm-commits__body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.scm-commit-row {
+  width: 100%;
+  display: flex;
+  gap: 6px;
+  padding: 5px 10px 6px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.scm-commit-row:hover {
+  background: var(--dc-surface);
+}
+
+.scm-commit-row--on {
+  background: color-mix(in srgb, var(--dc-accent) 16%, transparent);
+}
+
+/* 레일은 세로선 하나와 점 하나다 — 병합 곡선·레인은 그리지 않는다 (ScmHistory 머리말).
+   줄 사이가 이어져 보이도록 세로선은 줄 전체 높이를 쓴다. */
+.scm-rail {
+  position: relative;
+  flex: none;
+  width: 10px;
+  align-self: stretch;
+}
+
+.scm-rail::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: -6px;
+  bottom: -6px;
+  width: 1px;
+  transform: translateX(-50%);
+  background: var(--dc-border);
+}
+
+.scm-rail__dot {
+  position: absolute;
+  left: 50%;
+  top: 6px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  transform: translateX(-50%);
+  background: var(--dc-text-muted);
+}
+
+.scm-commit-row--on .scm-rail__dot {
+  background: var(--dc-accent);
+}
+
+.scm-commit-row__body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.scm-commit-row__msg {
+  font-size: 12.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scm-commit-row__sub {
+  font-family: var(--dc-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 11px;
+  color: var(--dc-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 라벨 배지. 글자는 git 이 준 원문 그대로고 종류만 색으로 가른다. */
+.scm-badge {
+  margin-right: 4px;
+  padding: 0 5px;
+  border-radius: var(--dc-radius-pill, 999px);
+  font-family: var(--dc-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 10px;
+  white-space: nowrap;
+  background: var(--dc-layer);
+  color: var(--dc-text-muted);
+}
+
+.scm-badge--head {
+  background: color-mix(in srgb, var(--dc-accent) 26%, transparent);
+  color: var(--dc-text);
+}
+
+.scm-badge--remote {
+  background: color-mix(in srgb, var(--dc-status-success) 22%, transparent);
+  color: var(--dc-text);
+}
+
+.scm-badge--tag {
+  background: color-mix(in srgb, var(--dc-status-warn) 24%, transparent);
+  color: var(--dc-text);
+}
+
+.scm-more {
+  flex: none;
+  padding: 6px 10px;
+  border: 0;
+  border-top: 1px solid var(--dc-border);
+  background: none;
+  color: var(--dc-text-muted);
+  font: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+.scm-more:hover:not(:disabled) {
+  background: var(--dc-surface);
+}
+
+.scm-more:disabled {
+  cursor: default;
+}
+
+/* ── 커밋 상세 ─────────────────────────────────────── */
+
+.scm-detail-pane {
+  min-width: 0;
+  overflow: auto;
+}
+
+.scm-detail__head {
+  padding: 10px;
+  border-bottom: 1px solid var(--dc-border);
+}
+
+.scm-detail__subject {
+  margin: 0 0 4px;
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.scm-detail__meta {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--dc-text-muted);
+}
+
+.scm-detail__hash {
+  font-family: var(--dc-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+}
+
+.scm-detail__files {
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--dc-border);
+}
+
+/* 잘렸다는 사실은 눈에 띄어야 한다 — 조용히 자르면 커밋을 잘못 읽는다 */
+.scm-detail__cut {
+  margin: 0;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--dc-border);
+  background: color-mix(in srgb, var(--dc-status-warn) 16%, transparent);
+  font-size: 11.5px;
+  color: var(--dc-text);
+}
+
+/* 커밋 상세의 파일 줄에는 누를 것이 없다 (지나간 커밋이다) — 자르기 규칙은
+   .git-row__path 그대로 쓰고 "누를 수 있다"는 신호만 걷어낸다 */
+.git-row__path--plain,
+.git-row__path--plain:hover {
+  cursor: default;
+  text-decoration: none;
+}
+
+/* ── 브랜치 갈래 ───────────────────────────────────── */
+
+.scm-refs {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 로컬 / 원격 / 임시저장 세 칸 (목업 안 A). 각 칸이 따로 스크롤한다. */
+.scm-refs__cols {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.scm-refs__col {
+  min-width: 0;
+  overflow: auto;
+  border-right: 1px solid var(--dc-border);
+}
+
+.scm-refs__col:last-child {
+  border-right: 0;
+}
+
+.scm-refs__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px 4px;
+}
+
+.scm-refs__head .git-group__title {
+  flex: 1;
+  min-width: 0;
+}
+
+.scm-ref-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  font-size: 12px;
+}
+
+.scm-ref-row:hover {
+  background: var(--dc-surface);
+}
+
+.scm-ref-row--on {
+  background: color-mix(in srgb, var(--dc-accent) 12%, transparent);
+}
+
+.scm-ref-row__mark {
+  flex: none;
+  width: 8px;
+  color: var(--dc-accent);
+  font-size: 9px;
+}
+
+/* 브랜치 이름은 뒤쪽(feat/x 의 x)이 살아남아야 해 앞을 자른다 — .git-row__path 와 같은 규칙 */
+.scm-ref-row__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+  text-align: left;
+}
+
+.scm-ref-row__when {
+  flex: none;
+  font-size: 11px;
+  color: var(--dc-text-muted);
+}
+
+/* git 이 낸 추적 문구 원문(`[ahead 1]`·`[gone]`) */
+.scm-ref-row__track {
+  flex: none;
+  font-family: var(--dc-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 10.5px;
+  color: var(--dc-status-warn);
+}
+
+/* 줄에 마우스가 왔을 때만 행동을 보인다 — 세 칸이 버튼으로 가득 차면 이름이 안 읽힌다 */
+.scm-ref-row__acts {
+  flex: none;
+  display: none;
+  gap: 4px;
+}
+
+.scm-ref-row:hover .scm-ref-row__acts,
+.scm-ref-row:focus-within .scm-ref-row__acts {
+  display: inline-flex;
+}
+
+/* 되돌릴 수 없는 것(강제 삭제·버리기)은 색으로도 갈라 둔다. 확인 대화는 따로 받는다. */
+.scm-btn--danger {
+  border-color: color-mix(in srgb, var(--dc-status-error) 45%, transparent);
+  color: var(--dc-status-error);
+}
+
+.scm-btn--danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--dc-status-error) 18%, transparent);
+}
+
+.scm-ref-form {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.scm-ref-form .scm-filter__input {
+  width: 130px;
+}
+
+/* ── 브랜치 칩 메뉴 (메뉴를 받은 자리에서만 뜬다) ──── */
+
+.git-chip--menu {
+  position: relative;
+  padding: 0;
+}
+
+.git-chip__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border: 0;
+  border-radius: inherit;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.git-chip__caret {
+  font-size: 9px;
+  color: var(--dc-text-muted);
+}
+
+.scm-branch-menu {
+  position: absolute;
+  left: 0;
+  top: calc(100% + 4px);
+  z-index: 10;
+  min-width: 200px;
+  max-height: 320px;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius-md);
+  background: var(--dc-surface);
+  box-shadow: 0 8px 20px rgb(0 0 0 / 28%);
+}
+
+.scm-branch-menu__empty {
+  margin: 0;
+  padding: 5px 8px;
+  font-size: 11.5px;
+  color: var(--dc-text-muted);
+}
+
+.scm-branch-menu__foot {
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px solid var(--dc-border);
+}
+
+/* ── 아래: 커밋바 ──────────────────────────────────── */
+
+.scm-commit {
+  flex: none;
+  display: flex;
+  gap: 10px;
+  padding: 8px 10px 10px;
+  border-top: 1px solid var(--dc-border);
+}
+
+.scm-commit__input {
+  flex: 1;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius-sm);
+  background: var(--dc-bg);
+  color: var(--dc-text);
+  font: inherit;
+  font-size: 12px;
+  resize: vertical;
+}
+
+.scm-commit__side {
+  flex: none;
+  width: 240px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* 메뉴가 이 상자를 기준으로 뜬다 (바깥 클릭 닫기의 경계이기도 하다) */
+.scm-commit__buttons {
+  position: relative;
+  display: flex;
+  gap: 4px;
+}
+
+.scm-commit__go {
+  flex: 1;
+}
+
+/* ▾ 는 커밋 버튼에 붙은 한 짝이다 — 사이를 벌리지 않는다 */
+.scm-commit__more {
+  padding: 3px 7px;
+}
+
+.scm-menu {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 4px);
+  z-index: 10;
+  min-width: 170px;
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius-md);
+  background: var(--dc-surface);
+  box-shadow: 0 8px 20px rgb(0 0 0 / 28%);
+}
+
+.scm-menu__item {
+  padding: 5px 8px;
+  border: none;
+  border-radius: var(--dc-radius-sm);
+  background: transparent;
+  color: var(--dc-text);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.scm-menu__item:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--dc-accent) 20%, transparent);
+}
+
+.scm-menu__item:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.scm-commit__meta {
+  margin: 0;
+  font-size: 11px;
+  color: var(--dc-text-muted);
+}
+
+.scm-kbd {
+  padding: 0 4px;
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius-sm);
+  font-family: var(--dc-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 10px;
+}

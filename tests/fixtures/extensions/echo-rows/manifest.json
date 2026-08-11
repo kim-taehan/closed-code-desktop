@@ -1,0 +1,11 @@
+{
+  "manifestVersion": 1,
+  "name": "echo-rows",
+  "displayName": "행 내보내기 (시험용)",
+  "version": "1.0.0",
+  "main": "main.js",
+  "contributes": {
+    "commands": [{ "id": "echoRows.run", "title": "실행" }],
+    "views": [{ "id": "echoRows.results", "title": "결과", "kind": "table" }]
+  }
+}

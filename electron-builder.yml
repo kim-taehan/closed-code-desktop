@@ -1,0 +1,41 @@
+# electron-builder 설정 (PoC — 서명 없음)
+appId: com.opencode.desktop
+productName: Open Code Desktop
+copyright: SKCC
+
+directories:
+  output: release
+  buildResources: build
+
+# 패키징 대상: 컴파일된 메인(dist-electron) + 렌더러 번들(dist) + 매니페스트.
+# 소스 .ts 와 테스트 산출물은 뺀다. (ws 등 production 의존성은 electron-builder 가 자동 포함)
+files:
+  - dist-electron/**/*
+  - dist/**/*
+  - package.json
+  - build/icon.png # OS 알림 아이콘 (taskNotifier 가 런타임에 읽는다)
+  - '!dist-electron/**/*.test.js'
+  - '!dist-electron/src/**/*'
+  - '!dist-electron/tests/**/*'
+  - '!**/*.map'
+
+asar: true
+
+mac:
+  target:
+    - target: zip
+      arch: [arm64, x64] # Apple Silicon + Intel
+  category: public.app-category.developer-tools
+  icon: build/icon.icns
+  identity: null # PoC: 코드 서명 없음
+
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  # .ico 가 없으면 electron-builder 가 icon.png(1024px)에서 자동 변환한다
+  # 코드 서명은 mac 과 마찬가지로 안 한다 (인증서 미설정 시 electron-builder 가 자동 생략)
+  icon: build/icon.png
+
+# 버전 없는 이름으로 고정 → releases/latest/download 로 항상 최신을 받게 한다.
+artifactName: open-code-desktop-${arch}.${ext}

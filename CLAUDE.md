@@ -1,0 +1,49 @@
+# CLAUDE.md — open-code-desktop
+
+opencode 헤드리스 서버(HTTP+SSE)에 붙는 Electron 데스크톱 클라이언트.
+프로젝트 개요·현재 상태·이벤트 매핑표는 `README.md`.
+
+`davis-code-desktop` 소스를 복사해 출발했다. **이 레포는 davis 제품 라인이 아니다** —
+메타레포(`../davis-code`)의 크로스레포 하네스·Jira 커밋 규칙 대상이 아니고, 독립적으로 굴린다.
+
+## 이 레포의 착지 기준
+
+- **파일당 300줄 상한** (`.ts`/`.tsx`, `scripts/check-file-size.mjs`). 초과는 추출로 푼다.
+  주석 삭제로 줄이지 않는다 — 이 레포의 주석은 실측 근거다 (davis 시절부터 이어진 규칙)
+- **완료 = 게이트 3종 동시 초록** (typecheck 2 tsconfig · lint:filesize · vitest)
+- 커밋·푸시는 사용자가 요청할 때만
+
+## 작업할 때 알아야 할 것
+
+**갈아끼우는 자리는 `electron/ws/transport.ts` 의 `Transport`/`SessionConnection` 인터페이스다.**
+`electron/session/*` 전체가 이 인터페이스만 알고 ws 라이브러리를 직접 쓰지 않는다 (설계 §10 DIP).
+opencode 어댑터(`electron/opencode/`)는 davis 봉투(`kind`/`action`)를 흉내내 위층에 먹이는
+**부패방지 계층**이다 — 위층을 고치는 게 아니라 번역한다. 새 기능을 붙일 때도 이 원칙을 지킨다:
+`session/*` 를 고쳐야 할 것 같으면, 먼저 어댑터에서 번역으로 풀 수 있는지 본다.
+
+**세션 격리를 깨뜨리지 말 것.** `/api/event` 는 **서버 전역**이라 다른 프로젝트 세션의 이벤트가
+같은 스트림으로 들어온다. 막는 것은 `transport.ts` 의 sessionID 필터 하나뿐이고,
+`electron/session/multiSession.test.ts` 가 그걸 겨눈다. davis 때는 프로젝트마다 소켓이 갈려
+물리적으로 안전했던 자리다 — 그 감각으로 만지면 남의 대화가 화면에 샌다.
+
+**프로토콜 정본은 opencode 의 OpenAPI 다.** 추측하지 말고 뜬다:
+
+```bash
+opencode serve --port 4096 --hostname 127.0.0.1
+curl http://127.0.0.1:4096/doc
+```
+
+**`shared/protocol/*` 와 `electron/session/*` 의 주석은 davis 런타임 소스를 실측한 근거다.**
+opencode 로 옮기며 사실이 아니게 된 주석은 지우지 말고 **고쳐 쓴다** — 어디가 왜 달라졌는지가
+어댑터의 설계 근거가 된다.
+
+## 모델
+
+`~/.config/opencode/opencode.json` → `davis-litellm` 프로바이더 (사내 LiteLLM `http://<internal-llm-ip>/v1`).
+
+| 모델 | 용도 |
+|---|---|
+| `glm-5.2` | **어댑터 검증용.** reasoning 모델이라 max_tokens 넉넉히 |
+| `qwen3.6-35b` | 약한 모델 내구성 판정용 — 검증 통과 **후에** 별도로 |
+
+두 변수(엔진 교체 · 모델 교체)를 동시에 흔들지 않는다. 실패 원인을 못 가린다.

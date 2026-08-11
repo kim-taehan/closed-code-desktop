@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>확장 배포처 (임시)</title>
+<style>
+  /* 앱의 --dc-* 토큰과 같은 값을 쓴다 — 나란히 놓고 봐도 어색하지 않게 */
+  :root {
+    --text: #1f2328; --muted: #59636e; --bg: #ffffff; --page: #f6f7f9;
+    --surface: rgba(0,0,0,0.045); --border: rgba(31,35,40,0.2); --accent: #0969da;
+    --err: #cf222e; --ok: #1a7f37; --warn: #9a6700;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --text: #e6edf3; --muted: #8b949e; --bg: #0d1117; --page: #010409;
+      --surface: rgba(128,128,128,0.08); --border: rgba(139,148,158,0.3); --accent: #79c0ff;
+      --err: #f85149; --ok: #3fb950; --warn: #d29922;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, sans-serif; line-height: 1.6;
+    background: var(--page); color: var(--text); margin: 0; padding: 40px 20px 80px;
+  }
+  .wrap { max-width: 760px; margin: 0 auto; }
+  h1 { font-size: 24px; font-weight: 650; margin: 0 0 4px; }
+  .sub { color: var(--muted); font-size: 14px; margin: 0 0 4px; }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.9em;
+         background: var(--surface); padding: 2px 6px; border-radius: 5px; }
+  h2 { font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.09em; color: var(--muted);
+       margin: 40px 0 10px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+
+  .drop {
+    border: 1px dashed var(--border); border-radius: 12px; padding: 32px 20px;
+    text-align: center; color: var(--muted); font-size: 14px; background: var(--bg);
+    cursor: pointer; transition: border-color .15s, background .15s;
+  }
+  .drop:hover, .drop.over { border-color: var(--accent); background: var(--surface); }
+  .drop strong { color: var(--text); font-weight: 620; }
+
+  .msg { margin-top: 12px; font-size: 13px; padding: 10px 14px; border-radius: 8px; display: none; }
+  .msg.on { display: block; }
+  .msg.ok { color: var(--ok); background: color-mix(in srgb, var(--ok) 12%, transparent); }
+  .msg.err { color: var(--err); background: color-mix(in srgb, var(--err) 12%, transparent); }
+
+  .ext { border: 1px solid var(--border); border-radius: 10px; background: var(--bg);
+         padding: 14px 16px; margin-bottom: 10px; }
+  .ext__top { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+  .ext__name { font-weight: 640; font-size: 15px; }
+  .ext__id { color: var(--muted); font-size: 12px; }
+  .ext__desc { color: var(--muted); font-size: 13px; margin: 4px 0 10px; }
+
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); }
+  th { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); font-weight: 700; }
+  td.num { font-variant-numeric: tabular-nums; }
+  tr:last-child td { border-bottom: none; }
+
+  .tag { font-size: 10px; font-weight: 700; padding: 1px 7px; border-radius: 999px;
+         color: var(--accent); background: color-mix(in srgb, var(--accent) 16%, transparent); }
+  a { color: var(--accent); }
+  .del { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 13px; padding: 2px 6px; }
+  .del:hover { color: var(--err); }
+  .empty { color: var(--muted); font-size: 13.5px; padding: 24px; text-align: center;
+           border: 1px dashed var(--border); border-radius: 10px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>확장 배포처 <span class="tag">임시</span></h1>
+  <p class="sub">앱이 조회할 주소 — <code id="indexUrl">/index.json</code></p>
+  <p class="sub">패키지를 올리면 안의 <code>manifest.json</code> 에서 이름·버전을 읽어 정리합니다.</p>
+
+  <h2>올리기</h2>
+  <div class="drop" id="drop">
+    <strong>.axcx 파일을 끌어다 놓거나 눌러서 고르세요</strong><br />
+    같은 버전을 다시 올리면 덮어씁니다
+  </div>
+  <input type="file" id="file" accept=".axcx,.zip" hidden />
+  <div class="msg" id="msg"></div>
+
+  <h2>올라온 확장</h2>
+  <div id="list"><div class="empty">불러오는 중…</div></div>
+</div>
+
+<script>
+  const drop = document.getElementById('drop')
+  const file = document.getElementById('file')
+  const msg = document.getElementById('msg')
+  const list = document.getElementById('list')
+  document.getElementById('indexUrl').textContent = location.origin + '/index.json'
+
+  function say(text, kind) {
+    msg.textContent = text
+    msg.className = 'msg on ' + kind
+  }
+
+  async function upload(blob) {
+    say('올리는 중…', 'ok')
+    try {
+      const res = await fetch('/upload', { method: 'POST', body: blob })
+      const data = await res.json()
+      if (!res.ok) return say(data.error ?? '올리지 못했습니다', 'err')
+      say(`${data.name} ${data.version} 을 ${data.replaced ? '덮어썼습니다' : '올렸습니다'}`, 'ok')
+      await refresh()
+    } catch (error) {
+      say(String(error), 'err')
+    }
+  }
+
+  drop.onclick = () => file.click()
+  file.onchange = () => file.files[0] && upload(file.files[0])
+  drop.ondragover = (e) => { e.preventDefault(); drop.classList.add('over') }
+  drop.ondragleave = () => drop.classList.remove('over')
+  drop.ondrop = (e) => {
+    e.preventDefault()
+    drop.classList.remove('over')
+    if (e.dataTransfer.files[0]) upload(e.dataTransfer.files[0])
+  }
+
+  function size(bytes) {
+    return bytes < 1024 ? bytes + ' B'
+      : bytes < 1024 * 1024 ? (bytes / 1024).toFixed(1) + ' KB'
+      : (bytes / 1024 / 1024).toFixed(1) + ' MB'
+  }
+
+  async function remove(name, version) {
+    if (!confirm(`${name} ${version} 을 지울까요?`)) return
+    await fetch(`/packages/${encodeURIComponent(name)}/${encodeURIComponent(version)}`, { method: 'DELETE' })
+    await refresh()
+  }
+
+  async function refresh() {
+    const data = await (await fetch('/index.json')).json()
+    if (data.extensions.length === 0) {
+      list.innerHTML = '<div class="empty">아직 올라온 확장이 없습니다.</div>'
+      return
+    }
+    list.innerHTML = data.extensions.map((ext) => `
+      <div class="ext">
+        <div class="ext__top">
+          <span class="ext__name"></span>
+          <span class="ext__id mono"></span>
+          <span class="tag">최신 ${ext.latest}</span>
+        </div>
+        <div class="ext__desc"></div>
+        <table>
+          <thead><tr><th>버전</th><th>크기</th><th>올린 때</th><th></th><th></th></tr></thead>
+          <tbody>
+            ${ext.versions.map((v) => `
+              <tr data-name="${ext.name}" data-version="${v.version}">
+                <td class="mono num">${v.version}</td>
+                <td class="num">${size(v.size)}</td>
+                <td class="num">${new Date(v.uploadedAt).toLocaleString('ko-KR')}</td>
+                <td><a href="${v.url}">받기</a></td>
+                <td><button class="del">지우기</button></td>
+              </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>`).join('')
+
+    // 이름·설명은 textContent 로 넣는다 — 매니페스트 값이라 태그가 섞일 수 있다
+    list.querySelectorAll('.ext').forEach((node, i) => {
+      node.querySelector('.ext__name').textContent = data.extensions[i].displayName
+      node.querySelector('.ext__id').textContent = data.extensions[i].name
+      node.querySelector('.ext__desc').textContent = data.extensions[i].description ?? ''
+    })
+    list.querySelectorAll('.del').forEach((button) => {
+      const row = button.closest('tr')
+      button.onclick = () => remove(row.dataset.name, row.dataset.version)
+    })
+  }
+
+  refresh()
+</script>
+</body>
+</html>

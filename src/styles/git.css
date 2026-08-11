@@ -1,0 +1,782 @@
+/* 소스 관리 패널.
+ *
+ * chat.css 와 따로 둔다 — 그쪽은 이미 크고, 이 패널은 사이드바 한 갈래로 닫혀 있다.
+ * 색은 chat.css 의 --dc-* 변수를 그대로 쓴다. 새 색을 만들지 않는다.
+ *
+ * 선으로 나누지 않고 배경 밝기 차이로 나눈다 (B안). */
+
+.git-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  font-size: 12px;
+}
+
+.git-empty {
+  margin: 0;
+  padding: 16px 12px;
+  color: var(--dc-text-muted);
+  font-size: 12px;
+}
+
+.git-empty--error {
+  color: var(--dc-status-error);
+}
+
+/* ── 브랜치 줄 ─────────────────────────────────────── */
+
+.git-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 8px 7px 10px;
+}
+
+/* 브랜치 칩 — 사이드바와 소스 관리 탭이 같은 모습을 쓴다 (GitBranchChip) */
+.git-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  padding: 2px 8px;
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius-pill);
+  background: var(--dc-layer);
+  font-weight: 600;
+  color: var(--dc-text);
+}
+
+.git-chip__icon {
+  flex: none;
+  color: var(--dc-text-muted);
+}
+
+.git-chip__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.git-bar__counts {
+  display: inline-flex;
+  gap: 6px;
+  font-size: 11px;
+}
+
+.git-bar__ahead {
+  color: var(--dc-status-success);
+}
+
+/* 뒤처진 것은 푸시가 거절될 신호다 — 앞선 것과 다른 색으로 둔다 */
+.git-bar__behind {
+  color: var(--dc-status-warn);
+}
+
+.git-bar__note {
+  font-size: 11px;
+  color: var(--dc-text-muted);
+}
+
+/* 누르기 쉬워야 한다 — 아이콘만 있는 버튼은 글자 버튼보다 표적이 작아 보인다 */
+.git-bar__refresh {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  flex: none;
+  border: none;
+  border-radius: var(--dc-radius-sm);
+  background: transparent;
+  color: var(--dc-text-muted);
+  font-size: 15px;
+  cursor: pointer;
+}
+
+/* 사이드바가 --dc-layer 로 눌려 있으므로 눌린 자리는 밝은 쪽으로 든다.
+   --dc-surface 를 겹치면 같은 방향이라 뭉개진다. */
+.git-bar__refresh:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--dc-bg) 60%, transparent);
+  color: var(--dc-text);
+}
+
+.git-bar__refresh:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* ── 묶음 ──────────────────────────────────────────── */
+
+.git-group {
+  padding: 6px 0 10px;
+}
+
+.git-group__title {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0 0 3px;
+  padding: 0 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--dc-text-muted);
+}
+
+.git-group__count {
+  opacity: 0.7;
+  font-weight: 400;
+}
+
+/* 묶음 전체 행동. 오른쪽 끝으로 밀어 파일 줄의 ↩ 와 세로로 맞춘다. */
+.git-group__action {
+  margin-left: auto;
+  flex: none;
+  padding: 1px 6px;
+  border: none;
+  border-radius: var(--dc-radius-sm);
+  background: transparent;
+  color: var(--dc-text-muted);
+  font: inherit;
+  font-weight: 400;
+  cursor: pointer;
+}
+
+.git-group__action:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--dc-bg) 60%, transparent);
+  color: var(--dc-text);
+}
+
+.git-group__action:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.git-group__more {
+  margin: 4px 0 0;
+  padding: 0 10px;
+  font-size: 11px;
+  color: var(--dc-text-muted);
+}
+
+/* ── 파일 한 줄 ────────────────────────────────────── */
+
+.git-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: var(--dc-radius-sm);
+}
+
+.git-row:hover {
+  background: color-mix(in srgb, var(--dc-bg) 60%, transparent);
+}
+
+.git-row__check {
+  flex: none;
+  margin: 0;
+}
+
+/* 상태 글자는 폭을 고정한다 — 안 그러면 파일명 시작점이 줄마다 어긋난다 */
+.git-row__letter {
+  flex: none;
+  width: 12px;
+  text-align: center;
+  font-family: var(--dc-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 11px;
+  color: var(--dc-text-muted);
+}
+
+.git-row__letter--added,
+.git-row__letter--untracked {
+  color: var(--dc-status-success);
+}
+
+.git-row__letter--deleted,
+.git-row__letter--conflicted {
+  color: var(--dc-status-error);
+}
+
+.git-row__letter--modified,
+.git-row__letter--renamed {
+  color: var(--dc-status-warn);
+}
+
+.git-row__note {
+  flex: none;
+  font-size: 10px;
+  color: var(--dc-text-muted);
+  opacity: 0.8;
+}
+
+/* ── 파일 트리 배지 ────────────────────────────────── */
+
+.dc-tree__badge {
+  flex: none;
+  margin-left: 4px;
+  font-family: var(--dc-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 10px;
+  line-height: 1;
+}
+
+/* 폴더는 점 하나. 하위에 변경이 있다는 사실만 알린다 — 개수는 셀 수 없다. */
+.dc-tree__badge--dir {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--dc-status-warn);
+  opacity: 0.7;
+}
+
+.dc-tree__badge--added,
+.dc-tree__badge--untracked {
+  color: var(--dc-status-success);
+}
+
+.dc-tree__badge--deleted,
+.dc-tree__badge--conflicted {
+  color: var(--dc-status-error);
+}
+
+.dc-tree__badge--modified,
+.dc-tree__badge--renamed {
+  color: var(--dc-status-warn);
+}
+
+/* 파일 이름은 누를 수 있다 — 버튼이지만 목록의 한 줄로 보여야 한다.
+   경로는 뒤쪽(파일명)이 살아남아야 해서 rtl 로 앞을 자른다. */
+.git-row__path {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+}
+
+.git-row__path:hover {
+  text-decoration: underline;
+}
+
+/* 폴더 부분만 흐리게. 별도 요소지만 잘라내기(rtl)는 한 덩어리로 돈다 —
+   bidi 는 요소 경계가 아니라 글자만 본다. */
+.git-row__dir {
+  color: var(--dc-text-muted);
+}
+
+/* 바뀐 줄 수. 등폭이라 줄마다 자릿수가 흔들려도 눈이 따라간다. */
+.git-row__stat {
+  flex: none;
+  display: inline-flex;
+  gap: 4px;
+  font-family: var(--dc-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 10.5px;
+}
+
+.git-row__stat-plus {
+  color: var(--dc-status-success);
+}
+
+.git-row__stat-minus {
+  color: var(--dc-status-error);
+}
+
+.git-row__conflict {
+  flex: none;
+  padding: 1px 5px;
+  border-radius: var(--dc-radius-pill);
+  background: color-mix(in srgb, var(--dc-status-error) 16%, transparent);
+  color: var(--dc-status-error);
+  font-size: 10px;
+}
+
+.git-row__revert {
+  flex: none;
+  padding: 1px 6px;
+  border: none;
+  border-radius: var(--dc-radius-sm);
+  background: transparent;
+  color: var(--dc-text-muted);
+  font-size: 13px;
+  cursor: pointer;
+  opacity: 0;
+}
+
+/* 평소엔 숨기고 그 줄에 마우스가 올라올 때만 보인다 — 되돌리기는 자주 쓰는 게 아니다 */
+.git-row:hover .git-row__revert {
+  opacity: 1;
+}
+
+.git-row__revert:hover {
+  color: var(--dc-status-error);
+}
+
+/* ── 토스트 ────────────────────────────────────────── */
+
+/* 화면 정중앙에 띄운다. 클릭을 막지 않도록 스택 자체는 통과시키고,
+   개별 토스트만 눌러서 지울 수 있게 한다. */
+.toast-stack {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.toast-stack .toast {
+  pointer-events: auto;
+}
+
+.toast {
+  max-width: 320px;
+  padding: 9px 14px;
+  border: none;
+  border-radius: var(--dc-radius-md);
+  background: var(--dc-text);
+  color: var(--dc-bg);
+  font-size: 12px;
+  text-align: center;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+}
+
+.toast--error {
+  background: var(--dc-status-error);
+  color: #fff;
+}
+
+/* ── 전체 화면으로 넘어가는 문 ─────────────────────── */
+
+/* 커밋 입력칸이 `margin-top:auto` 로 바닥을 잡으므로 이 버튼은 그 아래에 붙는다. */
+.git-panel__full {
+  margin: 0 10px 10px;
+  padding: 5px 0;
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius-sm);
+  background: transparent;
+  color: var(--dc-text-muted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.git-panel__full:hover {
+  background: color-mix(in srgb, var(--dc-bg) 60%, transparent);
+  color: var(--dc-text);
+}
+
+/* ── 커밋 입력칸 (패널 맨 아래 고정) ─────────────────── */
+
+.git-commit {
+  margin-top: auto;
+  padding: 8px 10px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.git-commit__input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius-sm);
+  background: var(--dc-bg);
+  color: var(--dc-text);
+  font: inherit;
+  font-size: 12px;
+  resize: vertical;
+}
+
+.git-commit__actions {
+  display: flex;
+  gap: 6px;
+}
+
+.git-commit__button {
+  flex: 1;
+  padding: 5px 0;
+  border: none;
+  border-radius: var(--dc-radius-sm);
+  background: var(--dc-surface);
+  color: var(--dc-text);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.git-commit__button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--dc-accent) 20%, transparent);
+}
+
+.git-commit__button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.git-bar__pull {
+  padding: 2px 9px;
+  border: 1px solid color-mix(in srgb, var(--dc-status-warn) 55%, transparent);
+  border-radius: var(--dc-radius-pill);
+  background: transparent;
+  color: var(--dc-status-warn);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+/* ── 공지 배너 ─────────────────────────────────────── */
+
+.ann-banner {
+  margin: 0 var(--dc-gutter) 12px;
+  padding: 8px 10px;
+  border-radius: var(--dc-radius-md);
+  background: var(--dc-surface);
+  font-size: 12px;
+}
+
+.ann-banner__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* 펼친 본문 — 흐름 안에서 이어진다. 팝업으로 덮지 않는다. */
+.ann-banner__detail {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--dc-border);
+}
+
+.ann-banner__body {
+  margin: 0 0 10px;
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  color: var(--dc-text);
+}
+
+.ann-banner__done {
+  padding: 5px 16px;
+  border: none;
+  border-radius: var(--dc-radius-sm);
+  background: var(--dc-accent);
+  color: var(--dc-bg);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+/* 우선순위별 왼쪽 띠 — 긴급은 눈에 띄게, 알림은 조용히 */
+.ann-banner--urgent {
+  background: color-mix(in srgb, var(--dc-status-error) 12%, transparent);
+}
+
+.ann-banner__tag {
+  flex: none;
+  padding: 1px 7px;
+  border-radius: var(--dc-radius-pill);
+  font-size: 10px;
+  font-weight: 600;
+  background: var(--dc-surface);
+  color: var(--dc-text-muted);
+}
+
+.ann-banner__tag--urgent {
+  background: var(--dc-status-error);
+  color: #fff;
+}
+
+.ann-banner__tag--low {
+  color: var(--dc-text-muted);
+}
+
+.ann-banner__title {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--dc-text);
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ann-banner__title:hover {
+  text-decoration: underline;
+}
+
+/* 클릭하면 내용이 열린다는 힌트 (VS Code '클릭하여 보기' 대응) */
+.ann-banner__hint {
+  flex: none;
+  font-size: 11px;
+  color: var(--dc-text-muted);
+  opacity: 0.8;
+}
+
+.ann-banner__more {
+  flex: none;
+  padding: 1px 7px;
+  border-radius: var(--dc-radius-pill);
+  background: var(--dc-accent);
+  color: var(--dc-bg);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.ann-banner__close {
+  flex: none;
+  padding: 0 4px;
+  border: none;
+  background: none;
+  color: var(--dc-text-muted);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.ann-banner__close:hover {
+  color: var(--dc-text);
+}
+
+/* ── 공지 내용 (본문 영역 — 대화 자리에 펼친다) ───────── */
+.ann-detail {
+  padding: 12px var(--dc-gutter) 24px;
+  max-width: 860px;
+  margin: 0 auto;
+}
+
+.ann-detail--urgent .ann-detail__title {
+  color: var(--dc-status-error);
+}
+
+.ann-detail__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.ann-detail__back {
+  padding: 4px 10px;
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius-sm);
+  background: var(--dc-surface);
+  color: var(--dc-text);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.ann-detail__back:hover {
+  border-color: var(--dc-accent);
+  color: var(--dc-accent);
+}
+
+.ann-detail__board {
+  margin-left: auto;
+  padding: 4px 10px;
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius-sm);
+  background: var(--dc-surface);
+  color: var(--dc-text-muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.ann-detail__board:hover {
+  border-color: var(--dc-accent);
+  color: var(--dc-accent);
+}
+
+.ann-detail__title {
+  margin: 0 0 12px;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.4;
+  color: var(--dc-text);
+}
+
+.ann-detail__body {
+  font-size: 13px;
+  line-height: 1.75;
+  white-space: pre-wrap;
+  color: var(--dc-text);
+}
+
+.ann-detail__body--empty {
+  color: var(--dc-text-muted);
+}
+
+/* ── 전송 대기열 칩 ────────────────────────────────── */
+
+.composer-queue {
+  margin: 0 var(--dc-gutter) 6px;
+  padding: 7px 11px;
+  border: 1px solid color-mix(in srgb, var(--dc-accent) 35%, transparent);
+  border-radius: var(--dc-radius-md);
+  background: color-mix(in srgb, var(--dc-accent) 8%, transparent);
+  font-size: 11px;
+}
+
+.composer-queue__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--dc-accent);
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.composer-queue__restore {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--dc-accent);
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.composer-queue__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* 대기 메시지는 한 줄로 — 길면 잘라 보여준다. 되돌리면 전문이 입력창에 나온다. */
+.composer-queue__item {
+  color: var(--dc-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.composer-queue__item::before {
+  content: '· ';
+  opacity: 0.6;
+}
+
+/* ── 도구 실행 승인 모달 ───────────────────────────── */
+
+.approval-modal {
+  width: min(520px, calc(100vw - 24px));
+}
+
+.approval-modal__field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 10px;
+}
+
+.approval-modal__label {
+  font-size: 11px;
+  color: var(--dc-text-muted);
+}
+
+.approval-modal__value {
+  font-size: 13px;
+  color: var(--dc-text);
+}
+
+.approval-modal__args {
+  margin-bottom: 12px;
+}
+
+.approval-modal__scopes {
+  list-style: none;
+  margin: 4px 0 16px;
+  padding: 12px 0 0;
+  border-top: 1px solid var(--dc-border);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.approval-modal__scope {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.approval-modal__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* 승인/거부는 판단이라 크게. 승인이 기본이라 강조색 면을 준다. */
+.approval-modal .approval-allow,
+.approval-modal .approval-deny {
+  padding: 7px 20px;
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius-sm);
+  background: var(--dc-surface);
+  color: var(--dc-text);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.approval-modal .approval-allow {
+  background: var(--dc-accent);
+  border-color: var(--dc-accent);
+  color: var(--dc-bg);
+}
+
+/* ── 설정 토글 (체크박스 + 라벨) ───────────────────── */
+
+.dc-settings__toggle {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  cursor: pointer;
+  margin-bottom: 4px;
+}
+
+.dc-settings__toggle input {
+  width: 15px;
+  height: 15px;
+  flex: none;
+  accent-color: var(--dc-accent);
+  cursor: pointer;
+}
+
+.dc-settings__togglelabel {
+  font-size: 13px;
+  color: var(--dc-text);
+}
+
+/* 준비 중(disabled)인 토글은 흐리게 — 눌러도 안 되는 이유는 아래 안내가 말한다 */
+.dc-settings__toggle--off {
+  cursor: default;
+}
+
+.dc-settings__toggle--off input {
+  cursor: default;
+}
+
+.dc-settings__toggle--off .dc-settings__togglelabel {
+  color: var(--dc-text-muted);
+}

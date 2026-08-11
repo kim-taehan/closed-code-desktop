@@ -1,0 +1,38 @@
+node_modules/
+dist/
+dist-electron/
+.vite/
+.omc/
+
+# Claude Code 로컬 설정
+.claude/
+
+# OS·에디터·로그
+.DS_Store
+*.log
+
+# 배포 산출물 (electron-builder)
+release/
+out/
+
+# 테스트 커버리지 산출물
+coverage/
+
+# 하네스 중간 산출물 (에이전트 협업 기록)
+_workspace/
+
+# 확장 배포처 임시 저장소·패키징 산출물 (로컬 전용)
+tools/extension-registry/store/
+dist-extensions/
+
+# 확장 자체는 이 레포에 담지 않는다.
+# 앱은 확장을 ~/.davis-code/desktop-extensions 에서 읽고
+# (DAVIS_EXTENSIONS_DIR 로 덮어씀, electron/extensions/registry.ts:51),
+# 여기 있는 소스는 빌드에도 실행에도 쓰이지 않는다.
+#
+# 앞의 `/` 는 **레포 루트 고정**이다. 빼면 `electron/extensions/`·`shared/extensions/`
+# 처럼 이름이 같은 소스 디렉토리까지 통째로 무시된다.
+/extensions/
+
+# 파이썬 산출물 (확장 시험 중 생김)
+__pycache__/

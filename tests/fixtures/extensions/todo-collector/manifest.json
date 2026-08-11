@@ -1,0 +1,22 @@
+{
+  "manifestVersion": 1,
+  "name": "todo-collector",
+  "displayName": "TODO 수집기",
+  "version": "0.1.0",
+  "main": "main.js",
+  "contributes": {
+    "commands": [
+      {
+        "id": "todoCollector.scan",
+        "title": "TODO 수집"
+      }
+    ],
+    "views": [
+      {
+        "id": "todoCollector.results",
+        "title": "TODO",
+        "kind": "table"
+      }
+    ]
+  }
+}

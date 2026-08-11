@@ -1,0 +1,117 @@
+name: Desktop App CI
+
+on:
+  push:
+    branches: [main, dev, staging, 'release/**']
+    tags: ['v*.*.*']
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '.gitignore'
+      - 'LICENSE'
+  pull_request:
+    branches: [main, dev, staging]
+    # paths-ignore 미설정 — required check 가 path 필터로 skip 되면 pending 으로 남아
+    # docs-only PR 을 BLOCK 한다. 아래 changes job + job-level if 로 docs-only 를 처리.
+  workflow_dispatch:
+
+# 동일 브랜치에서 중복 빌드 방지 (새 빌드 시작 시 이전 빌드 취소)
+# event_name 을 포함해 pull_request 와 push 가 서로 취소하지 않도록 한다.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  # 변경 파일 감지 — docs/메타 파일만 바뀐 PR 은 빌드를 건너뛴다.
+  # required check(build) 는 job-level if 로 skip 되면 GitHub 이 success 로 보고하므로
+  # docs-only PR 도 머지 가능해진다.
+  changes:
+    name: Detect code changes
+    runs-on:
+      group: organization/Default
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect non-docs changes
+        id: filter
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "code=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          changed=$(git diff --name-only --no-renames \
+            "${{ github.event.pull_request.base.sha }}...${{ github.event.pull_request.head.sha }}")
+          echo "Changed files:"; printf '%s\n' "$changed"
+          # grep -q 로 파이프하면 첫 매치에서 즉시 종료 → 상류(grep -v/printf)가 나머지를
+          # 다 쓰기 전에 SIGPIPE 를 받고, pipefail 이 이를 파이프 전체 실패로 취급해
+          # if 가 거짓으로 평가되는 레이스가 있었다(대량 diff PR 에서 code=false 오탐,
+          # required check 가 무검증 skip→success 로 새는 버그). command substitution 으로
+          # 상류를 끝까지 소비시켜 조기 종료 자체를 없앤다. (다른 리포와 동일 패턴)
+          non_docs=$(printf '%s\n' "$changed" | grep -vE '(\.md$|^docs/|^\.gitignore$|^LICENSE$)' || true)
+          if [ -n "$non_docs" ]; then
+            echo "code=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "code=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  build:
+    name: Build Desktop App
+    needs: changes
+    # docs-only(code=false) 면 skip→success. changes 장애('')·코드변경(true)이면 실행(우회 차단)
+    if: ${{ !cancelled() && needs.changes.outputs.code != 'false' }}
+    runs-on:
+      group: organization/Default
+    # Vite 렌더러 번들이 CI 러너의 기본 힙(~2GB)을 넘길 수 있다.
+    env:
+      NODE_OPTIONS: --max-old-space-size=8192
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      # 정적 검사 먼저 — 빠르게 실패시켜 긴 테스트·빌드 시간을 낭비하지 않는다.
+      - name: Verify shared davis-progress assets
+        shell: bash
+        run: |
+          # 진행 표시 자산은 VS Code 리포에서 생성해 복사해 온 산출물이다. 여기서 직접
+          # 고치면 다음 동기화 때 덮여 사라지므로 매니페스트와 대조해 막는다.
+          # 갱신은 메타 리포에서 tools/sync-davis-progress.sh 를 실행한다.
+          if ! shasum -c src/lib/davis-progress/.davis-progress-sync.sha256; then
+            echo "::error::공유 davis-progress 자산이 매니페스트와 다릅니다. 메타 리포에서 tools/sync-davis-progress.sh 를 실행해 갱신하세요."
+            exit 1
+          fi
+
+      - name: Check file size limit
+        run: npm run lint:filesize
+
+      # renderer(tsconfig.json)·electron(tsconfig.electron.json) 두 프로젝트를 모두 검사한다.
+      # build 스크립트에도 typecheck 가 포함되어 있으나, 실패 지점을 구분하려고 따로 둔다.
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build
+        run: npm run build
