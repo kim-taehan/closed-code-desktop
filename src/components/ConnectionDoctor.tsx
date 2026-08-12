@@ -30,7 +30,7 @@ import type { AppSettings } from '../../shared/settings/appSettings'
 export interface ConnectionDoctorProps {
   status: ProjectStatus
   failure?: string
-  /** 인라인 수정 폼 재료 (프로젝트·설정·저장). 없으면 폼 없이 안내만 한다. */
+  /** 인라인 수정 폼 재료 (설정·저장). 없으면 폼 없이 안내만 한다. */
   fix?: {
     settings: AppSettings
     onSaveSettings: (settings: AppSettings) => Promise<void>
