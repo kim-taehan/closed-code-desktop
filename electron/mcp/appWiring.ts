@@ -5,6 +5,7 @@ import { toActiveFile } from '../ipc/extensionActiveFile'
 import { logStore } from '../logs/logStore'
 import type { ProjectRegistry } from '../projects/projectRegistry'
 import { DesktopMcp } from './desktopMcp'
+import type { McpToolPorts } from './tools'
 
 // 데스크톱 MCP 서버를 **앱 상태에 잇는** 자리. `main.ts` 에서 뽑아 왔다 (그 파일이 300줄
 // 상한에 닿았다). 판단은 하나도 안 옮겼고 배선만 왔다 — 여기 있는 편이 낫기도 하다:
@@ -27,26 +28,35 @@ export interface DesktopMcpDeps {
   activeFile: () => unknown
 }
 
+/**
+ * 앱 상태를 읽는 포트 넷. **따로 내보내는 이유는 시험 때문이다** —
+ * 낡은 세대를 보는지는 이 넷을 직접 두들겨야 알 수 있고, `DesktopMcp` 안을 들추면
+ * private 에 기대는 시험이 된다.
+ */
+export function desktopMcpPorts(deps: DesktopMcpDeps): McpToolPorts {
+  return {
+    // **열린 프로젝트만** 안다. 탭을 닫으면 그 순간 아무 파일도 못 건드린다.
+    rootOf: (id) => deps.registry()?.openProjects.find((p) => p.id === id)?.root ?? null,
+    focusedProjectId: () => deps.registry()?.active?.id ?? null,
+    // 값의 주인은 렌더러다 — main 이 짐작하지 않는다 (`extensionActiveFile.ts` 머리말).
+    activeFile: () => toActiveFile(deps.activeFile()),
+    // 겉봉(ProjectScoped)을 씌워 보낸다 — 화면은 지금 보고 있는 프로젝트 것만 받는다
+    openInView: (projectId, target) => {
+      const window = deps.window()
+      if (window === null || window.isDestroyed()) return false
+      window.webContents.send(Channel.DESKTOP_MCP_OPEN_FILE, { projectId, payload: target })
+      return true
+    },
+  }
+}
+
 export function createDesktopMcp(deps: DesktopMcpDeps): DesktopMcp {
   return new DesktopMcp({
     settings: async () => {
       const current = await deps.settings()
       return { desktopMcp: current.desktopMcp, opencodeUrl: current.opencodeUrl }
     },
-    ports: {
-      // **열린 프로젝트만** 안다. 탭을 닫으면 그 순간 아무 파일도 못 건드린다.
-      rootOf: (id) => deps.registry()?.openProjects.find((p) => p.id === id)?.root ?? null,
-      focusedProjectId: () => deps.registry()?.active?.id ?? null,
-      // 값의 주인은 렌더러다 — main 이 짐작하지 않는다 (`extensionActiveFile.ts` 머리말).
-      activeFile: () => toActiveFile(deps.activeFile()),
-      // 겉봉(ProjectScoped)을 씌워 보낸다 — 화면은 지금 보고 있는 프로젝트 것만 받는다
-      openInView: (projectId, target) => {
-        const window = deps.window()
-        if (window === null || window.isDestroyed()) return false
-        window.webContents.send(Channel.DESKTOP_MCP_OPEN_FILE, { projectId, payload: target })
-        return true
-      },
-    },
+    ports: desktopMcpPorts(deps),
     log: (line) => logStore.add('desktop', line),
   })
 }
