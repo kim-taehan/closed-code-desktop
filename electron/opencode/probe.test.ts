@@ -27,7 +27,11 @@ describe('pingOpencode — 서버가 떠 있나', () => {
     expect(urlOf(impl)).toBe('http://127.0.0.1:4096/global/health')
   })
 
-  // 끝의 / 를 안 떼면 `//global/health` 가 되어 404 다 (opencode/client.ts 와 같은 함정)
+  // 주소 정규화. ⚠️ **"안 떼면 404" 는 실측이 아니었다** — 1.17.18 은 `//global/health`·
+  // `//api/health`·`//config/providers` 를 **전부 200 으로 받는다** (재 봤다).
+  // 그래도 떼는 이유는 두 가지다: 사용자가 붙여넣는 주소가 제각각이라 **한 모양으로 모으는 것**과,
+  // 앞에 프록시·리버스프록시가 붙으면 이중 슬래시를 어떻게 다루는지 **재 본 적이 없다**는 것.
+  // (`client.ts` 도 같은 정규화를 한다.)
   it('주소 끝의 / 를 떼고 붙인다', async () => {
     const impl = fakeFetch(HEALTH)
     await pingOpencode('http://127.0.0.1:4096///', impl)

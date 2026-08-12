@@ -76,7 +76,11 @@ export class OpencodeClient {
   private readonly fetchImpl: typeof fetch
 
   constructor(private readonly options: OpencodeClientOptions) {
-    // 끝의 / 를 떼어 둔다 — 붙어 있으면 `//api/...` 가 되어 404 가 난다.
+    // 끝의 / 를 떼어 둔다.
+    // ⚠️ **"붙어 있으면 `//api/...` 가 되어 404" 는 실측이 아니었다** — 1.17.18 은
+    // `//api/health`·`//api/session` 을 **200 으로 받는다** (D2 후속에서 재 봤다).
+    // 그래도 떼는 이유: 사용자가 넣는 주소가 제각각이라 **한 모양으로 모으는 것**이고,
+    // 앞에 프록시가 붙었을 때 이중 슬래시가 어떻게 다뤄지는지는 **재 본 적이 없다.**
     this.baseUrl = options.baseUrl.replace(/\/+$/, '')
     this.fetchImpl = options.fetchImpl ?? fetch
   }
@@ -161,6 +165,10 @@ export class OpencodeClient {
    *
    * ⚠️ **`/api` 가 아니라 `/config/providers` 다** — 그래서 `{data:...}` 래핑도 없다.
    * `/api/config/providers` 는 없다 (실측 1.17.18, `curl /doc`).
+   *
+   * **없는데 404 가 아니다.** 그 주소는 **200 에 웹 UI HTML** 을 준다 (SPA 폴백).
+   * `response.ok` 가 참이라 여기서 안 끊기고 JSON 파싱에서야 터진다 — 상태 코드로는
+   * 못 가린다. README 실측 함정 11.
    */
   async providers(): Promise<ProvidersResponse> {
     return this.get<ProvidersResponse>('/config/providers')

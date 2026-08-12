@@ -29,6 +29,27 @@ export function routedFetch(body: unknown, dead: string[] = []): typeof fetch {
   }) as unknown as typeof fetch
 }
 
+/**
+ * 경로별로 답하는 fetch — `checkModels` 가 **세 겹**이 되면서 필요해졌다:
+ * `/config/providers` 조회 → `/config` 의 선택 조회 → 그 프로바이더 ping.
+ *
+ * `config` 에 `null` 을 주면 `/config` 를 **못 읽는 상황**이 된다 (설정을 못 읽어도
+ * model 단계가 실패하면 안 된다는 규칙을 겨눈다).
+ * ⚠️ `/config/providers` 가 `/config` 보다 **먼저** 걸려야 한다 — 접두사가 겹친다.
+ */
+export function opencodeFetch(providers: unknown, config: unknown, dead: string[] = []): typeof fetch {
+  const answer = (body: unknown) =>
+    Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) })
+  return vi.fn().mockImplementation((url: string) => {
+    if (dead.some((prefix) => url.startsWith(prefix))) return Promise.reject(new Error('fetch failed'))
+    if (url.endsWith('/config/providers')) return answer(providers)
+    if (url.endsWith('/config')) {
+      return config === null ? Promise.reject(new Error('설정을 못 읽었다')) : answer(config)
+    }
+    return answer({})
+  }) as unknown as typeof fetch
+}
+
 /** n 번째 호출이 받은 URL */
 export function urlOf(impl: typeof fetch, call = 0): string {
   return (impl as unknown as { mock: { calls: [string, RequestInit][] } }).mock.calls[call]![0]

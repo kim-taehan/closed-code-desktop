@@ -139,6 +139,18 @@ session/*  ──davis 봉투(kind/action)──▶  OpencodeTransport  ──HT
     `PUT /api/pty/{id}` 의 `{size:{rows,cols}}` 이고, 셸 종료는 제어 프레임이 아니라
     **WS close(1000)** 으로 온다 (종료 코드는 `GET /api/pty/{id}` 의 `exitCode`).
 
+11. **없는 경로가 404 를 주지 않는다 — 200 에 웹 UI HTML 을 준다.** SPA 폴백이 걸린다.
+    실측: `/api/config` · `/api/config/providers` (1.17.18) · `/api/health` (1.14.28, 그 판엔
+    라우트가 없다). **`response.ok` 가 참이라 코드가 그대로 진행하고 JSON 파싱에서야 터진다** —
+    화면에는 "경로가 틀렸다" 가 아니라 파싱 오류나 "서버가 안 떠 있습니다" 로 뜬다.
+    **상태 코드로는 못 가리므로 URL 자체를 단언하는 것 말고 그물이 없다**
+    (`electron/opencode/probe.test.ts`·`probeModels.test.ts` 가 그걸 한다).
+
+    같은 이유로 **"경로가 없으면 404" 를 전제한 주석 둘이 틀려 있었다.** 1.17.18 은
+    이중 슬래시(`//api/health`·`//global/health`·`//config/providers`)도 **전부 200** 이다.
+    주소 끝의 `/` 를 떼는 것은 여전히 하되, 근거는 404 회피가 아니라 **주소를 한 모양으로
+    모으는 것**이다 (프록시가 앞에 붙었을 때는 안 재 봤다).
+
 > 버전을 올리면 `curl http://127.0.0.1:4096/doc` 을 다시 떠서 대조할 것.
 
 ## davis 대응이 없는 신규 표면
