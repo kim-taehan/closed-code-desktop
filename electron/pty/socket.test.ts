@@ -7,7 +7,6 @@ import { PtySocket, type PtyLikeSocket } from './socket'
 class FakeSocket implements PtyLikeSocket {
   readonly sent: string[] = []
   closed = false
-  terminated = false
   private handlers = new Map<string, (...args: never[]) => void>()
 
   on(event: string, handler: (...args: never[]) => void): void {
@@ -18,9 +17,6 @@ class FakeSocket implements PtyLikeSocket {
   }
   close(): void {
     this.closed = true
-  }
-  terminate(): void {
-    this.terminated = true
   }
 
   emit(event: string, ...args: unknown[]): void {

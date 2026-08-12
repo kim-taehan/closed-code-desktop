@@ -32,8 +32,12 @@ export interface PtyLikeSocket {
   on(event: 'close', handler: (code: number, reason: Buffer) => void): void
   on(event: 'error', handler: (error: Error) => void): void
   send(data: string): void
+  /**
+   * 정상 종료만 있다. `ws` 의 `terminate()`(강제 끊기)는 **여기 없다** —
+   * 부르는 자리가 없어서다. 드로어를 접는 것은 `close()` 로 충분하고, 서버가 응답을
+   * 안 하는 경우를 다루는 경로도 아직 없다. 필요해지면 그때 넣는다.
+   */
   close(): void
-  terminate(): void
 }
 
 export interface PtyCloseInfo {
