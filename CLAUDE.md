@@ -10,7 +10,9 @@ opencode 헤드리스 서버(HTTP+SSE)에 붙는 Electron 데스크톱 클라이
 
 - **파일당 300줄 상한** (`.ts`/`.tsx`, `scripts/check-file-size.mjs`). 초과는 추출로 푼다.
   주석 삭제로 줄이지 않는다 — 이 레포의 주석은 실측 근거다 (davis 시절부터 이어진 규칙)
-- **완료 = 게이트 3종 동시 초록** (typecheck 2 tsconfig · lint:filesize · vitest)
+- **완료 = 게이트 4종 동시 초록** — 자산 매니페스트
+  (`shasum -c src/lib/davis-progress/.davis-progress-sync.sha256`) · `lint:filesize` ·
+  typecheck(2 tsconfig) · vitest. **매니페스트가 빠져 있었다** — CI 는 처음부터 넷을 돌린다
 - 커밋·푸시는 사용자가 요청할 때만
 
 ## 작업할 때 알아야 할 것
@@ -39,11 +41,22 @@ opencode 로 옮기며 사실이 아니게 된 주석은 지우지 말고 **고�
 
 ## 모델
 
-`~/.config/opencode/opencode.json` → `davis-litellm` 프로바이더 (사내 LiteLLM `http://<internal-llm-ip>/v1`).
+`~/.config/opencode/opencode.json` → **`ollama-local` 프로바이더 (로컬 ollama `http://127.0.0.1:11434/v1`)**.
 
 | 모델 | 용도 |
 |---|---|
-| `glm-5.2` | **어댑터 검증용.** reasoning 모델이라 max_tokens 넉넉히 |
-| `qwen3.6-35b` | 약한 모델 내구성 판정용 — 검증 통과 **후에** 별도로 |
+| `devstral:24b` | 지금의 기본값(`"model": "ollama-local/devstral:24b"`). **`tool_call: true`** 로 선언돼 있다 |
+
+**도구를 실제로 부른다** — `/api/chat`(네이티브)과 `/v1/chat/completions`(opencode 가 쓰는 길)
+양쪽에서 확인됐다. 단, **프롬프트가 약하면 안 부른다**: system 메시지 없이 캐주얼하게 물으면
+도구 대신 "확인 중입니다…" 로 답하고, system 에 "도구를 반드시 쓰라"를 넣으면 부른다.
+**opencode 는 자기 system 프롬프트를 실으므로 실제 경로는 이 실험과 다를 수 있다.**
 
 두 변수(엔진 교체 · 모델 교체)를 동시에 흔들지 않는다. 실패 원인을 못 가린다.
+
+### 예전 구성 (지금은 없다)
+
+`davis-litellm` 프로바이더 — 사내 LiteLLM `http://<internal-llm-ip>/v1` 의 `glm-5.2`(어댑터 검증용)와
+`qwen3.6-35b`(약한 모델 내구성 판정용). **설정 파일에서 사라졌고 그 주소는 이 환경에서 응답이
+없다(HTTP 000).** 위 "두 변수" 원칙은 저 구성에서 나왔지만 **모델이 바뀌어도 그대로 유효하다** —
+낡은 것은 모델 이름뿐이다.

@@ -155,14 +155,20 @@ npm run lint:filesize
 opencode serve --port 4096 --hostname 127.0.0.1
 ```
 
-모델은 `~/.config/opencode/opencode.json` 의 `davis-litellm` 프로바이더를 쓴다
-(사내 LiteLLM `http://<internal-llm-ip>/v1` — `glm-5.2` / `qwen3.6-35b`).
+모델은 `~/.config/opencode/opencode.json` 의 **`ollama-local` 프로바이더**를 쓴다
+(로컬 ollama `http://127.0.0.1:11434/v1` — `devstral:24b`, `"model": "ollama-local/devstral:24b"`).
 
 ### 실서버 검증
 
 ```bash
+ollama serve                                        # 모델도 함께 떠 있어야 한다
+opencode serve --port 4096 --hostname 127.0.0.1
 OPENCODE_LIVE=1 npx vitest run electron/opencode/live.test.ts
 ```
+
+**서버가 둘이다.** opencode 만 띄우면 핸드셰이크까지는 가고 **턴이 답을 못 받는다** —
+모델은 opencode 뒤의 프로바이더(여기서는 로컬 ollama)가 굴린다. `ollama` 가 안 떠 있으면
+`http://127.0.0.1:11434` 가 거절하고, 증상은 "어댑터가 응답을 못 받는다" 로만 보인다.
 
 기본 실행에서는 건너뛴다(서버·모델 필요). **가짜 서버로는 안 잡히는 계약 어긋남을 잡는 유일한 그물**이며,
 위 함정 목록 중 4건이 여기서 나왔다 — 넷 다 타입체크·단위테스트는 초록이었다.
@@ -172,15 +178,27 @@ OPENCODE_LIVE=1 npx vitest run electron/opencode/live.test.ts
 
 ### 모델 선택 주의
 
-`qwen3.6-35b` 는 약한 모델이다. davis 런타임은 이걸 굴리려고 방어 미들웨어를 두껍게 쌓았고
-(`davis-code/runtime-weak-model-workarounds.md` — 시스템 프롬프트 9K자부터 환각, `edit_file` 34회 반복 등),
-**opencode 에는 그 층이 없다.** 어댑터 검증은 `glm-5.2` 로 하고, 약한 모델 내구성은 별도로 판정할 것 —
-두 변수를 같이 흔들면 실패 원인을 못 가린다.
+**약한 모델을 어댑터 검증과 같이 흔들지 않는다.** davis 런타임은 약한 모델을 굴리려고 방어
+미들웨어를 두껍게 쌓았고 (`davis-code/runtime-weak-model-workarounds.md` — 시스템 프롬프트
+9K자부터 환각, `edit_file` 34회 반복 등), **opencode 에는 그 층이 없다.** 어댑터가 이상해 보일 때
+그것이 어댑터 탓인지 모델 탓인지 가르려면 한 번에 하나만 바꿔야 한다.
+
+지금 기본값 `devstral:24b` 는 `tool_call: true` 로 선언돼 있고 **도구를 실제로 부른다**
+(`/api/chat`·`/v1/chat/completions` 양쪽 확인). 다만 **프롬프트가 약하면 안 부른다** —
+system 없이 캐주얼하게 물으면 도구 대신 "확인 중입니다…" 로 답하고, system 에 "도구를 반드시
+쓰라"를 넣으면 부른다. **opencode 는 자기 system 프롬프트를 싣기 때문에 실제 경로는 이 실험과
+다를 수 있다.**
+
+> **예전 구성** — `davis-litellm`(사내 LiteLLM `http://<internal-llm-ip>/v1`)의 `glm-5.2`(검증용)와
+> `qwen3.6-35b`(약한 모델 판정용). **설정에서 사라졌고 그 주소는 이 환경에서 응답이 없다.**
+> 위 원칙은 저 구성에서 나왔지만 모델이 바뀌어도 그대로 유효하다 — 낡은 것은 이름뿐이다.
 
 ## 착지 기준
 
 - **파일당 300줄 상한** (`.ts`/`.tsx`, `scripts/check-file-size.mjs`). 초과는 추출로 푼다
-- **완료 = 게이트 3종 동시 초록** (typecheck 2 tsconfig · lint:filesize · vitest)
+- **완료 = 게이트 4종 동시 초록** — 자산 매니페스트
+  (`shasum -c src/lib/davis-progress/.davis-progress-sync.sha256`) · `lint:filesize` ·
+  typecheck(2 tsconfig) · vitest. **매니페스트가 빠져 있었다** — CI 는 처음부터 넷을 돌린다
 
 ## 테스트 척추
 
