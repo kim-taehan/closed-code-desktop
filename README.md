@@ -112,9 +112,13 @@ session/*  ──davis 봉투(kind/action)──▶  OpencodeTransport  ──HT
    **안 재 본 것:** 인자가 들어가는 GET 과 `PUT`/`DELETE`.
    `/api/health` 에서 `.data` 를 벗기려 들면 막힌다.
    **다만 진단은 `/api/health` 를 안 쓴다** — `electron/opencode/probe.ts` 의 `pingOpencode` 는
-   `/global/health` 를 부른다. **고장이 나서 옮긴 게 아니라** `/global/health` 만
-   `{"healthy":true,"version":"1.17.18"}` 처럼 **릴리스 버전을 주기 때문**이고, 그 버전으로
-   하한선(`shared/opencode/version.ts`)을 대조한다. `/global/health` 도 안 감싼다.
+   `/global/health` 를 부른다. 옮긴 이유가 **둘**이다: ① `/global/health` 만
+   `{"healthy":true,"version":"1.17.18"}` 처럼 **릴리스 버전을 준다** (그 값으로
+   하한선 `shared/opencode/version.ts` 를 대조한다) · ② **`/api/health` 라우트가 옛 판에는 없다** —
+   1.14.28 에서 그 주소는 웹 UI HTML 을 돌려주므로(아래 함정 11) 그 서버를
+   **"안 떠 있습니다" 로 오진**했다. `/global/health` 는 1.14.28 에도 있고 버전도 준다.
+   **잰 점은 1.14.28 · 1.17.17 · 1.17.18 · 1.18.16 넷이고 그 사이는 안 쟀다.**
+   `/global/health` 도 안 감싼다.
 
 5. **경로 이름이 문서와 다르다.** `abort` → `interrupt`, `permissions/:id` → `permission/:id/reply`.
 

@@ -10,10 +10,19 @@
 // 2번이 중요한 이유: 서버는 떠 있는데 프로바이더 설정(`~/.config/opencode/opencode.json`)이
 // 비었거나 프록시 키가 죽으면, 증상이 "보내도 답이 없다" 로만 나타난다. 미리 갈라 준다.
 //
-// ⚠️ **1번이 `/api/health` 가 아니다.** `/api/health` 도 실재하고 `{"healthy":true}` 를
-// 정상으로 준다 — 바꾼 이유는 고장이 아니라 **`/global/health` 만 릴리스 버전을 주기 때문**이다
-// (`{"healthy":true,"version":"1.17.18"}`). `/doc` 의 `info.version` 을 릴리스 버전으로 읽으면
-// 안 된다 — 그것은 OpenAPI 스펙 버전이고 1.17.18·1.18.16 **두 버전 모두 `"1.0.0"`** 이다.
+// ⚠️ **1번이 `/api/health` 가 아니다.** 옮긴 이유가 **둘**이다:
+//
+//   ① `/global/health` 만 릴리스 버전을 준다 (`{"healthy":true,"version":"1.17.18"}`)
+//   ② **`/api/health` 라우트가 옛 판에는 없다** — 1.14.28 에서 그 주소는 JSON 이 아니라
+//      **웹 UI HTML** 을 돌려준다 (SPA 폴백, README 실측 함정 11).
+//      즉 이 변경은 개선만이 아니라 **구버전을 "안 떠 있습니다" 로 오진하던 것의 수리**다.
+//
+// **잰 점은 넷뿐이다: 1.14.28 · 1.17.17 · 1.17.18 · 1.18.16. 그 사이는 안 쟀다.**
+// `/api/health` 가 정확히 어느 판에서 생겼는지 모르고, 여기서 아는 것은
+// "1.14.28 에는 없고 1.17.17 에는 있다" 까지다.
+//
+// `/doc` 의 `info.version` 을 릴리스 버전으로 읽으면 안 된다 — 그것은 OpenAPI 스펙 버전이고
+// 1.17.18·1.18.16 **두 버전 모두 `"1.0.0"`** 이다.
 
 import { MIN_OPENCODE_VERSION, meetsMinimum } from '../../shared/opencode/version'
 import { toModelRef } from './models'

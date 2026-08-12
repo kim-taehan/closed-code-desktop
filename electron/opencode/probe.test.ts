@@ -18,9 +18,11 @@ import { pingOpencode } from './probe'
 const HEALTH = { healthy: true, version: MIN_OPENCODE_VERSION }
 
 describe('pingOpencode — 서버가 떠 있나', () => {
-  // ⚠️ **`/api/health` 가 아니다.** 그것도 실재하고 정상으로 돈다 — 바꾼 이유는 고장이 아니라
-  // **`/global/health` 만 릴리스 버전을 주기 때문**이다. 진단 패널은 사람이 캡처해서 묻는
-  // 화면이라 버전이 찍혀 있으면 되묻지 않아도 된다.
+  // ⚠️ **`/api/health` 가 아니다.** 옮긴 이유가 둘이다: `/global/health` 만 릴리스 버전을
+  // 주고(진단 패널은 사람이 캡처해서 묻는 화면이라 버전이 찍혀 있으면 되묻지 않아도 된다),
+  // **`/api/health` 라우트가 1.14.28 에는 없어** 그 주소가 웹 UI HTML 을 돌려준다.
+  // 되돌리면 구버전을 "안 떠 있습니다" 로 **오진**한다 — 개선이자 수리다.
+  // **잰 점은 1.14.28 · 1.17.17 · 1.17.18 · 1.18.16 넷이고 그 사이는 안 쟀다.**
   it('GET {base}/global/health 를 부른다', async () => {
     const impl = fakeFetch(HEALTH)
     await pingOpencode('http://127.0.0.1:4096', impl)
