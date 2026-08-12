@@ -96,15 +96,20 @@ session/*  ──davis 봉투(kind/action)──▶  OpencodeTransport  ──HT
    나온다. **이 실패는 여전히 참이다.** 틀렸던 것은 "`/api/*` 전부" 라는 **범위**뿐이다 —
    근거는 세션·이벤트 계열에서만 나왔는데 문장이 전체를 단정했다.
 
-   1.17.18 에서 인자 없는 `/api/*` GET 16개를 전수로 재 봤다 (응답 최상위 키):
+   1.17.18 에서 인자 없는 `/api/*` GET 16개를 전수로 재 봤다 (SSE 인 `/api/event` 와 인자가
+   필요한 `fs/find`·`fs/read/*` 는 뺐다). **봉투가 한 모양이 아니다** —
+   `.data` 만 벗기면 되는 것과 형제 필드가 붙는 것이 갈린다:
 
-   | | 경로 |
-   |---|---|
-   | 감싼다 (14) | `session`(+`cursor`) · `session/active` · `agent` · `model` · `provider` · `integration` · `permission/request` · `permission/saved` · `command` · `skill` · `pty` · `question/request` · `reference` · `fs/list` — 대부분 `location` 이 `data` 의 형제로 붙는다 |
-   | **안 감싼다 (2)** | **`/api/health` → `{"healthy":true}`** · `/api/location` → `{"directory","project"}` |
+   | 봉투 | 수 | 경로 |
+   |---|---:|---|
+   | `{location, data}` | 11 | `agent` · `command` · `fs/list` · `integration` · `model` · `permission/request` · `provider` · `pty` · `question/request` · `reference` · `skill` |
+   | `{data}` 단독 | 2 | `permission/saved` · `session/active` |
+   | `{data, cursor}` | 1 | `session` (GET) |
+   | **안 감싼다** | **2** | **`/api/health` → `{"healthy":true}`** · `/api/location` → `{"directory","project"}` |
 
-   `POST /api/session` → `{data:{id:"ses_…"}}` (원래 근거, 같이 재확인함).
-   **안 재 본 것:** 인자가 들어가는 경로와 `POST`/`PUT`/`DELETE` 나머지.
+   POST 도 쟀다 — `POST /api/session` · `POST /api/session/{id}/prompt` 는 **`{data}` 단독**이다
+   (`location` 이 없다). 원래 근거인 `{data:{id:"ses_…"}}` 가 그것이다.
+   **안 재 본 것:** 인자가 들어가는 GET 과 `PUT`/`DELETE`.
    `/api/health` 에서 `.data` 를 벗기려 들면 막힌다.
    **다만 진단은 `/api/health` 를 안 쓴다** — `electron/opencode/probe.ts` 의 `pingOpencode` 는
    `/global/health` 를 부른다. **고장이 나서 옮긴 게 아니라** `/global/health` 만

@@ -8,7 +8,13 @@ import { turnScript } from './turnScript'
 // 버그를 통과시킨다 (실제로 겪었다 — `{data:...}` 래핑과 `data`/`properties` 필드명).
 // 그래서 아래 셋은 반드시 실물과 같게 둔다:
 //
-//   1. `/api/*` 응답은 `{ data: ... }` 로 감싼다
+//   1. **이 가짜가 서비스하는 세션 계열 POST** 는 `{ data: ... }` 로 감싼다
+//      (`POST /api/session` · `POST /api/session/{id}/prompt` — 실물도 `data` 단독이다).
+//      ⚠️ **`/api/*` 전체가 그런 것은 아니다.** 봉투가 세 모양이고(`{location,data}` 11 ·
+//      `{data}` 2 · `{data,cursor}` 1) 아예 안 감싸는 것도 있다 (`/api/health`·`/api/location`).
+//      `fakePty.ts` 가 `{location, data}` 를 쓰는 것은 어긋난 게 아니라 **pty 계열 실물이
+//      그렇기 때문**이다. 여기에 GET 을 더할 때는 그 경로를 실측하고 맞춘다 —
+//      전수는 `README.md` 실측 함정 4.
 //   2. SSE 이벤트의 페이로드 필드는 `properties` 가 아니라 **`data`**
 //   3. `/api/event` 는 **서버 전역**이다 — 모든 세션의 이벤트가 모든 구독자에게 간다
 //      (세션 격리는 클라이언트가 sessionID 로 거른다)
