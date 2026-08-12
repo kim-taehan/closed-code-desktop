@@ -19,7 +19,24 @@
 // 머신은 순수하다: 부작용(ping·재연결)은 next 로 시키기만 하고,
 // 드라이버(ConnectionDoctor)가 실행해 결과를 advance 로 돌려준다. 화면 없이 단언한다.
 
-export type DiagStepId = 'server' | 'model' | 'session'
+/**
+ * 진단 단계의 순서. **단계를 더할 때 고치는 자리는 여기 하나다.**
+ *
+ * 원래는 순서가 세 곳에 손으로 나열돼 있었다 — 초기 목록·`server` 실패 시 막을 대상·
+ * `model` 실패 시 막을 대상. **타입이 그 셋을 맞춰 주지 않는다.** 4번째 단계를 더하고
+ * 막을 목록만 안 고쳐도 타입체크와 기존 테스트가 **전부 초록**이고, 증상은 조용하다:
+ * *"실패했는데 뒤 단계가 `·` 로 영원히 남는다."*
+ *
+ * `drawerKeys.ts` 에서 밟은 것과 같은 결이다 — 거기서도 예외를 손으로 세다가 목록이
+ * **태어날 때 이미 낡아 있었고**, 고친 방향은 나열이 아니라 유도였다.
+ *
+ * 패킹(`06_pack_opencode.md`)이 들어오면 단계가 는다 (포트 선택·기동 대기·프로세스 생사).
+ * 그때 이 배열 한 줄이 된다.
+ */
+export const DIAG_ORDER = ['server', 'model', 'session'] as const
+
+/** 배열에서 유도한다 — 배열과 union 이 갈리는 자리를 없앤다 */
+export type DiagStepId = (typeof DIAG_ORDER)[number]
 export type HealStepId = 'heal-reconnect'
 export type DoctorStepId = DiagStepId | HealStepId
 
@@ -55,18 +72,35 @@ export interface PipelineState {
 
 const BLOCKED_DETAIL = '앞 단계가 실패해 확인할 수 없습니다'
 
+/**
+ * 어떤 단계가 실패했을 때 「앞 단계가 실패해 확인할 수 없습니다」로 칠할 단계들 —
+ * **그 뒤에 오는 것 전부.**
+ *
+ * `order` 를 인자로 받는 이유는 시험하기 위해서다. 단계가 늘어도 유도가 도는지는
+ * **가짜 4번째 단계를 넣어 봐야** 알 수 있는데, 상수를 직접 읽으면 그 시험을 못 한다.
+ * (`doctorPipeline.ts` 머리주석의 *"화면 없이 단언한다"* 와 같은 결이다.)
+ */
+export function blockedAfter(order: readonly DiagStepId[], failedId: DiagStepId): DiagStepId[] {
+  const index = order.indexOf(failedId)
+  return index < 0 ? [] : order.slice(index + 1)
+}
+
 function freshDiagSteps(): DoctorStep[] {
-  return [
-    { id: 'server', status: 'running' },
-    { id: 'model', status: 'pending' },
-    { id: 'session', status: 'pending' },
-  ]
+  return DIAG_ORDER.map((id, index) => ({ id, status: index === 0 ? 'running' : 'pending' }))
+}
+
+/** 실패한 단계 뒤를 전부 blocked 로 칠한다 */
+function blockRest(steps: DoctorStep[], failedId: DiagStepId): DoctorStep[] {
+  return blockedAfter(DIAG_ORDER, failedId).reduce(
+    (acc, id) => setStep(acc, id, 'blocked', BLOCKED_DETAIL),
+    steps,
+  )
 }
 
 export function initPipeline(sessionOk: boolean): PipelineState {
   return {
     steps: freshDiagSteps(),
-    next: 'server',
+    next: DIAG_ORDER[0],
     verdict: null,
     sessionOk,
     log: ['진단을 시작합니다'],
@@ -89,14 +123,11 @@ export function advance(state: PipelineState, outcome: CheckOutcome, sessionOk: 
     case 'server':
       if (!outcome.ok) {
         // 서버에 못 닿으면 모델도 세션도 볼 것이 없다 — 여기서 멈춘다
-        const blocked = setStep(
-          setStep(done, 'model', 'blocked', BLOCKED_DETAIL),
-          'session',
-          'blocked',
-          BLOCKED_DETAIL,
-        )
         return finishDiagnosis(
-          withLog({ ...base, steps: blocked }, '서버 실패 → 이후 단계는 진행하지 않습니다'),
+          withLog(
+            { ...base, steps: blockRest(done, 'server') },
+            '서버 실패 → 이후 단계는 진행하지 않습니다',
+          ),
         )
       }
       return { ...base, steps: setStep(done, 'model', 'running'), next: 'model' }
@@ -106,7 +137,7 @@ export function advance(state: PipelineState, outcome: CheckOutcome, sessionOk: 
         // 모델이 없으면 붙어도 대화가 안 된다. 재연결로 풀리지 않으니 설정 안내로 끝낸다.
         return finishDiagnosis(
           withLog(
-            { ...base, steps: setStep(done, 'session', 'blocked', BLOCKED_DETAIL) },
+            { ...base, steps: blockRest(done, 'model') },
             '모델 설정 없음 → 이후 단계는 진행하지 않습니다',
           ),
         )

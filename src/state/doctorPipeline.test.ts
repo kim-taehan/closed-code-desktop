@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { advance, initPipeline, type CheckOutcome, type PipelineState } from './doctorPipeline'
+import {
+  DIAG_ORDER,
+  advance,
+  blockedAfter,
+  initPipeline,
+  type CheckOutcome,
+  type DiagStepId,
+  type PipelineState,
+} from './doctorPipeline'
 
 // 진단 상태 머신. **이 파일이 D1 의 본체다.**
 //
@@ -224,5 +232,62 @@ describe('재진단 — 같은 id 가 두 벌일 때', () => {
     expect(detailOf(state, 'server')).toBe('두 번째 회전 실패')
     // 앞 회전의 server 는 건드리지 않는다
     expect(state.steps[0]?.status).toBe('ok')
+  })
+})
+
+// **여기가 D5 의 본체다 — 그리고 D1 의 blocked 테스트와 성격이 다르다.**
+//
+// 위의 blocked 케이스들은 **회귀 그물**이다: 3단계에 대한 현 동작을 잠근다.
+// 그런데 원래 결함은 **단계를 더할 때만 드러난다** — 4번째를 넣고 「막을 대상」 나열을
+// 안 고치면 뒤 단계가 `·` 로 영원히 남는데, 3단계만 보는 테스트는 그걸 못 본다.
+//
+// 그래서 유도 부분을 순수 함수로 뗐다. `order` 를 인자로 받으므로 **가짜 4번째 단계를
+// 여기서 넣어 볼 수 있다.** 함수만 빼고 이 시험을 안 붙이면 아무것도 안 얻는다.
+describe('blockedAfter — 막을 대상을 순서에서 유도한다', () => {
+  it('실패한 단계 뒤가 전부 대상이다', () => {
+    expect(blockedAfter(DIAG_ORDER, 'server')).toEqual(['model', 'session'])
+    expect(blockedAfter(DIAG_ORDER, 'model')).toEqual(['session'])
+  })
+
+  it('마지막 단계가 실패하면 막을 것이 없다', () => {
+    expect(blockedAfter(DIAG_ORDER, 'session')).toEqual([])
+  })
+
+  // ⭐ 나열로 짜면 여기서 깨진다 — 손으로 적은 목록에는 'extra' 가 없다
+  it('단계를 더하면 그것도 자동으로 막힌다', () => {
+    const order = ['server', 'model', 'session', 'extra'] as unknown as DiagStepId[]
+    expect(blockedAfter(order, 'server')).toEqual(['model', 'session', 'extra'])
+    expect(blockedAfter(order, 'session')).toEqual(['extra'])
+  })
+
+  // 순서를 바꿔도 「뒤에 오는 것」이라는 뜻이 그대로 따라간다
+  it('순서를 바꾸면 막는 대상도 따라 바뀐다', () => {
+    const order = ['session', 'server', 'model'] as unknown as DiagStepId[]
+    expect(blockedAfter(order, 'session')).toEqual(['server', 'model'])
+  })
+
+  // 순서에 없는 단계는 판단 근거가 없다 — 조용히 전부 막지 않는다
+  it('순서에 없는 단계는 아무것도 막지 않는다', () => {
+    expect(blockedAfter(DIAG_ORDER, 'nope' as unknown as DiagStepId)).toEqual([])
+  })
+})
+
+describe('DIAG_ORDER — 초기 목록도 여기서 나온다', () => {
+  // 초기 목록과 순서가 갈리면 「막을 대상」이 존재하지 않는 단계를 가리키게 되고,
+  // setStep 은 조용히 아무것도 안 한다 — 유도로 바꾸며 새로 생긴 위험이라 잠근다
+  it('초기 단계가 DIAG_ORDER 와 같은 순서다', () => {
+    expect(initPipeline(true).steps.map((step) => step.id)).toEqual([...DIAG_ORDER])
+  })
+
+  it('첫 단계만 running 이고 나머지는 pending 이다', () => {
+    expect(initPipeline(true).steps.map((step) => step.status)).toEqual([
+      'running',
+      'pending',
+      'pending',
+    ])
+  })
+
+  it('처음 실행할 것은 순서의 첫 단계다', () => {
+    expect(initPipeline(true).next).toBe(DIAG_ORDER[0])
   })
 })
