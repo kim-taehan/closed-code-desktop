@@ -93,32 +93,46 @@ describe('belongsToApp', () => {
 
   // **손으로 센 예외 목록은 태어날 때 이미 낡아 있었다** — `⌘/⌃1..9`(프로젝트 직행)가
   // 먼저 들어와 있었는데 "지금 ⌃ 앱 단축키는 ⌃Tab 하나" 라고 적었다.
-  // 판정 근거는 xterm 의 ctrl 매핑이다: 숫자는 **3~8 만** 바이트가 있다.
-  describe('⌃ + 숫자 — 셸이 받는 것과 안 받는 것', () => {
-    // 매핑에 없다 → 셸이 아무것도 안 받는다 → 앱이 가져가도 잃는 것이 없다.
-    // 안 빼면 윈도우·리눅스에서 칸에 포커스가 있는 동안 1·2·9번 프로젝트로 못 간다.
-    it('⌃1 · ⌃2 · ⌃9 는 앱 것이다 — 셸이 아무 바이트도 안 받는다', () => {
-      for (const digit of ['1', '2', '9']) {
-        expect(belongsToApp(key(digit, { ctrlKey: true }))).toBe(true)
-      }
+  //
+  // 그래서 여기에 **xterm 의 ctrl 표 자체를 못 박는다.** 다음에 누가 축을 "⌃ 는 다 앱 것"
+  // 으로 단순화하거나 반대로 "⌃ 는 다 셸 것" 으로 되돌리면 이 묶음이 빨개진다.
+  describe('xterm ctrl 표 — 셸이 바이트를 받는 것과 못 받는 것', () => {
+    const shellGets = (key: string) =>
+      expect(belongsToApp({ key, metaKey: false, ctrlKey: true })).toBe(false)
+    const appGets = (key: string) =>
+      expect(belongsToApp({ key, metaKey: false, ctrlKey: true })).toBe(true)
+
+    // ^A..^Z — 중단(⌃C)·단어 지우기(⌃W)·줄 편집(⌃A/⌃E/⌃U)이 전부 여기다.
+    // **이 케이스가 없으면 "⌃ 는 다 앱 것" 으로 단순화해도 아무것도 안 빨개진다.**
+    it('글자는 셸 것이다 — ⌃C·⌃W·⌃P·⌃N 을 뺏으면 칸에서 셸을 못 쓴다', () => {
+      for (const k of ['a', 'c', 'e', 'n', 'p', 'u', 'w', 'z', 'A', 'Z']) shellGets(k)
     })
 
-    // 3~7 → ESC/FS/GS/RS/US, 8 → DEL. **진짜 바이트가 있으므로 뺏으면 대가가 있다.**
-    it('⌃3 ~ ⌃8 은 셸 것이다 — 여기는 진짜 거래다', () => {
-      for (const digit of ['3', '4', '5', '6', '7', '8']) {
-        expect(belongsToApp(key(digit, { ctrlKey: true }))).toBe(false)
-      }
+    it('space 는 셸 것이다 — NUL', () => {
+      shellGets(' ')
     })
 
-    // 앱 메뉴(배율 초기화)가 L0 에서 먼저 먹지만, 셸이 못 받는 것은 마찬가지다
-    it('⌃0 도 셸이 안 받는다', () => {
-      expect(belongsToApp(key('0', { ctrlKey: true }))).toBe(true)
+    // 3~7 → ESC,FS,GS,RS,US · 8 → DEL. **진짜 거래라 뺏으면 대가가 있다.**
+    it('숫자 3~8 은 셸 것이다', () => {
+      for (const k of ['3', '4', '5', '6', '7', '8']) shellGets(k)
     })
 
-    // 글자는 전부 ^A..^Z 로 나간다 — 숫자 규칙이 글자까지 삼키면 ⌃C 가 죽는다
-    it('숫자 규칙이 글자를 삼키지 않는다', () => {
-      for (const letter of ['c', 'w', 'a', 'z']) {
-        expect(belongsToApp(key(letter, { ctrlKey: true }))).toBe(false)
+    it('[ \\ ] 는 셸 것이다 — ESC·FS·GS', () => {
+      for (const k of ['[', '\\', ']']) shellGets(k)
+    })
+
+    // 표에 없다 = 셸이 아무것도 안 받는다 = 앱이 가져가도 잃는 것이 없다.
+    // 안 빼면 윈도우·리눅스에서 칸에 포커스가 있는 동안 1·2·9번 프로젝트와 설정이 죽는다.
+    it('표에 없는 한 글자는 앱 것이다 — ⌃0·⌃1·⌃2·⌃9·⌃,', () => {
+      for (const k of ['0', '1', '2', '9', ',', ';', '/', '.']) appGets(k)
+    })
+
+    // ⚠️ **이 케이스가 「왜 축을 뒤집지 않았나」를 지킨다.**
+    // 이름이 긴 키는 자기 `case` 에서 따로 바이트를 만든다 — ⌃← 는 ESC[1;5D(단어 이동)다.
+    // 그 목록을 우리가 다 모르므로 판단하지 않고 셸에 남긴다.
+    it('이름이 긴 키는 판단하지 않고 셸에 남긴다 — ⌃←/⌃→ 는 단어 이동이다', () => {
+      for (const k of ['ArrowLeft', 'ArrowRight', 'Home', 'End', 'PageUp', 'F1', 'Backspace']) {
+        shellGets(k)
       }
     })
   })
