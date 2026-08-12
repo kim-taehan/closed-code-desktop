@@ -1,9 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
-import { callCount, fakeFetch, opencodeFetch, routedFetch, urlOf } from './probeFixtures'
+import { callCount, fakeFetch, routedFetch, urlOf } from './probeFixtures'
 import { checkModels } from './probe'
 
 // `checkModels` 는 **세 겹**이다: 프로바이더·모델이 잡혀 있나 → 무엇을 골랐나(`GET /config`)
-// → 그 주소가 살아 있나.
+// → 그 주소가 살아 있나. **이 파일은 첫째·셋째를 본다** — 「무엇을 골랐나」는
+// `probeChoice.test.ts`(통합)와 `configChoice.test.ts`(규칙)로 갈렸다.
 //
 // ⚠️ **경로가 두 세대로 갈린다** (README 실측 함정 1·8): health 는 `/global` 판을 쓰고
 // 설정 계열은 `/api` 판이 **없어** 레거시 표면(`/config`·`/config/providers`)을 쓴다.
@@ -207,81 +208,5 @@ describe('checkModels — 프로바이더 주소가 살아 있나 (두 번째 �
     })
     await checkModels('http://127.0.0.1:4096', impl)
     expect(callCount(impl)).toBe(2)
-  })
-})
-
-// **고른 프로바이더 하나만 본다.** 전부 보면 셋을 넣고 하나만 쓰는 사람에게 진단이 늘
-// 빨갛고, 그러면 그 화면을 안 보게 되어 정작 필요할 때 못 쓴다.
-//
-// 선택은 `GET /config` 의 `model` 이 그대로 준다 — `"ollama-local/devstral:24b"` (실측 1.17.18,
-// `opencode.ai/config.json` 스키마: *"Model to use in the format of provider/model"*).
-// IPC 계약을 넓히지 않아도 된다.
-describe('checkModels — 무엇을 골랐는지는 /config 가 준다', () => {
-  const two = {
-    providers: [
-      { id: 'ollama-local', models: { 'devstral:24b': {} }, options: { baseURL: 'http://127.0.0.1:11434/v1' } },
-      { id: 'other-local', models: { m: {} }, options: { baseURL: 'http://127.0.0.1:9999/v1' } },
-    ],
-  }
-
-  it('고른 프로바이더만 ping 하고 나머지는 안 본다', async () => {
-    const impl = opencodeFetch(two, { model: 'ollama-local/devstral:24b' })
-    await checkModels('http://127.0.0.1:4096', impl)
-    expect(urlOf(impl, 2)).toBe('http://127.0.0.1:11434/v1')
-    expect(callCount(impl)).toBe(3) // providers · config · 고른 것 하나
-  })
-
-  // ⭐ 이것이 「전부」 규칙을 「고른 것」으로 바꾼 이유다 — 안 쓰는 쪽이 죽어도 초록이어야 한다
-  it('안 고른 프로바이더가 죽어 있어도 통과다', async () => {
-    const impl = opencodeFetch(two, { model: 'ollama-local/devstral:24b' }, ['http://127.0.0.1:9999'])
-    expect((await checkModels('http://127.0.0.1:4096', impl)).ok).toBe(true)
-  })
-
-  it('고른 프로바이더가 죽어 있으면 실패다', async () => {
-    const impl = opencodeFetch(two, { model: 'ollama-local/devstral:24b' }, ['http://127.0.0.1:11434'])
-    const result = await checkModels('http://127.0.0.1:4096', impl)
-    expect(result.ok).toBe(false)
-    expect(result.detail).toContain('ollama-local')
-    expect(result.detail).not.toContain('other-local')
-  })
-
-  // **첫 `/` 에서만 자른다** — 모델 id 에 `/` 가 들어가는 게이트웨이가 있다 (`models.ts` 주석).
-  // 마지막 `/` 로 자르면 프로바이더가 `openrouter/anthropic` 이 되어 목록에 없고, 조용히
-  // 「전부」로 물러난다 — 틀렸는데 초록으로 보이는 모양이다.
-  it('모델 id 에 / 가 들어가도 프로바이더를 옳게 가른다', async () => {
-    const gateway = {
-      providers: [
-        { id: 'openrouter', models: { 'anthropic/claude-3': {} }, options: { baseURL: 'http://127.0.0.1:8080/v1' } },
-        { id: 'other-local', models: { m: {} }, options: { baseURL: 'http://127.0.0.1:9999/v1' } },
-      ],
-    }
-    const impl = opencodeFetch(gateway, { model: 'openrouter/anthropic/claude-3' })
-    await checkModels('http://127.0.0.1:4096', impl)
-    expect(urlOf(impl, 2)).toBe('http://127.0.0.1:8080/v1')
-    expect(callCount(impl)).toBe(3)
-  })
-
-  describe('못 고르면 전부로 물러난다 — 무엇을 쓸지 모르면 넓게 본다', () => {
-    it('config.model 이 없을 때', async () => {
-      const impl = opencodeFetch(two, {}, ['http://127.0.0.1:9999'])
-      expect((await checkModels('http://127.0.0.1:4096', impl)).ok).toBe(false)
-    })
-
-    it('config.model 이 provider/model 모양이 아닐 때', async () => {
-      const impl = opencodeFetch(two, { model: 'devstral' }, ['http://127.0.0.1:9999'])
-      expect((await checkModels('http://127.0.0.1:4096', impl)).ok).toBe(false)
-    })
-
-    it('고른 프로바이더가 목록에 없을 때', async () => {
-      const impl = opencodeFetch(two, { model: 'nope/x' }, ['http://127.0.0.1:9999'])
-      expect((await checkModels('http://127.0.0.1:4096', impl)).ok).toBe(false)
-    })
-
-    // /config 를 못 읽었다고 model 단계를 실패시키지 않는다 — 프로바이더 목록은 이미 받았다
-    it('/config 를 못 읽을 때 — 그것 자체는 실패가 아니다', async () => {
-      const impl = opencodeFetch(two, null)
-      expect((await checkModels('http://127.0.0.1:4096', impl)).ok).toBe(true)
-      expect(callCount(impl)).toBe(4) // providers · config(실패) · 둘 다 ping
-    })
   })
 })

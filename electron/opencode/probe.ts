@@ -25,7 +25,7 @@
 // 1.17.18·1.18.16 **두 버전 모두 `"1.0.0"`** 이다.
 
 import { MIN_OPENCODE_VERSION, meetsMinimum } from '../../shared/opencode/version'
-import { toModelRef } from './models'
+import { providerIdsOf, type OpencodeConfigView } from './configChoice'
 
 export interface ProbeResult {
   ok: boolean
@@ -162,46 +162,39 @@ interface CountedProvider {
 /**
  * 어느 프로바이더를 ping 할 것인가.
  *
- * **`GET /config` 의 `model` 이 선택을 그대로 준다** — `"ollama-local/devstral:24b"` 처럼
+ * **`GET /config` 가 선택을 그대로 준다** — `model` 이 `"ollama-local/devstral:24b"` 처럼
  * `provider/model` 이다 (실측 1.17.18 + `opencode.ai/config.json` 스키마의
  * *"Model to use in the format of provider/model"*). IPC 계약을 넓히지 않아도 되고,
  * 이미 부르는 `/config/providers` 와 같은 레거시 계열이라 주소 하나면 충분하다.
+ * **고르는 규칙 자체는 `configChoice.ts` 에 있다** — 오버라이드까지 왜 모으는지도 거기 적었다.
  *
- * 고른 것 하나만 보는 이유: **전부 보면 안 쓰는 프로바이더가 죽어도 늘 빨갛다.** 셋을 넣고
- * 하나만 쓰는 사람에게 진단이 항상 빨간 화면이면 그 화면을 안 보게 되고, 정작 필요할 때 못 쓴다.
+ * **전부는 안 본다.** 전부 보면 안 쓰는 프로바이더가 죽어도 늘 빨갛고, 셋을 넣고 하나만 쓰는
+ * 사람에게 진단이 항상 빨간 화면이면 그 화면을 안 보게 되어 정작 필요할 때 못 쓴다.
  *
- * **못 고르면 전부로 물러난다** (`config.model` 이 없거나 · 모양이 아니거나 · 그 프로바이더가
- * 목록에 없거나 · `/config` 를 못 읽거나). 무엇을 쓸지 모르는 상태에서는 넓게 보는 쪽이 맞다.
+ * **하나도 못 고르면 전부로 물러난다** (`/config` 를 못 읽거나 · 모양이 아니거나 · 고른 것이
+ * 목록에 하나도 없거나). 무엇을 쓸지 모르는 상태에서는 넓게 보는 쪽이 맞다.
  * 「전부」 규칙에서 **「하나만 살아 있으면 통과」로 완화하면 안 된다** — 실측 설정에는
  * `opencode`(원격, baseURL 없음)와 `ollama-local`(로컬)이 같이 있고 원격 쪽은 늘 건너뛰어
  * 초록이라, ollama 가 죽어도 초록이 된다.
- *
- * ⚠️ **1순위 규칙의 한계 — `config.model` 이 전부가 아니다.** 스키마에 오버라이드가 더 있다:
- * `agent.<이름>.model`(Agent 정의에 `model` 속성이 있다)·`small_model`. 실측한 설정에서는
- * `agent`·`mode` 가 **빈 객체**라 오버라이드가 걸린 모습을 **본 적이 없다.**
- * 오버라이드로 다른 프로바이더를 쓰면 그 프로바이더의 생사는 이 단계가 못 본다.
  */
 async function targetsOf(
   trimmed: string,
   named: CountedProvider[],
   fetchImpl: typeof fetch,
 ): Promise<CountedProvider[]> {
-  const chosen = await chosenProviderId(trimmed, fetchImpl)
-  if (chosen === null) return named
-  const match = named.filter((provider) => provider.id === chosen)
+  const chosen = await chosenProviderIds(trimmed, fetchImpl)
+  if (chosen.length === 0) return named
+  const match = named.filter((provider) => chosen.includes(provider.id))
   return match.length > 0 ? match : named
 }
 
-/** `GET /config` 의 `model` 에서 프로바이더 id 만. 못 읽으면 null 이고, 그것은 실패가 아니다. */
-async function chosenProviderId(trimmed: string, fetchImpl: typeof fetch): Promise<string | null> {
+/** 쓰일 수 있는 프로바이더 id 들. 못 읽으면 빈 배열이고, 그것은 실패가 아니다. */
+async function chosenProviderIds(trimmed: string, fetchImpl: typeof fetch): Promise<string[]> {
   try {
-    const body = (await getJson(`${trimmed}/config`, fetchImpl)) as { model?: unknown }
-    if (typeof body?.model !== 'string') return null
-    // 첫 `/` 에서만 자른다 — 모델 id 에 `/` 가 들어가는 게이트웨이가 있다 (models.ts 주석)
-    return toModelRef(body.model)?.providerID ?? null
+    return providerIdsOf((await getJson(`${trimmed}/config`, fetchImpl)) as OpencodeConfigView)
   } catch {
     // 설정을 못 읽었다고 model 단계를 실패시키지 않는다 — 프로바이더 목록은 이미 받았다
-    return null
+    return []
   }
 }
 
