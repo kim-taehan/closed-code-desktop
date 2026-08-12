@@ -106,7 +106,11 @@ export function useShortcuts(
       // 셸 칸. macOS 에서 ⌘↑/⌘↓ 는 텍스트 영역의 "문서 처음/끝으로" 기본 동작이기도 한데
       // preventDefault 로 그쪽을 취소한다 (버블 단계도 디스패치 중이다).
       // Alt 를 요구하지 않는다 — 프로젝트 전환(←·→)과 축이 달라 부딪히지 않는다.
-      if ((key === 'arrowdown' || key === 'arrowup') && !event.altKey) {
+      //
+      // **⇧ 가 끼면 손대지 않는다.** ⌘⇧↑/↓ 는 편집기에서 선택 영역을 문서 끝까지 넓히는
+      // 조합이고(CodeMirror `selectDocStart`/`selectDocEnd`), 셸 칸은 그 조합을 광고한 적이
+      // 없다. 안 빼면 글을 고르려다 칸이 열린다.
+      if ((key === 'arrowdown' || key === 'arrowup') && !event.altKey && !event.shiftKey) {
         event.preventDefault()
         ;(key === 'arrowdown' ? handlers.onShellDown : handlers.onShellUp)()
         return

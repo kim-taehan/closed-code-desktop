@@ -20,6 +20,7 @@ import type {
   WorkingDirPayload,
   PickedAttachment,
   PtyDataPayload,
+  PtyDetachPayload,
   PtyExitPayload,
   PtyInputPayload,
   PtyOpenResult,
@@ -198,8 +199,11 @@ export interface DesktopBridge extends GitHistoryBridge, ExtensionRegistryBridge
   /** 누른 키를 그대로. **응답을 기다리지 않는다** — 왕복을 기다리면 타이핑이 느려진다 */
   sendShellInput(payload: PtyInputPayload): void
   resizeShell(payload: PtyResizePayload): Promise<void>
-  /** 드로어를 접는다. **셸은 죽이지 않는다** — 다시 펴면 스크롤백째 돌아온다 */
-  detachShellDrawer(): void
+  /**
+   * 그 프로젝트의 드로어에서 손을 뗀다. **셸은 죽이지 않는다** — 다시 펴면 스크롤백째 돌아온다.
+   * ⌘↑ 로 접을 때가 아니라 **프로젝트를 옮길 때** 부른다 (`PtyDetachPayload` 머리말).
+   */
+  detachShellDrawer(payload: PtyDetachPayload): void
   onShellData(handler: ProjectHandler<PtyDataPayload>): () => void
   onShellExit(handler: ProjectHandler<PtyExitPayload>): () => void
   /** 소스 관리 상태. 저장소가 아니면 isRepo: false 로 온다. */

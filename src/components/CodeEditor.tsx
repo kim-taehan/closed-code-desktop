@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands'
 import { HighlightStyle, LanguageDescription, syntaxHighlighting } from '@codemirror/language'
 import { languages } from '@codemirror/language-data'
-import { Compartment, EditorState } from '@codemirror/state'
+import { Compartment, EditorState, Prec } from '@codemirror/state'
 import { EditorView, drawSelection, keymap, lineNumbers } from '@codemirror/view'
 import { tags } from '@lezer/highlight'
 import type { EditorSelection } from '../state/editorContext'
@@ -14,6 +14,30 @@ import type { EditorSelection } from '../state/editorContext'
 // (textarea 자체 색으로 그려져서) 안 보인다. CodeMirror 는 조합을 직접 다뤄 이 문제가 없다.
 //
 // 색은 대화 코드 블록과 **같은 CSS 변수**를 쓴다 — 테마를 바꾸면 둘이 함께 바뀐다.
+
+/**
+ * ⌘↑/⌘↓ 는 **셸 칸 것이다** — 여기서 삼켜 커서가 안 뛰게 한다.
+ *
+ * `defaultKeymap` 안의 `standardKeymap` 이 mac 에서 `Cmd-ArrowUp→cursorDocStart` /
+ * `Cmd-ArrowDown→cursorDocEnd` 를 건다 (`@codemirror/commands` 실측). CodeMirror 키맵은
+ * `preventDefault` 만 하고 **전파는 안 막으므로**, 그대로 두면 이벤트가 window 까지 올라가
+ * `useShortcuts` 도 함께 돈다 — **커서가 문서 끝으로 뛰면서 동시에 셸 칸이 열린다.**
+ * `Composer` 에서 막은 바로 그 이중 발동이다 (`src/state/composerArrowKeys.ts`).
+ *
+ * 셸 칸을 이기게 하는 이유: 이 앱은 이미 그 조합을 셸 칸에 줬고(입력창에서도 `useShortcuts`
+ * 가 `preventDefault` 로 문서 처음/끝 이동을 취소한다), 편집기에서만 반대로 하면 같은 키가
+ * 화면마다 다른 일을 한다. 파일을 읽다가 셸을 열려면 먼저 딴 데를 클릭해야 하는 것도 나쁘다.
+ *
+ * `run: () => true` 는 "내가 처리했다" 는 뜻이라 CodeMirror 가 커서를 안 옮긴다.
+ * 전파는 그대로라 `useShortcuts` 가 받아 칸을 연다. **⇧ 는 안 삼킨다** — ⌘⇧↑/↓ 는
+ * 선택 영역 넓히기이고, `useShortcuts` 쪽도 ⇧ 가 끼면 손대지 않는다.
+ */
+const SHELL_DRAWER_KEYS = Prec.highest(
+  keymap.of([
+    { key: 'Mod-ArrowUp', run: () => true },
+    { key: 'Mod-ArrowDown', run: () => true },
+  ]),
+)
 
 export interface CodeEditorProps {
   /** 언어 판별에 쓴다 (확장자) */
@@ -63,6 +87,7 @@ export function CodeEditor({
           lineNumbers(),
           history(),
           drawSelection(),
+          SHELL_DRAWER_KEYS,
           keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
           syntaxHighlighting(HIGHLIGHT),
           language.current.of([]),

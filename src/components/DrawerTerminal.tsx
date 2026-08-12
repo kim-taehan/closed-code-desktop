@@ -3,6 +3,8 @@ import { FitAddon } from '@xterm/addon-fit'
 import { Terminal as Xterm } from '@xterm/xterm'
 import '@xterm/xterm/css/xterm.css'
 import type { ThemeChoice } from '../state/useTheme'
+// 「이 키는 누구 것인가」 판정. 밖에 둔 이유와 그 축이 못 덮는 자리는 그 파일 머리말에 있다.
+import { belongsToApp } from '../state/drawerKeys'
 
 // 셸 드로어 안의 터미널.
 //
@@ -36,18 +38,6 @@ function terminalColors(): { background: string; foreground: string } {
   // 이름은 이 레포의 것(`--dc-*`)이다. 공여는 `--bg`/`--text` 였다 — 베끼면 늘 fallback 이 나가
   // 터미널만 테마를 안 따라간다 (화면에는 "색이 좀 다르네" 로만 보여 알아채기 어렵다).
   return { background: pick('--dc-bg', '#0d1117'), foreground: pick('--dc-text', '#e6edf3') }
-}
-
-/**
- * 이 키를 xterm 이 먹지 말고 창까지 올려보내야 하는가.
- *
- * macOS 의 갈래를 그대로 쓴다 — **⌘ 는 앱 것, ⌃ 는 터미널 것**이다. ⌃C 를 가로채면
- * 셸에서 돌던 것을 끊을 수 없고, ⌃W(단어 지우기)를 앱이 먹으면 탭이 닫힌다.
- * 예외는 ⌃↑/⌃↓ 하나다 — 윈도우·리눅스에는 ⌘ 가 없어 드로어를 접을 길이 사라진다.
- */
-function belongsToApp(event: KeyboardEvent): boolean {
-  if (event.metaKey) return true
-  return event.ctrlKey && (event.key === 'ArrowUp' || event.key === 'ArrowDown')
 }
 
 interface Props {
@@ -130,7 +120,11 @@ export function DrawerTerminal({ projectId, active, theme }: Props): React.React
       offData()
       offExit()
       // **셸은 죽이지 않는다** — 소켓만 접는다. 서버가 스크롤백을 들고 있어 다시 열면 돌아온다.
-      window.davis.detachShellDrawer()
+      //
+      // **내 projectId 를 실어 보낸다.** 이 정리가 도는 시점은 프로젝트를 옮긴 뒤라,
+      // main 의 활성 프로젝트는 이미 도착한 쪽이다 — 안 실으면 떠나온 내 소켓이 아니라
+      // 도착한 쪽을 정리하고 내 것은 열린 채 표에 남는다 (`PtyDetachPayload`).
+      window.davis.detachShellDrawer({ projectId })
       xterm.dispose()
       xtermRef.current = null
     }

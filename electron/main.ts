@@ -18,10 +18,9 @@ import type { ExtensionService } from './extensions/service'
 import { startExtensionHost } from './extensions/appHost'
 import type { ExtensionAskText } from './extensions/serviceDispatch'
 import { ExtensionViewHost, VIEW_SCHEME } from './extensions/viewHost'
-import { DesktopMcp } from './mcp/desktopMcp'
+import type { DesktopMcp } from './mcp/desktopMcp'
+import { createDesktopMcp } from './mcp/appWiring'
 import { PtyDrawerBridge } from './pty/drawerBridge'
-import { toActiveFile } from './ipc/extensionActiveFile'
-import { logStore } from './logs/logStore'
 
 // 확장 화면을 서빙할 스킴. **app ready 전에** 등록해야 한다 (Electron 규칙) —
 // 그래서 이 한 줄만 모듈 최상위에 있다. 이유는 `viewHost.ts` 머리말.
@@ -52,6 +51,16 @@ let projectRegistry: ProjectRegistry | null = null
 let appSettings: SettingsStore | null = null
 /** 에이전트가 이 앱을 조작하는 문 (`electron/mcp/`). 창이 다시 만들어져도 포트는 하나다. */
 let desktopMcp: DesktopMcp | null = null
+/**
+ * 지금 창. **DesktopMcp 가 창보다 오래 살기 때문에 여기 둔다.**
+ *
+ * macOS 는 창을 다 닫아도 앱이 죽지 않고(`window-all-closed`), 독에서 되살리면
+ * `createWindow()` 가 **새 window·새 registry** 를 만든다. `desktopMcp` 는 `??=` 라
+ * 첫 것을 그대로 들고 있으므로, 클로저로 굳히면 파괴된 창을 영영 바라본다 —
+ * 에이전트에게는 "화면이 없어 파일을 열지 못했습니다" 만 돌아간다.
+ * 확장 호스트가 `activeFile` 을 함수로 받아 가는 것과 같은 이유다.
+ */
+let mainWindow: BrowserWindow | null = null
 
 async function createWindow(): Promise<void> {
   const window = new BrowserWindow({
@@ -69,6 +78,7 @@ async function createWindow(): Promise<void> {
   const userData = app.getPath('userData')
   const registry = new ProjectRegistry({ store: new ProjectStore(defaultStorePath(userData)) })
   projectRegistry = registry
+  mainWindow = window
   const settings = new SettingsStore(defaultSettingsPath(userData))
   appSettings = settings
 
@@ -88,28 +98,13 @@ async function createWindow(): Promise<void> {
   // 세션은 프로젝트마다 하나다. 목록이 세션 수명을 이끈다 (설계 §3).
   // opencode 서버는 사용자가 띄운 것에 붙기만 한다 — 주소가 설정의 전부다.
   const stored = await settings.load()
-  // 에이전트가 이 앱을 조작하는 문. 창마다 새로 만들지 않는다 — 포트와 토큰이 둘이 되면
-  // opencode 에 등록된 옛 주소가 죽는다 (`electron/mcp/desktopMcp.ts`).
-  desktopMcp ??= new DesktopMcp({
-    settings: async () => {
-      const current = await settings.load()
-      return { desktopMcp: current.desktopMcp, opencodeUrl: current.opencodeUrl }
-    },
-    ports: {
-      // **열린 프로젝트만** 안다. 탭을 닫으면 그 순간 아무 파일도 못 건드린다.
-      rootOf: (id) => registry.openProjects.find((project) => project.id === id)?.root ?? null,
-      focusedProjectId: () => registry.active?.id ?? null,
-      // 값의 주인은 렌더러다 — main 이 짐작하지 않는다 (`extensionActiveFile.ts` 머리말).
-      // 브리지는 창과 함께 생기므로 값이 아니라 함수로 읽는다.
-      activeFile: () => toActiveFile(extensionIpc?.currentActiveFile() ?? null),
-      // 겉봉(ProjectScoped)을 씌워 보낸다 — 화면은 지금 보고 있는 프로젝트 것만 받는다
-      openInView: (projectId, target) => {
-        if (window.isDestroyed()) return false
-        window.webContents.send(Channel.DESKTOP_MCP_OPEN_FILE, { projectId, payload: target })
-        return true
-      },
-    },
-    log: (line) => logStore.add('desktop', line),
+  // 에이전트가 이 앱을 조작하는 문. **창마다 새로 만들지 않는다** — 포트와 토큰이 둘이 되면
+  // opencode 에 등록된 옛 주소가 죽는다. 포트들이 왜 함수인지는 `mcp/appWiring.ts` 머리말.
+  desktopMcp ??= createDesktopMcp({
+    settings: () => settings.load(),
+    registry: () => projectRegistry,
+    window: () => mainWindow,
+    activeFile: () => extensionIpc?.currentActiveFile() ?? null,
   })
   const mcp = desktopMcp
   bridge = new SessionBridge(
@@ -271,6 +266,10 @@ app.on('window-all-closed', () => {
   // 창이 사라지면 드로어도 없다. 서버 쪽 pty 는 그대로 둔다 — 창을 다시 만들면 되찾는다.
   void drawer?.dispose()
   drawer = null
+  mainWindow = null
+  // MCP 서버는 계속 듣는다 (포트·토큰이 바뀌면 opencode 쪽 등록이 죽는다).
+  // 등록 표시만 비워, 창을 되살렸을 때 다시 등록되게 한다.
+  desktopMcp?.forgetRegistrations()
   git?.dispose()
   git = null
   // 창이 다시 만들어지면 register() 가 다시 불린다 — 안 풀면 두 번째 등록에서 던진다

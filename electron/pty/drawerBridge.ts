@@ -1,6 +1,11 @@
 import { ipcMain, type BrowserWindow } from 'electron'
 import { Channel, type ProjectScoped } from '../../shared/ipc/channels'
-import type { PtyInputPayload, PtyOpenResult, PtyResizePayload } from '../../shared/ipc/ptyPayloads'
+import type {
+  PtyDetachPayload,
+  PtyInputPayload,
+  PtyOpenResult,
+  PtyResizePayload,
+} from '../../shared/ipc/ptyPayloads'
 import { isSendableSize, PtyClient } from './client'
 import { PtySocket } from './socket'
 
@@ -61,7 +66,8 @@ export class PtyDrawerBridge {
   private readonly drawers = new Map<string, DrawerState>()
 
   private readonly onInput = (_event: unknown, payload: PtyInputPayload): void => this.write(payload)
-  private readonly onDetach = (): void => this.detach()
+  private readonly onDetach = (_event: unknown, payload: PtyDetachPayload): void =>
+    this.detach(payload)
 
   constructor(private readonly options: PtyDrawerOptions) {}
 
@@ -159,13 +165,20 @@ export class PtyDrawerBridge {
   }
 
   /**
-   * 드로어를 접는다. **pty 는 죽이지 않는다** — 다시 펴면 그 셸이 스크롤백째 돌아와야 한다.
-   * 진짜로 없애는 것은 프로젝트를 닫을 때뿐이다 (`closeProject`).
+   * 그 프로젝트의 드로어에서 손을 뗀다. **pty 는 죽이지 않는다** — 다시 펴면 그 셸이
+   * 스크롤백째 돌아와야 한다. 진짜로 없애는 것은 프로젝트를 닫을 때뿐이다 (`closeProject`).
+   *
+   * ⚠️ **⌘↑ 로 접을 때는 안 온다.** 접기는 `display:none` 일 뿐 언마운트가 아니라
+   * 정리 함수가 안 돈다 (`ShellDrawer` — 내리면 그리던 화면이 날아간다). 접힌 동안에도
+   * 소켓은 붙어 있고, 그게 맞다: 그동안 흘러간 출력이 다시 펼 때 화면에 남아 있어야 한다.
+   *
+   * 실제로 오는 경로는 **프로젝트를 옮길 때** 하나뿐이다. 그래서 **활성 프로젝트로 풀지
+   * 않는다** — 그 시점에 활성은 이미 도착한 쪽이라, 그러면 떠나온 것 대신 도착한 것을
+   * 정리한다. 떠나는 쪽이 신원을 실어 보낸다 (`PtyDetachPayload`).
    */
-  private detach(): void {
-    const project = this.options.activeProject()
-    if (project === null) return
-    this.forget(project.id)
+  private detach(payload: PtyDetachPayload): void {
+    if (typeof payload?.projectId !== 'string') return
+    this.forget(payload.projectId)
   }
 
   /** 탭을 닫았다 — 셸도 함께 거둔다. 안 그러면 서버에 죽은 셸이 쌓인다. */

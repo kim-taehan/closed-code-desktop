@@ -92,6 +92,18 @@ describe('DesktopMcp', () => {
     expect(calls()).toBe(2)
   })
 
+  // macOS 는 창을 다 닫아도 앱이 산다. 독으로 되살리면 세션이 새로 붙는데, 표시가 남아
+  // 있으면 전부 "이미 등록됨" 으로 걸러진다 — 그 사이 opencode 가 재기동됐다면 도구가
+  // 조용히 사라진 채로 굳는다.
+  it('창이 사라졌다 되살아나면 다시 등록한다', async () => {
+    const { mcp, calls } = make()
+    running = mcp
+    await mcp.onProjectReady(projectA)
+    mcp.forgetRegistrations()
+    await mcp.onProjectReady(projectA)
+    expect(calls()).toBe(2)
+  })
+
   it('꺼져 있으면 등록하지 않는다', async () => {
     const { mcp, calls } = make({ enabled: false })
     running = mcp

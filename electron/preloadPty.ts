@@ -2,6 +2,7 @@ import { ipcRenderer } from 'electron'
 import { Channel, type DesktopBridge, type ProjectHandler } from '../shared/ipc/channels'
 import type {
   PtyDataPayload,
+  PtyDetachPayload,
   PtyExitPayload,
   PtyInputPayload,
   PtyOpenResult,
@@ -33,7 +34,7 @@ export function ptyBridge(subscribe: Subscribe): PtyBridge {
     sendShellInput: (payload: PtyInputPayload) => ipcRenderer.send(Channel.PTY_INPUT, payload),
     resizeShell: (payload: PtyResizePayload) =>
       ipcRenderer.invoke(Channel.PTY_RESIZE, payload) as Promise<void>,
-    detachShellDrawer: () => ipcRenderer.send(Channel.PTY_DETACH),
+    detachShellDrawer: (payload: PtyDetachPayload) => ipcRenderer.send(Channel.PTY_DETACH, payload),
     onShellData: (handler: ProjectHandler<PtyDataPayload>) =>
       subscribe<PtyDataPayload>(Channel.PTY_DATA, handler),
     onShellExit: (handler: ProjectHandler<PtyExitPayload>) =>

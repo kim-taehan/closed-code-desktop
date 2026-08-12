@@ -90,6 +90,18 @@ export class DesktopMcp {
     this.registered.delete(projectId)
   }
 
+  /**
+   * 창이 통째로 사라졌다 (macOS 는 이때 앱이 안 죽는다). **서버는 계속 듣는다** —
+   * 포트와 토큰이 바뀌면 opencode 에 등록된 주소가 죽기 때문이다.
+   *
+   * 등록 표시만 비운다. 창을 되살리면 세션이 새로 붙고 `onSessionReady` 가 다시 오는데,
+   * 표시가 남아 있으면 **전부 "이미 등록됨" 으로 걸러진다** — 그 사이 opencode 가
+   * 재기동됐다면 도구가 조용히 사라진 채로 굳는다.
+   */
+  forgetRegistrations(): void {
+    this.registered.clear()
+  }
+
   async dispose(): Promise<void> {
     this.registered.clear()
     await this.server.stop()

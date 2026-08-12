@@ -20,6 +20,20 @@ export interface PtyResizePayload {
   cols: number
 }
 
+/**
+ * 드로어에서 떠난다 — **떠나는 쪽이 자기 신원을 말한다.**
+ *
+ * 다른 요청과 달리 여기만 projectId 가 실린다. 이 프레임이 나가는 유일한 경로가
+ * **프로젝트를 옮길 때**인데, 그 시점에 main 의 활성 프로젝트는 **이미 옮겨 간 쪽**이다.
+ * 신원을 안 실으면 main 이 "떠나온 A" 대신 "도착한 B" 를 정리해서, A 의 소켓이 안 닫히고
+ * 표에 남는다 — 옮겨 다닐수록 쌓인다 (design-audit 경고 2).
+ *
+ * 나가는 프레임에 겉봉을 씌운 것과 같은 이유다: 어느 프로젝트 것인지를 **보내는 쪽이 안다.**
+ */
+export interface PtyDetachPayload {
+  projectId: string
+}
+
 export interface PtyDataPayload {
   chunk: string
 }
