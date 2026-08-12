@@ -105,9 +105,11 @@ session/*  ──davis 봉투(kind/action)──▶  OpencodeTransport  ──HT
 
    `POST /api/session` → `{data:{id:"ses_…"}}` (원래 근거, 같이 재확인함).
    **안 재 본 것:** 인자가 들어가는 경로와 `POST`/`PUT`/`DELETE` 나머지.
-   `/api/health` 에서 `.data` 를 벗기려 들면 막힌다 — `electron/opencode/probe.ts:46` 은
-   `body.healthy` 를 그대로 읽는다. 릴리스 버전이 필요하면 `/global/health` 가
-   `{"healthy":true,"version":"1.17.18"}` 을 준다.
+   `/api/health` 에서 `.data` 를 벗기려 들면 막힌다.
+   **다만 진단은 `/api/health` 를 안 쓴다** — `electron/opencode/probe.ts` 의 `pingOpencode` 는
+   `/global/health` 를 부른다. **고장이 나서 옮긴 게 아니라** `/global/health` 만
+   `{"healthy":true,"version":"1.17.18"}` 처럼 **릴리스 버전을 주기 때문**이고, 그 버전으로
+   하한선(`shared/opencode/version.ts`)을 대조한다. `/global/health` 도 안 감싼다.
 
 5. **경로 이름이 문서와 다르다.** `abort` → `interrupt`, `permissions/:id` → `permission/:id/reply`.
 

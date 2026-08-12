@@ -3,9 +3,10 @@
 // 진단은 3단계다: **opencode 서버 → 모델 → 연결 상태**.
 // 아래(서버)부터 본다 — 위 단계는 아래가 살아 있어야 의미가 있고, 실패 원인도 아래가 먼저다.
 //
-//   server  — `opencode serve` 가 떠 있나 (GET /api/health)
-//   model   — 쓸 모델이 붙어 있나 (GET /config/providers).
-//             서버는 떴는데 프로바이더 설정이 비면 증상이 "보내도 답이 없다" 로만 나온다.
+//   server  — `opencode serve` 가 떠 있나 (GET /global/health — 버전 하한선도 함께 본다)
+//   model   — 쓸 모델이 붙어 있나 (GET /config/providers + 그 프로바이더 주소 ping).
+//             서버는 떴는데 프로바이더 설정이 비거나 **설정만 되고 주소가 죽으면**
+//             증상이 "보내도 답이 없다" 로만 나온다.
 //   session — 지금 이 프로젝트 세션이 붙어 있나
 //
 // davis 시절엔 **Admin 서버 ping → 라이선스 검증 → 런타임 ping** 이었다. opencode 에는
