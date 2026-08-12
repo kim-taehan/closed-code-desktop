@@ -91,8 +91,23 @@ session/*  ──davis 봉투(kind/action)──▶  OpencodeTransport  ──HT
 3. **페이로드 필드 이름이 스트림마다 다르다.** `/api/event` 는 `data`, 레거시 `/event` 는 `properties`.
    안 맞추면 파싱은 되는데 필드가 전부 undefined 가 되어 **내용 없는 청크**가 흐른다.
 
-4. **`/api/*` 응답은 `{ data: ... }` 로 감싸여 온다.** 레거시 경로는 안 감싼다.
-   모르면 세션 id 가 undefined 로 새고, 증상은 한참 뒤 "핸드셰이크는 ready 인데 무응답" 으로만 나온다.
+4. **`/api/*` 응답은 대개 `{ data: ... }` 로 감싸여 온다 — 전부는 아니다.** 레거시 경로는 안 감싼다.
+   안 벗기면 세션 id 가 undefined 로 새고, 증상은 한참 뒤 "핸드셰이크는 ready 인데 무응답" 으로만
+   나온다. **이 실패는 여전히 참이다.** 틀렸던 것은 "`/api/*` 전부" 라는 **범위**뿐이다 —
+   근거는 세션·이벤트 계열에서만 나왔는데 문장이 전체를 단정했다.
+
+   1.17.18 에서 인자 없는 `/api/*` GET 16개를 전수로 재 봤다 (응답 최상위 키):
+
+   | | 경로 |
+   |---|---|
+   | 감싼다 (14) | `session`(+`cursor`) · `session/active` · `agent` · `model` · `provider` · `integration` · `permission/request` · `permission/saved` · `command` · `skill` · `pty` · `question/request` · `reference` · `fs/list` — 대부분 `location` 이 `data` 의 형제로 붙는다 |
+   | **안 감싼다 (2)** | **`/api/health` → `{"healthy":true}`** · `/api/location` → `{"directory","project"}` |
+
+   `POST /api/session` → `{data:{id:"ses_…"}}` (원래 근거, 같이 재확인함).
+   **안 재 본 것:** 인자가 들어가는 경로와 `POST`/`PUT`/`DELETE` 나머지.
+   `/api/health` 에서 `.data` 를 벗기려 들면 막힌다 — `electron/opencode/probe.ts:46` 은
+   `body.healthy` 를 그대로 읽는다. 릴리스 버전이 필요하면 `/global/health` 가
+   `{"healthy":true,"version":"1.17.18"}` 을 준다.
 
 5. **경로 이름이 문서와 다르다.** `abort` → `interrupt`, `permissions/:id` → `permission/:id/reply`.
 
