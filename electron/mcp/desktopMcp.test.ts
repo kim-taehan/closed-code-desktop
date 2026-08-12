@@ -104,6 +104,42 @@ describe('DesktopMcp', () => {
     expect(calls()).toBe(2)
   })
 
+  // **`forgetRegistrations()` 가 서버까지 버리면 안 된다.**
+  //
+  // 창 수명 문제를 "창이 닫히면 DesktopMcp 를 버린다" 로 풀고 싶어지는데, 그러면 포트와
+  // 토큰이 새로 나서 **opencode 에 등록해 둔 주소가 죽고** 재등록은 다음 핸드셰이크까지
+  // 안 온다. 그래서 서버는 계속 듣고 등록 표시만 비운다 — 재등록 URL 이 그대로인 것이
+  // 그 증거다 (contract-qa 가 대조하겠다고 한 네 번째 항목).
+  it('되살아나도 포트와 토큰은 그대로다 — 등록해 둔 주소가 안 죽는다', async () => {
+    const fetchImpl = fakeFetch()
+    const mcp = new DesktopMcp({
+      settings: () => Promise.resolve({ desktopMcp: true, opencodeUrl: 'http://127.0.0.1:4096' }),
+      ports,
+      fetchImpl,
+    })
+    running = mcp
+
+    const urlOf = (call: number): string => {
+      const body = (fetchImpl as unknown as { mock: { calls: [string, RequestInit][] } }).mock
+        .calls[call]![1].body
+      return (JSON.parse(String(body)) as { config: { url: string; headers: Record<string, string> } })
+        .config.url
+    }
+    const tokenOf = (call: number): string => {
+      const body = (fetchImpl as unknown as { mock: { calls: [string, RequestInit][] } }).mock
+        .calls[call]![1].body
+      return (JSON.parse(String(body)) as { config: { headers: Record<string, string> } }).config
+        .headers['Authorization']!
+    }
+
+    await mcp.onProjectReady(projectA)
+    mcp.forgetRegistrations()
+    await mcp.onProjectReady(projectA)
+
+    expect(urlOf(1)).toBe(urlOf(0))
+    expect(tokenOf(1)).toBe(tokenOf(0))
+  })
+
   it('꺼져 있으면 등록하지 않는다', async () => {
     const { mcp, calls } = make({ enabled: false })
     running = mcp
