@@ -136,6 +136,29 @@ export function belongsToApp(event: DrawerKeyLike): boolean {
  * **한 글자 `_`·`@` 로만 보인다.** 제외에 안 넣으면 칸에서 undo·set-mark 가 앱으로 새고,
  * 앱에는 그 단축키가 없어 **아무 일도 안 일어난다** — "가끔 undo 가 안 먹는다" 로만 겪힌다.
  *
+ * ### 근거 ③ `⌥` 가 섞이는 갈래 — **아직 안 덮었다 (알려진 범위 밖)**
+ *
+ * 갈래가 셋이다. 세 번째는 `⌥` 가 걸릴 때 도는데, 도달 조건이 플랫폼을 탄다:
+ *
+ * ```js
+ * evaluateKeyboardEvent(e, applicationCursorKeys, isMac, macOptionIsMeta)  // 인자 순서
+ * if (isMac && !macOptionIsMeta || !e.altKey || e.metaKey) { …② }
+ * else { o.key = ESC + <문자> }                                            // ③
+ * ```
+ *
+ * `macOptionIsMeta` 를 우리가 안 켜므로 **mac 에서는 ③ 이 아예 안 돈다** — `⌥⌃,` 는 ②
+ * 로 가서 바이트가 없고, 앱이 가져가도 잃는 것이 없다. **Win/Linux 에서만** ③ 이 돌아
+ * `ESC + ","` 를 낸다. `DrawerKeyLike` 가 `altKey` 를 안 받으니 여기서는 그냥 `,` 로 보이고
+ * **앱이 가져간다.**
+ *
+ * **안 고쳤다.** mac 은 영향이 없고 Win/Linux 는 이 환경에서 **실행할 수 없다**(보고서의
+ * `W-plat`). 실행 근거 없이 손대면 이번엔 반대 방향으로 틀릴 수 있다 — 지금은 `⌥⌃` 조합이
+ * 드물어 손해가 작고, 실행이 되는 자리에서 함께 보는 편이 낫다.
+ *
+ * 고치게 되면 `DrawerKeyLike` 에 `altKey` 를 더하고 `altKey → false`(셸 것)다. 그때
+ * **`shiftKey` 를 일부러 뺀 사유(⌃⇧Tab)가 `altKey` 에는 해당하지 않는다는 것**을 함께
+ * 적어야 한다 — 안 그러면 다음 사람이 "왜 하나는 받고 하나는 안 받나" 에서 막힌다.
+ *
  * ⚠️ **한 글자가 아니면 무조건 false(= 셸 것)다.** `ArrowLeft`·`Home`·`F1` 처럼 이름이 긴
  * 키는 위 갈래에 오지도 않고 **자기 `case` 에서 따로 바이트를 만든다** — `⌃←`/`⌃→` 가
  * `ESC[1;5D`/`ESC[1;5C`(단어 단위 이동)를 낸다. 그 목록을 우리가 다 알지 못하므로
