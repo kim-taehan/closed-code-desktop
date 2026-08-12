@@ -8,6 +8,20 @@ import { inShellDrawer } from './drawerKeys'
 // 설정의 단축키 목록과도 어긋난다 (목록에 있는데 안 먹는 것이 가장 나쁘다).
 //
 // macOS 는 Cmd, 그 밖은 Ctrl 을 쓴다.
+//
+// ## 여기 말고 키 임자를 정하는 곳 (새 단축키를 더하기 전에 볼 것)
+//
+// 판정을 여기로 옮겨 오지 마라 — **표를 복사하면 표가 늘 때마다 사본이 낡는다**
+// (`drawerKeys.ts` 가 그 실패를 한 번 겪고 규칙으로 바꿨다). 포인터만 둔다.
+//
+// | 물음 | 어디 |
+// |---|---|
+// | 이 키가 셸 칸에서 **밖으로 나가는가** | `src/state/drawerKeys.ts` (`belongsToApp`) |
+// | 입력창의 **↑/↓ 임자**가 누구인가 | `src/state/composerArrowKeys.ts` (`wantsHistoryNav`) |
+// | **⇧Tab** 이 먹는 범위 | `src/components/PermissionModeSwitch.tsx` (`inComposer`) |
+//
+// 아래 캡처 층의 `borrowed()`·`inShellDrawer` 도 임자 판정이다 — Esc·⌘Enter 전용이라
+// 여기 남아 있다.
 
 export interface ShortcutHandlers {
   onQuickOpen: () => void
@@ -177,8 +191,12 @@ export function useShortcuts(
       // 하므로 **xterm 이 그 키를 보지도 못한다** — `belongsToApp` 은 이 경로에 표를 못 던진다.
       //
       // 대가: 칸에 포커스가 있는 동안 Esc 로 턴을 못 끊는다. ⌘↑ 로 나온 뒤 Esc 를 누르거나
-      // 중단 버튼(TurnControls)을 쓴다. **⌘Enter(리뷰 적용)는 안 가른다** — 셸에서 뜻이 없는
-      // 조합이라 칸에 있어도 앱이 가져가는 편이 낫고, 좁게 고치는 쪽을 골랐다.
+      // 중단 버튼(TurnControls)을 쓴다.
+      //
+      // **⌘/⌃Enter(리뷰 적용)는 안 가른다.** 근거는 ⌃Tab 을 앱으로 올린 것과 **같은 모양**이다 —
+      // xterm 5.5.0 의 `case 13` 이 `ctrlKey` 를 안 본다(`o.key = e.altKey ? ESC+CR : CR`).
+      // 즉 ⌃Enter 는 뜻이 없는 게 아니라 **`CR` 을 만드는데 그것이 맨 Enter 와 같은 바이트라
+      // 셸이 구별하지 못한다.** 뺏어도 잃는 것이 없다.
       if (escape && inShellDrawer(event.target)) return
 
       if (accept) {
