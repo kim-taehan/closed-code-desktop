@@ -76,6 +76,15 @@ export function AgentSection({ settings, onSave }: AgentSectionProps) {
         checked={settings.desktopMcp}
         onChange={(value) => onSave({ ...settings, desktopMcp: value })}
       />
+
+      {/* 켜는 사람이 무엇을 기대해야 하는지 알아야 한다. **우리 쪽 결함이 아니므로**
+          "안 됩니다" 가 아니라 "지금 버전에서는 아직 안 씁니다" 로 적는다 —
+          근거는 `shared/settings/appSettings.ts` 의 `DEFAULT_DESKTOP_MCP` 주석. */}
+      <p className="dc-settings__hint">
+        {t(
+          '지금 확인된 opencode 버전(1.17·1.18)에서는 등록까지만 되고 모델이 이 도구를 아직 받아 가지 않습니다 — 켜 두어도 에이전트 쪽 동작은 달라지지 않습니다. opencode 가 이 도구를 싣기 시작하면 설정을 바꾸지 않아도 바로 동작합니다.',
+        )}
+      </p>
     </section>
   )
 }

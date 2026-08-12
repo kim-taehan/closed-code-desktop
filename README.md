@@ -135,9 +135,34 @@ session/*  ──davis 봉투(kind/action)──▶  OpencodeTransport  ──HT
 |---|---|---|
 | 자리 | `electron/mcp/`, `Channel.DESKTOP_MCP_*` | `electron/session/mcpConfig.ts`, `src/components/McpDialog.tsx`, `Channel.MCP_*` |
 | 하는 일 | 에이전트가 우리 앱을 조작한다 (`open_file`·`current_view`) | 사용자가 남의 MCP 서버에 쓸 개인 자격을 넣는다 |
-| 상태 | ✅ 동작 | ⬜ 프레임이 조용히 버려진다 (`opencode/transport.ts:129`) |
+| 상태 | ⚠️ **등록까지 동작** (아래) | ⬜ 프레임이 조용히 버려진다 (`opencode/transport.ts:129`) |
 
 **둘은 아무 관계가 없다.** 채널·타입·설정 문구를 갈라 뒀고, 새 파일 머리주석마다 이 구분을 적는다.
+
+#### ⚠️ 「앱이 MCP 서버」 는 **등록까지**만 착지했다 (실측 2026-08-12)
+
+| 겹 | 무엇 | 결과 |
+|---|---|---|
+| 1 | `POST /mcp?directory=` → `connected` | ✅ |
+| 2 | opencode 가 `tools/list` 로 우리 도구를 받아 감 | ✅ |
+| 3 | **그 도구가 모델에게 나가는 도구 집합에 들어감** | ❌ |
+| 4·5 | 모델이 호출 → 우리 서버에 도달 | 3 때문에 도달 못 함 |
+
+모델에게 가는 `/v1/chat/completions` 를 프록시로 가로채 봤고, opencode 자신의 오라클
+(`GET /experimental/tool?provider=&model=`)도 같은 답을 줬다 — **둘 다 내장 도구 12개뿐**이다.
+
+**우리 응답 모양의 문제가 아니다.** 참조 MCP 서버(표준 응답의 stdio 서버)를 대조군으로
+나란히 세웠는데 **그것도 안 실린다.** 등록 경로 셋(런타임 `POST /mcp` · 프로젝트 설정의
+remote · 같은 설정의 local stdio)이 전부 같고, `config.tools` 로 이름을 명시 허용해도
+안 바뀐다. **opencode 1.17.18 과 1.18.16 둘 다 그렇다.**
+
+**어디서 끊기는지는 모른다.** 설치본은 난독화돼 있고 포크 소스는 버전이 달라, 합치는 코드가
+있다는 것까지만 읽힌다. **"opencode 버그" 라고 단정하지 않는다** — 우리가 모르는 설정
+조건일 수도 있다. 재현 절차·대조군·두 버전 결과는 `_workspace/03_contract_qa.md` 의
+**12·13회차**에 있다.
+
+`AppSettings.desktopMcp` 는 **켜짐이 기본이다**(사용자 결정). 지금은 켜도 포트만 열리지만,
+opencode 쪽이 풀리면 **우리 코드 변경 없이 바로 동작한다.**
 
 ## 개발
 
