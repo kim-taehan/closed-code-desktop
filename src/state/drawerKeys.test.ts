@@ -80,13 +80,46 @@ describe('belongsToApp', () => {
       expect(belongsToApp(withShift)).toBe(true)
     })
 
-    // `ESC[Z`(역방향 탭) — **다른 바이트**라 터미널에서 실제로 뜻이 있다
-    it('⇧Tab 은 셸 것이다 — 같이 빼지 않는다', () => {
-      expect(belongsToApp({ key: 'Tab', metaKey: false, ctrlKey: false })).toBe(false)
+    // 맨 Tab(자동완성)도 맨 ⇧Tab(`ESC[Z`, 역방향 탭)도 셸 것이다.
+    //
+    // ⚠️ **이 함수는 그 둘을 구별하지 않는다** — `DrawerKeyLike` 에 `shiftKey` 가 없어서
+    // 입력이 같은 값이 된다. 그래서 케이스를 둘로 나누지 않는다: 나누면 같은 것을 두 번
+    // 단언하면서 「⇧Tab 을 시험했다」고 믿게 된다 (실제로 그렇게 적었다가 감사에서 잡혔다).
+    // 구별할 필요도 없다 — ⌃ 가 없으면 둘 다 셸로 가는 것이 맞는 답이다.
+    it('⌃ 없는 Tab 은 셸 것이다 — 맨 Tab 도 ⇧Tab 도', () => {
+      expect(belongsToApp(key('Tab'))).toBe(false)
+    })
+  })
+
+  // **손으로 센 예외 목록은 태어날 때 이미 낡아 있었다** — `⌘/⌃1..9`(프로젝트 직행)가
+  // 먼저 들어와 있었는데 "지금 ⌃ 앱 단축키는 ⌃Tab 하나" 라고 적었다.
+  // 판정 근거는 xterm 의 ctrl 매핑이다: 숫자는 **3~8 만** 바이트가 있다.
+  describe('⌃ + 숫자 — 셸이 받는 것과 안 받는 것', () => {
+    // 매핑에 없다 → 셸이 아무것도 안 받는다 → 앱이 가져가도 잃는 것이 없다.
+    // 안 빼면 윈도우·리눅스에서 칸에 포커스가 있는 동안 1·2·9번 프로젝트로 못 간다.
+    it('⌃1 · ⌃2 · ⌃9 는 앱 것이다 — 셸이 아무 바이트도 안 받는다', () => {
+      for (const digit of ['1', '2', '9']) {
+        expect(belongsToApp(key(digit, { ctrlKey: true }))).toBe(true)
+      }
     })
 
-    it('맨 Tab 은 셸 것이다 — 자동완성', () => {
-      expect(belongsToApp(key('Tab'))).toBe(false)
+    // 3~7 → ESC/FS/GS/RS/US, 8 → DEL. **진짜 바이트가 있으므로 뺏으면 대가가 있다.**
+    it('⌃3 ~ ⌃8 은 셸 것이다 — 여기는 진짜 거래다', () => {
+      for (const digit of ['3', '4', '5', '6', '7', '8']) {
+        expect(belongsToApp(key(digit, { ctrlKey: true }))).toBe(false)
+      }
+    })
+
+    // 앱 메뉴(배율 초기화)가 L0 에서 먼저 먹지만, 셸이 못 받는 것은 마찬가지다
+    it('⌃0 도 셸이 안 받는다', () => {
+      expect(belongsToApp(key('0', { ctrlKey: true }))).toBe(true)
+    })
+
+    // 글자는 전부 ^A..^Z 로 나간다 — 숫자 규칙이 글자까지 삼키면 ⌃C 가 죽는다
+    it('숫자 규칙이 글자를 삼키지 않는다', () => {
+      for (const letter of ['c', 'w', 'a', 'z']) {
+        expect(belongsToApp(key(letter, { ctrlKey: true }))).toBe(false)
+      }
     })
   })
 })

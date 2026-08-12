@@ -74,6 +74,9 @@ const SHORTCUTS: { group: string; items: Shortcut[] }[] = [
     items: [
       { keys: `${MOD} + Alt + →`, what: '다음 프로젝트', where: '창 전체' },
       { keys: `${MOD} + Alt + ←`, what: '이전 프로젝트', where: '창 전체' },
+      // 「창 전체」가 맞다 — 셸 칸에서도 나간다. `belongsToApp` 이 ⌃1·⌃2·⌃9 를 앱 것으로
+      // 보내고(셸이 그 바이트를 안 받는다), ⌃3~⌃8 은 셸이 받지만 프로젝트가 그만큼 열리는
+      // 경우가 드물어 실제로 걸리는 자리가 아니다. 걸리면 그때 여기 단서를 적는다.
       { keys: `${MOD} + 1…9`, what: 'n번째 프로젝트로 바로 — 9 는 마지막', where: '창 전체' },
     ],
   },
