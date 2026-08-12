@@ -69,6 +69,17 @@ describe('belongsToApp', () => {
       expect(belongsToApp(key('Tab', { ctrlKey: true }))).toBe(true)
     })
 
+    // **`!shiftKey` 를 더하고 싶어지는 자리다.** 더하면 칸 안에서 **이전 탭만** 조용히 죽는다.
+    // ⌃⇧Tab 도 셸에는 `ESC[Z` — 맨 ⇧Tab 과 같은 바이트라 역시 구분이 안 된다.
+    //
+    // 실제 호출자(`DrawerTerminal`)는 **진짜 `KeyboardEvent`** 를 넘기므로 `shiftKey` 가
+    // 딸려 온다. `DrawerKeyLike` 가 그 필드를 안 받는 것이 1차 방어이고, 이 케이스는
+    // 값이 실려 와도 판정이 안 흔들리는지를 본다.
+    it('⌃⇧Tab(이전 탭)도 앱으로 올린다 — shiftKey 가 실려 와도 무시한다', () => {
+      const withShift = { key: 'Tab', metaKey: false, ctrlKey: true, shiftKey: true }
+      expect(belongsToApp(withShift)).toBe(true)
+    })
+
     // `ESC[Z`(역방향 탭) — **다른 바이트**라 터미널에서 실제로 뜻이 있다
     it('⇧Tab 은 셸 것이다 — 같이 빼지 않는다', () => {
       expect(belongsToApp({ key: 'Tab', metaKey: false, ctrlKey: false })).toBe(false)
