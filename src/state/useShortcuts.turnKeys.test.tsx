@@ -159,3 +159,45 @@ describe('⌘Enter — 턴 리뷰 전체 적용', () => {
   })
 })
 
+// **셸 칸에서의 Esc 는 셸 것이다.** 칸은 터미널이고 Esc 는 거기서 vim·less·readline
+// vi 모드가 쓰는 기본 키다. 캡처가 먼저 돌아 stopPropagation 까지 하므로, 여기서 안
+// 가르면 **xterm 이 그 키를 보지도 못한다** (`belongsToApp` 은 이 경로에 표를 못 던진다).
+describe('셸 칸의 Esc', () => {
+  const STREAMING: ShortcutContext = { streaming: true, canAcceptReview: false }
+
+  /** 칸 안에서 누른 것처럼 — 포커스는 xterm 이 숨겨 둔 textarea 다 */
+  function pressInDrawer(init: KeyboardEventInit): boolean {
+    const drawer = document.createElement('div')
+    drawer.className = 'drawer'
+    const hidden = document.createElement('textarea')
+    drawer.appendChild(hidden)
+    document.body.appendChild(drawer)
+
+    const prevented = pressOn(hidden, init)
+    drawer.remove()
+    return prevented
+  }
+
+  it('칸에서 누른 Esc 는 턴을 끊지 않는다 — 셸로 내려보낸다', () => {
+    mount(STREAMING)
+    const prevented = pressInDrawer({ key: 'Escape' })
+
+    expect(handlers.onCancelTurn).not.toHaveBeenCalled()
+    // 안 막아야 xterm 이 받아 셸로 보낸다
+    expect(prevented).toBe(false)
+  })
+
+  // 대가를 못 박아 둔다 — 칸 밖에서는 그대로 끊긴다. ⌘↑ 로 나오면 되는 이유다.
+  it('칸 밖에서는 그대로 끊는다', () => {
+    mount(STREAMING)
+    press({ key: 'Escape' })
+    expect(handlers.onCancelTurn).toHaveBeenCalledTimes(1)
+  })
+
+  // **⌘Enter 는 안 가른다** — 셸에서 뜻이 없는 조합이라 칸에 있어도 앱이 가져간다
+  it('칸에서도 ⌘Enter 는 리뷰를 적용한다', () => {
+    mount({ streaming: false, canAcceptReview: true })
+    pressInDrawer({ key: 'Enter', metaKey: true })
+    expect(handlers.onAcceptReview).toHaveBeenCalledTimes(1)
+  })
+})

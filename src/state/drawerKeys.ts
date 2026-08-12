@@ -108,3 +108,22 @@ function isSilentCtrlDigit(key: string): boolean {
   if (key.length !== 1 || key < '0' || key > '9') return false
   return key < '3' || key > '8'
 }
+
+/**
+ * 지금 셸 칸 안에서 누르고 있는가.
+ *
+ * `belongsToApp` 이 못 미치는 경로가 하나 있다 — **`useShortcuts` 의 Esc 는 캡처 단계**라
+ * xterm 보다 **먼저** 돌고, 처리하면 `stopPropagation` 까지 해서 xterm 은 그 키를 보지도
+ * 못한다. 즉 `attachCustomKeyEventHandler` 로는 표를 던질 수 없다.
+ *
+ * 그래서 Esc 만 이 판정으로 따로 가른다. `borrowed()` 의 열거가 보는 것은
+ * `[role=menu/listbox/dialog]` 와 `HTMLInputElement` 뿐인데 xterm 의 숨은 입력 요소는
+ * 어느 것도 아니다 — 그 주석이 스스로 *"이건 열거다, 화면을 덮는 표식이 새로 생기면
+ * 여기도 늘어야 한다"* 고 적어 뒀고 **셸 칸이 그 새 표식이다.**
+ *
+ * 태그가 아니라 **컨테이너**로 가른다 (`PermissionModeSwitch` 의 `inComposer` 와 같은 방식) —
+ * 칸의 포커스는 xterm 이 숨겨 둔 `<textarea>` 라 태그로는 입력창과 구별되지 않는다.
+ */
+export function inShellDrawer(target: EventTarget | null): boolean {
+  return target instanceof Element && target.closest('.drawer') !== null
+}

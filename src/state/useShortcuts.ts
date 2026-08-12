@@ -1,4 +1,6 @@
 import { useEffect } from 'react'
+// 셸 칸 임자 판정. 왜 Esc 만 여기서 가르는지는 그 파일의 `inShellDrawer` 머리말.
+import { inShellDrawer } from './drawerKeys'
 
 // 창 전체 단축키.
 //
@@ -169,6 +171,15 @@ export function useShortcuts(
 
       // 이 키를 이미 쓰고 있는 곳이 있으면 넘긴다 — 임자가 있으면 우리 것이 아니다.
       if (borrowed(event)) return
+
+      // **셸 칸에서의 Esc 는 셸 것이다.** 칸은 터미널이고 Esc 는 거기서 vim·less·readline
+      // vi 모드가 쓰는 기본 키다. 여기서 안 가르면 캡처가 먼저 돌아 `stopPropagation` 까지
+      // 하므로 **xterm 이 그 키를 보지도 못한다** — `belongsToApp` 은 이 경로에 표를 못 던진다.
+      //
+      // 대가: 칸에 포커스가 있는 동안 Esc 로 턴을 못 끊는다. ⌘↑ 로 나온 뒤 Esc 를 누르거나
+      // 중단 버튼(TurnControls)을 쓴다. **⌘Enter(리뷰 적용)는 안 가른다** — 셸에서 뜻이 없는
+      // 조합이라 칸에 있어도 앱이 가져가는 편이 낫고, 좁게 고치는 쪽을 골랐다.
+      if (escape && inShellDrawer(event.target)) return
 
       if (accept) {
         if (!context.canAcceptReview) return
