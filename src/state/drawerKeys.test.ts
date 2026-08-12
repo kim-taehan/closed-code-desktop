@@ -60,10 +60,22 @@ describe('belongsToApp', () => {
     })
   })
 
-  // **의도한 거래다.** 터미널에서 Tab 은 자동완성이라 ⌃Tab 을 앱에 주면 그쪽이 다친다.
-  // 칸에서 본문 탭을 옮기려면 ⌘↑ 로 나온 뒤 ⌃Tab 을 쓴다. 적어 두지 않으면 나중에
-  // "왜 여기서만 ⌃Tab 이 안 먹지" 를 버그로 오해한다.
-  it('⌃Tab 은 앱으로 안 올린다 — 칸 안에서는 셸 자동완성이다', () => {
-    expect(belongsToApp(key('Tab', { ctrlKey: true }))).toBe(false)
+  // **Tab 두 조합의 근거가 정반대다.** 나란히 있어 한 덩어리로 보이므로 함께 못 박는다 —
+  // 한쪽을 고치려다 다른 쪽까지 옮기는 것이 여기서 가장 하기 쉬운 실수다.
+  describe('⌃Tab 과 ⇧Tab', () => {
+    // 셸에 가 봐야 `HT` — 맨 Tab 과 같은 바이트라 셸이 구분조차 못 한다.
+    // 안 빼면 앱은 본문 탭 순환을 잃고 셸은 아무것도 얻지 못한다.
+    it('⌃Tab 은 앱으로 올린다 — 셸이 얻는 것이 없다', () => {
+      expect(belongsToApp(key('Tab', { ctrlKey: true }))).toBe(true)
+    })
+
+    // `ESC[Z`(역방향 탭) — **다른 바이트**라 터미널에서 실제로 뜻이 있다
+    it('⇧Tab 은 셸 것이다 — 같이 빼지 않는다', () => {
+      expect(belongsToApp({ key: 'Tab', metaKey: false, ctrlKey: false })).toBe(false)
+    })
+
+    it('맨 Tab 은 셸 것이다 — 자동완성', () => {
+      expect(belongsToApp(key('Tab'))).toBe(false)
+    })
   })
 })
