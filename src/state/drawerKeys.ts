@@ -109,8 +109,10 @@ export function belongsToApp(event: DrawerKeyLike): boolean {
 /**
  * ⌃ + **한 글자** 중 셸이 아무 바이트도 못 받는 것인가.
  *
- * xterm 의 `default:` 갈래(= 자기 `case` 가 없는 키들)가 plain ⌃ 에서 내는 것은 이게 전부다
- * (5.5.0 실측). **여집합으로 쓰므로 앱 단축키가 늘어도 안 낡는다:**
+ * **여집합으로 쓰므로 앱 단축키가 늘어도 안 낡는다.** 대신 여집합은 **근거의 범위를 못
+ * 넘는다** — 그래서 근거가 어디까지인지를 함께 적는다.
+ *
+ * ### 근거 ① plain ⌃ 갈래 (`ctrlKey && !shiftKey && !altKey && !metaKey`)
  *
  * ```js
  * keyCode 65..90      → ^A..^Z           // 글자
@@ -119,6 +121,20 @@ export function belongsToApp(event: DrawerKeyLike): boolean {
  * keyCode 56          → DEL              // 숫자 8
  * keyCode 219/220/221 → ESC,FS,GS        // [ \ ]
  * ```
+ *
+ * ### 근거 ② shift 가 섞이는 갈래 — **처음에 이걸 빠뜨려 구멍이 났다**
+ *
+ * 위 표는 plain ⌃ 일 때만 도는 갈래에서 떴다. shift 가 끼면 다른 갈래로 가는데 거기에도
+ * ⌃ 처리가 있다 (5.5.0, 이 둘이 전부다):
+ *
+ * ```js
+ * e.key && e.ctrlKey && ("_" === e.key && (o.key = US),   // ⌃⇧- → US  (readline undo)
+ *                        "@" === e.key && (o.key = NUL))  // ⌃⇧2 → NUL (readline set-mark)
+ * ```
+ *
+ * `DrawerKeyLike` 가 `shiftKey` 를 안 받으므로(⌃⇧Tab 을 살리려는 판단) 이 둘은 여기서
+ * **한 글자 `_`·`@` 로만 보인다.** 제외에 안 넣으면 칸에서 undo·set-mark 가 앱으로 새고,
+ * 앱에는 그 단축키가 없어 **아무 일도 안 일어난다** — "가끔 undo 가 안 먹는다" 로만 겪힌다.
  *
  * ⚠️ **한 글자가 아니면 무조건 false(= 셸 것)다.** `ArrowLeft`·`Home`·`F1` 처럼 이름이 긴
  * 키는 위 갈래에 오지도 않고 **자기 `case` 에서 따로 바이트를 만든다** — `⌃←`/`⌃→` 가
@@ -131,11 +147,14 @@ export function belongsToApp(event: DrawerKeyLike): boolean {
  */
 function isSilentCtrlChar(key: string): boolean {
   if (key.length !== 1) return false
+  // ① plain ⌃ 갈래
   if (key >= 'a' && key <= 'z') return false
   if (key >= 'A' && key <= 'Z') return false
   if (key === ' ') return false
   if (key >= '3' && key <= '8') return false
-  return key !== '[' && key !== '\\' && key !== ']'
+  if (key === '[' || key === '\\' || key === ']') return false
+  // ② shift 가 섞이는 갈래 — `_`(US, undo) · `@`(NUL, set-mark)
+  return key !== '_' && key !== '@'
 }
 
 /**
