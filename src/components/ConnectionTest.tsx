@@ -18,7 +18,7 @@ export interface ConnectionTestProps {
   intro?: string
   /** Doctor 인라인 수정 폼 재료 — 있으면 주소·키를 이 팝업 안에서 바로 고친다 */
   fix?: ConnectionDoctorProps['fix']
-  /** 진단이 초록으로 끝났다 — 최초 등록 게이트는 이걸로 자동 닫힘한다 */
+  /** 진단이 초록으로 끝났다 — 자동 게이트(`useDoctorGate`)가 이걸로 스스로 닫는다 */
   onHealthy?: () => void
 }
 

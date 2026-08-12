@@ -83,7 +83,6 @@ export function AppDialogs(props: AppDialogsProps) {
             ? {
                 // 진단이 못 고친 주소·키 문제는 이 팝업 안에서 바로 고친다 (왕복 제거)
                 fix: {
-                  project: props.project,
                   settings: props.appSettings.value,
                   onSaveSettings: props.appSettings.save,
                 },

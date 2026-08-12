@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { DEFAULT_OPENCODE_URL, type AppSettings } from '../../shared/settings/appSettings'
-import type { ProjectRecord } from '../../shared/projects/projectRecord'
 import { t } from '../i18n/messages'
 
 // 연결 설정 폼 — 연결에 관한 값 전부와 버튼 하나.
@@ -16,7 +15,6 @@ import { t } from '../i18n/messages'
 // 붙었는지 확인하는 일은 이 폼이 하지 않는다 — 옆 열의 자가 진단(파이프라인)이 전부 맡는다.
 
 export interface ConnectionFixFormProps {
-  project: ProjectRecord
   settings: AppSettings
   /** 저장 완료를 기다린다 — 저장 전에 재연결하면 옛 주소로 붙는다 */
   onSaveSettings: (settings: AppSettings) => Promise<void>

@@ -3,7 +3,6 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ConnectionFixForm } from './ConnectionFixForm'
 import { DEFAULT_OPENCODE_URL, DEFAULT_SETTINGS } from '../../shared/settings/appSettings'
-import type { ProjectRecord } from '../../shared/projects/projectRecord'
 
 // **"값을 바꾸고 연결 시도를 누르면 저장·재연결·재진단까지 한 번에"** — 그 한 번에가
 // 실제로 셋을 다 하는지 잠근다 (`ConnectionDoctor.tsx:162` 가 화면에 그렇게 광고한다).
@@ -14,8 +13,6 @@ import type { ProjectRecord } from '../../shared/projects/projectRecord'
 
 afterEach(cleanup)
 
-const project: ProjectRecord = { id: 'p1', root: '/tmp/p1', name: 'p1', favorite: false, lastOpenedAt: 0 }
-
 function setup(overrides: { url?: string; running?: boolean } = {}) {
   const onSaveSettings = vi.fn().mockResolvedValue(undefined)
   const onApply = vi.fn()
@@ -23,7 +20,6 @@ function setup(overrides: { url?: string; running?: boolean } = {}) {
 
   render(
     <ConnectionFixForm
-      project={project}
       settings={settings}
       onSaveSettings={onSaveSettings}
       running={overrides.running ?? false}
@@ -95,8 +91,7 @@ describe('연결 시도 — 한 번에 무엇을 하나', () => {
     })
     render(
       <ConnectionFixForm
-        project={project}
-        settings={{ ...DEFAULT_SETTINGS, opencodeUrl: DEFAULT_OPENCODE_URL }}
+          settings={{ ...DEFAULT_SETTINGS, opencodeUrl: DEFAULT_OPENCODE_URL }}
         onSaveSettings={onSaveSettings}
         running={false}
         onApply={onApply}

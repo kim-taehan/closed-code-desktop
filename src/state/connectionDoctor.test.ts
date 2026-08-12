@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { diagnoseIssues, isHealthy, sessionUp, stepIssues } from './connectionDoctor'
+import { diagnoseIssues, sessionUp, stepIssues } from './connectionDoctor'
 import { initPipeline, advance, type PipelineState } from './doctorPipeline'
 import type { DiagnosticsPayload } from '../../shared/ipc/channels'
 import type { ProjectStatus } from './projectStatus'
@@ -24,35 +24,6 @@ describe('sessionUp — 대화 가능한 상태', () => {
     for (const status of ['idle', 'connecting', 'error', 'disconnected'] as ProjectStatus[]) {
       expect(sessionUp(status)).toBe(false)
     }
-  })
-})
-
-// ⚠️ **이 함수는 지금 소비처가 없다.** `src`·`electron`·`shared` 어디도 안 부른다
-// (D1 을 쓰며 발견 — 고치지 않고 보고했다). 그런데 주석은 *"Doctor 버튼은 이게 false 일 때만
-// 활성화된다"* 고 적고 있어, 있지도 않은 배선을 주장한다.
-//
-// 그래도 계약을 잠가 둔다 — D3(자동 게이트)의 판정 조건이 정확히 이 물음이라
-// 되살아날 가능성이 높고, 그때 이 표가 있으면 판정이 흔들렸는지 바로 보인다.
-describe('isHealthy — Doctor 버튼을 잠그는 판정 (지금은 소비처 없음)', () => {
-  it('세션이 살아 있고 진단도 통과면 정상이다', () => {
-    expect(isHealthy('ready', diag(true))).toBe(true)
-  })
-
-  it('아직 진단을 안 돌렸어도 세션이 살아 있으면 정상으로 본다', () => {
-    expect(isHealthy('ready', null)).toBe(true)
-  })
-
-  it('세션이 죽었으면 정상이 아니다', () => {
-    expect(isHealthy('disconnected', diag(true))).toBe(false)
-  })
-
-  // 세션은 붙어 있는데 런타임 ping 이 실패하는 경우가 있다 — 그때도 정상이 아니다
-  it('런타임 ping 이 실패했으면 정상이 아니다', () => {
-    expect(isHealthy('ready', diag(false, '연결 거부'))).toBe(false)
-  })
-
-  it('핸드셰이크 실패 사유가 있으면 정상이 아니다', () => {
-    expect(isHealthy('ready', diag(true), '워크스페이스 준비 실패')).toBe(false)
   })
 })
 

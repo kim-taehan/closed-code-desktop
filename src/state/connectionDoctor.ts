@@ -32,17 +32,12 @@ export function sessionUp(status: ProjectStatus): boolean {
   return status === 'ready' || status === 'busy'
 }
 
-/** 모든 계층이 정상인가 — Doctor 버튼은 이게 false 일 때만 활성화된다 */
-export function isHealthy(
-  status: ProjectStatus,
-  result: DiagnosticsPayload | null,
-  failure?: string,
-): boolean {
-  if (!sessionUp(status)) return false
-  if (failure) return false
-  if (result && !result.runtime.ok) return false
-  return true
-}
+// **`isHealthy()` 가 여기 있었다 — D4 에서 지웠다.**
+// *"모든 계층이 정상인가 — Doctor 버튼은 이게 false 일 때만 활성화된다"* 고 적혀 있었는데
+// **그렇게 쓰는 코드가 없었다** (전수 확인). D3(자동 게이트)이 되살릴 자리로 지목돼 기다렸지만,
+// 게이트는 반대 물음(`status === 'error'` — **붙어 보고 실패했나**)으로 판정한다.
+// 「전부 정상인가」와 「실패했나」는 `idle`·`connecting` 에서 답이 갈려 서로를 대신 못 쓴다.
+// 다시 필요해지면 10줄이다 — **없는 배선을 주장하는 주석을 남겨 두는 쪽이 비싸다.**
 
 /**
  * 깨진 계층을 의존 순서(서버 → 세션)로 나열한다.

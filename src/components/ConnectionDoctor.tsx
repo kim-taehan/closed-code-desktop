@@ -13,7 +13,6 @@ import { awaitHealthy, probeModels, probeRuntime, probeServer } from '../state/c
 import { ConnectionFixForm } from './ConnectionFixForm'
 import { DoctorSteps, IssueList, mergeIssues } from './DoctorSteps'
 import type { AppSettings } from '../../shared/settings/appSettings'
-import type { ProjectRecord } from '../../shared/projects/projectRecord'
 
 // 연결 진단·복구(Doctor) — 오토힐링 파이프라인의 드라이버.
 //
@@ -33,11 +32,17 @@ export interface ConnectionDoctorProps {
   failure?: string
   /** 인라인 수정 폼 재료 (프로젝트·설정·저장). 없으면 폼 없이 안내만 한다. */
   fix?: {
-    project: ProjectRecord
     settings: AppSettings
     onSaveSettings: (settings: AppSettings) => Promise<void>
   }
-  /** 진단이 초록(healthy/healed)으로 끝났다 — 최초 등록 게이트의 자동 닫힘용 */
+  /**
+   * 진단이 초록(healthy/healed)으로 끝났다 — **자동 게이트가 스스로 닫는 신호**다
+   * (`src/state/useDoctorGate.ts`). 배지를 눌러 연 팝업은 이걸로 안 닫힌다 — 그쪽은
+   * `App` 이 `testingOpen` 을 쥐고 있다.
+   *
+   * 이 주석은 오랫동안 *"최초 등록 게이트의 자동 닫힘용"* 이라고 **없는 주인을 가리키고
+   * 있었다.** D3 에서 게이트가 생겨 사실이 됐다.
+   */
   onHealthy?: () => void
 }
 
@@ -161,7 +166,6 @@ export function ConnectionDoctor({ status, failure, fix, onHealthy }: Connection
           <h3 className="dc-doctor__coltitle">연결 설정</h3>
           <p className="dc-doctor__note">값을 바꾸고 연결 시도를 누르면 저장·재연결·재진단까지 한 번에 됩니다.</p>
           <ConnectionFixForm
-            project={fix.project}
             settings={fix.settings}
             onSaveSettings={fix.onSaveSettings}
             running={running}

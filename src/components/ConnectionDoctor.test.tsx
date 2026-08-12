@@ -3,7 +3,6 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ConnectionDoctor } from './ConnectionDoctor'
 import { DEFAULT_OPENCODE_URL, DEFAULT_SETTINGS } from '../../shared/settings/appSettings'
-import type { ProjectRecord } from '../../shared/projects/projectRecord'
 
 // 드라이버 — 순수 머신(`doctorPipeline`)에 **부작용을 실제로 먹이는** 자리.
 //
@@ -12,8 +11,6 @@ import type { ProjectRecord } from '../../shared/projects/projectRecord'
 // 초록으로 끝나면 `onHealthy` 가 불리는가(자동 닫힘 게이트가 이 신호를 쓴다).
 
 afterEach(cleanup)
-
-const project: ProjectRecord = { id: 'p1', root: '/tmp/p1', name: 'p1', favorite: false, lastOpenedAt: 0 }
 
 const davis = {
   pingServer: vi.fn(),
@@ -43,7 +40,6 @@ function renderDoctor(props: Partial<Parameters<typeof ConnectionDoctor>[0]> = {
       status="ready"
       onHealthy={onHealthy}
       fix={{
-        project,
         settings: { ...DEFAULT_SETTINGS, opencodeUrl: DEFAULT_OPENCODE_URL },
         onSaveSettings,
       }}
