@@ -46,9 +46,9 @@ function makeBridge() {
       reload: () => Promise.resolve(),
       restart: () => Promise.resolve(),
     },
-    views: { register: () => 'davis-ext://view/1' },
+    views: { register: () => 'code-ext://view/1' },
     activeProjectId: () => '프로젝트-1',
-    settings: new SettingsStore(join(tmpdir(), `davis-extactive-${process.pid}.json`)),
+    settings: new SettingsStore(join(tmpdir(), `code-extactive-${process.pid}.json`)),
   })
 
   return { bridge, activeFiles }

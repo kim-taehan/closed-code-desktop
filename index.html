@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <!--
-      frame-src davis-ext: — 확장 화면을 담는 iframe 만 허용한다.
+      frame-src code-ext: — 확장 화면을 담는 iframe 만 허용한다.
       default-src 'self' 로 두면 커스텀 스킴 프레임이 막힌다.
 
       확장 화면을 srcdoc 으로 넣지 않는 이유가 여기 있다: srcdoc 문서는 **이 정책을 물려받아**
@@ -17,7 +17,7 @@
     -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; frame-src davis-ext:"
+      content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; frame-src code-ext:"
     />
     <title>AXGentic Desktop</title>
   </head>

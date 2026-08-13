@@ -2,7 +2,7 @@ import { lstat, stat } from 'node:fs/promises'
 import { isAbsolute, relative, resolve } from 'node:path'
 import { resolveInside } from '../fs/resolveInside'
 import type { ExtensionManifest } from '../../shared/extensions/manifest'
-import type { DavisApi } from './davisApi'
+import type { ExtensionApi } from './extensionApi'
 
 // 확장 호스트(자식) 안에서 확장을 실제로 싣는다.
 //
@@ -75,13 +75,13 @@ export interface ActiveFileRef {
 }
 
 /**
- * 확장 하나에 줄 `davis` 를 만든다.
+ * 확장 하나에 줄 `code` 를 만든다.
  *
  * **확장마다 따로 만든다.** 하나를 돌려 쓰면 `storage` 가 어느 확장 것인지 알 수 없어
- * 키가 확장끼리 충돌한다 (`davisApi.ts` 의 `METHOD_STORAGE_GET` 머리말).
+ * 키가 확장끼리 충돌한다 (`extensionApi.ts` 의 `METHOD_STORAGE_GET` 머리말).
  */
-/** 두 번째 인자는 **사람이 읽는 이름**(`displayName`) — 물음창에만 쓴다 (`davisApi.ts`) */
-export type DavisApiFor = (extensionName: string, extensionLabel: string) => DavisApi
+/** 두 번째 인자는 **사람이 읽는 이름**(`displayName`) — 물음창에만 쓴다 (`extensionApi.ts`) */
+export type ExtensionApiFor = (extensionName: string, extensionLabel: string) => ExtensionApi
 
 export interface ExtensionLoadResult {
   /** 명령 id → 처리기. 확장 여러 개가 같은 id 를 선언하면 먼저 실린 쪽이 남는다. */
@@ -113,7 +113,7 @@ export interface LoadDeps {
  */
 export async function loadExtensions(
   sources: ExtensionSource[],
-  davisFor: DavisApiFor,
+  apiFor: ExtensionApiFor,
   deps: LoadDeps,
 ): Promise<ExtensionLoadResult> {
   const commands = new Map<string, CommandHandler>()
@@ -155,7 +155,7 @@ export async function loadExtensions(
 
     try {
       // 확장이 async activate 를 써도 되게 await 한다 — 동기 반환이면 그대로 통과한다
-      const registration = await (activate as (api: DavisApi) => unknown)(davisFor(source.manifest.name, source.manifest.displayName))
+      const registration = await (activate as (api: ExtensionApi) => unknown)(apiFor(source.manifest.name, source.manifest.displayName))
       addCommands(commands, registration, source, deps.log)
       const redraw = asRecord(registration)['redraw']
       // 안 돌려줘도 된다 — 저장할 것이 없는 확장은 다시 그릴 것도 없다

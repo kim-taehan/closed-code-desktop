@@ -34,6 +34,13 @@ export const Channel = {
    * 앱을 조작하는 쪽이다 (`electron/mcp/`). 이름을 갈라 두 뜻이 섞이지 않게 한다.
    */
   DESKTOP_MCP_OPEN_FILE: 'desktopMcp:openFile',
+  /**
+   * main → renderer: **확장이 채팅으로 물었다** (`code.chat.ask`).
+   *
+   * 확장 질의는 사용자 입력과 **같은 큐**를 타야 한다 — 그 큐는 렌더러에 있다
+   * (`useSendQueue`). 그래서 main 이 대신 보내지 않고 화면에 밀어 넣는다.
+   */
+  EXTENSION_CHAT_ASK: 'extension:chatAsk',
   MODEL_OPTIONS_REQUEST: 'llm:modelOptions', // renderer → main: 모델 스위처 상태 재조회 (DC-1322)
   MODEL_STATE: 'llm:modelState', // main → renderer: 모델 스위처 상태 (llm_config status/models 결과)
   NOTIFICATION: 'notification:push',
@@ -71,8 +78,14 @@ export const Channel = {
   PROJECT_LIST: 'project:list',
   /** main → renderer: 프로젝트 목록 상태 */
   PROJECT_STATE: 'project:state',
-  /** renderer → main: 스킬 목록 (Admin 서버에서 온다) */
-  SKILL_LIST: 'skill:list',
+  /** renderer → main: `/` 목록 — opencode 의 명령·MCP·스킬 전부 */
+  COMMAND_LIST: 'command:list',
+  /** renderer → main: opencode 자신의 프로젝트 설정 파일과 서버가 합친 유효 설정 */
+  OPENCODE_CONFIG_READ: 'opencodeConfig:read',
+  /** renderer → main: 그 설정 파일을 쓴다. 깨진 JSON 은 거절된다 */
+  OPENCODE_CONFIG_WRITE: 'opencodeConfig:write',
+  /** renderer → main: opencode instance 를 버려 설정을 다시 읽힌다 + 재연결 */
+  OPENCODE_CONFIG_RELOAD: 'opencodeConfig:reload',
   /** renderer → main: 프로젝트 파일 목록 (빠른 열기) */
   PROJECT_LIST_FILES: 'project:listFiles',
   /** renderer → main: 내용 검색 */
@@ -188,25 +201,25 @@ export const Channel = {
    * 밀어 줄 수도(`onActiveFile`) 있어야 해서 둘 다 이 채널 하나에서 갈린다.
    */
   EXTENSION_ACTIVE_FILE: 'extension:activeFile',
-  /** 도는 확장 질의를 끊는다 (`CancelBook`) */
+  /** 확장 화면의 「중단」 — **사용자 대화의 도는 턴**을 끊는다 (설계 2026-08-13) */
   EXTENSION_CANCEL: 'extension:cancel',
-  /** 확장이 알린 진행 상황 한 줄 (`davis.progress`) */
+  /** 확장이 알린 진행 상황 한 줄 (`code.progress`) */
   EXTENSION_PROGRESS: 'extension:progress',
-  /** main → renderer: 확장이 davis.view.setRows 로 넘긴 행 */
+  /** main → renderer: 확장이 code.view.setRows 로 넘긴 행 */
   EXTENSION_ROWS: 'extension:rows',
-  /** main → renderer: 확장이 davis.view.setHtml 로 넘긴 HTML (격리는 renderer 가 씌운다) */
+  /** main → renderer: 확장이 code.view.setHtml 로 넘긴 HTML (격리는 renderer 가 씌운다) */
   EXTENSION_HTML: 'extension:html',
   /** 확장이 `view.setTree` 로 올린 트리. 앱이 그리고 **선택 상태도 앱이 쥔다.** */
   EXTENSION_TREE: 'extension:tree',
   /**
-   * 확장이 **사람에게 글을 묻는다** (`davis.ui.askText`). main → renderer 밀어주기.
+   * 확장이 **사람에게 글을 묻는다** (`code.ui.askText`). main → renderer 밀어주기.
    * 답은 `EXTENSION_ASK_TEXT_RESPOND` 로 되돌아온다.
    */
   EXTENSION_ASK_TEXT: 'extension:askText',
   /** 위 물음의 답. `requestId` 로 잇는다 — 물음이 겹쳐도 서로의 답을 먹지 않는다. */
   EXTENSION_ASK_TEXT_RESPOND: 'extension:askTextRespond',
   /**
-   * renderer → main: 격리 문서를 등록하고 `davis-ext://` URL 을 받는다.
+   * renderer → main: 격리 문서를 등록하고 `code-ext://` URL 을 받는다.
    *
    * srcdoc 을 쓰지 않는 이유는 `electron/extensions/viewHost.ts` 머리말 —
    * srcdoc 은 앱 CSP 를 물려받아 확장 화면의 스크립트가 통째로 죽는다.

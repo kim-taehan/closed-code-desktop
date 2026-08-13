@@ -9,12 +9,10 @@ import { ComposerAdd } from './ComposerAdd'
 import { SkillPicker } from './SkillPicker'
 import { PermissionModeSwitch } from './PermissionModeSwitch'
 import { detectComposerMode, shellCommandOf } from '../state/composerMode'
-import {
-  resolveSlashSubmission,
-  setSendToRuntime,
-  setModelSlashCommand,
-} from '../state/slashCommands'
+import { resolveSlashSubmission, setModelSlashCommand } from '../state/slashCommands'
+import { useComposerSendBridges } from '../state/useComposerSendBridges'
 import { parseMentions } from '../state/atMentions'
+import { useOpencodeCommands } from '../state/useOpencodeCommands'
 import { useSendQueue } from '../state/useSendQueue'
 import { useModelSelect } from '../state/useModelSelect'
 import { isModelSwitcherEligible } from '../state/modelSelect'
@@ -70,6 +68,9 @@ export function ChatComposer(props: ChatComposerProps) {
   const queue = useSendQueue(props.project?.id ?? null, props.isStreaming)
   const history = useInputHistory(props.project?.id ?? null)
   const [skills, setSkills] = useState(false)
+  // `/` 로 부를 수 있는 opencode 항목. 전송 때 템플릿을 전개하려면 팝업만이 아니라
+  // 여기서도 목록을 들고 있어야 한다 — 손으로 쳐서 Enter 한 것도 같은 길로 온다.
+  const opencodeCommands = useOpencodeCommands(props.project?.id ?? null)
   // 입력창에 밖에서 글을 넣는 통로는 하나로 합친다 — 파일 픽·스킬·대기열 되돌리기가
   // 각자 nonce 를 가지면 "가장 최근 것" 을 못 가려 이전 것에 영영 가린다.
   const [insert, setInsert] = useState({ text: '', nonce: 0, replace: false })
@@ -86,17 +87,20 @@ export function ChatComposer(props: ChatComposerProps) {
   const modelEligible = isModelSwitcherEligible(models.state)
   const modelPatch = models.selected ? { model: models.selected } : {}
 
-  // `/compact` 는 runtime 이 처리한다 — 큐를 거쳐 보내면 스트리밍 중엔 턴이 끝난 뒤 나간다.
-  // queue.submit 의 closure 가 스트리밍 여부를 물고 있어 매 렌더 다시 심는다 (stale 방지).
-  useEffect(() => setSendToRuntime((text) => queue.submit({ query: text, ...modelPatch })))
+  // 입력창을 거치지 않는 전송 통로(슬래시 명령·확장의 chat.ask) — 사유는 훅 머리말.
+  useComposerSendBridges({
+    projectId: props.project?.id ?? null,
+    submit: queue.submit,
+    modelPatch,
+  })
 
-  // `/model` 슬래시 — 툴바 스위처와 **같은 선택 상태**를 공유한다. 뜰 조건일 때만 등록 (fail-closed).
+  // `/models` 슬래시 — 툴바 스위처와 **같은 선택 상태**를 공유한다. 뜰 조건일 때만 등록 (fail-closed).
   // 매 렌더 다시 심는다 (setSendToRuntime 과 같은 stale 방지). 목록 밖 이름은 조용히 넘기지 않는다.
   useEffect(() => {
     if (!modelEligible) return setModelSlashCommand(null)
     setModelSlashCommand({
-      name: 'model',
-      description: '응답에 사용할 모델 변경 — /model 모델명 (비우면 기본 모델)',
+      name: 'models',
+      description: '응답에 사용할 모델 변경 — /models 모델명 (비우면 기본 모델)',
       takesArgs: true,
       run: (args) => {
         const name = args.trim()
@@ -116,17 +120,16 @@ export function ChatComposer(props: ChatComposerProps) {
   }
 
   function submit(text: string): void {
-    // 빌트인 슬래시 명령(`/clear` 등)은 런타임으로 보내지 않고 여기서 처리한다.
-    // 팝업에서 고르지 않고 직접 쳐서 Enter 한 경우가 이 경로로 온다 —
-    // 그래서 2단계 형식(`/command clear`)도 받아야 한다. UI 가 그 형식을 가르쳐 놓고
-    // 손으로 친 것만 안 먹으면, 그 줄이 통째로 질문으로 전송된다.
-    const plan = resolveSlashSubmission(text)
+    // 데스크톱 명령(`/new` 등)은 런타임으로 보내지 않고 여기서 처리한다.
+    // 팝업에서 고르지 않고 직접 쳐서 Enter 한 경우도 이 경로로 온다.
+    const plan = resolveSlashSubmission(text, opencodeCommands.commands)
     if (plan?.kind === 'run') {
       plan.command.run(plan.args)
       return
     }
-    // 스킬은 런타임 몫이다. 다만 canonical 한 단계로 되돌려 보낸다.
-    if (plan?.kind === 'rewrite') text = plan.text
+    // opencode 명령이면 템플릿이 전개된 글이 온다 — 그 글이 그대로 사용자 메시지가 된다
+    // (opencode 도 그렇게 한다. opencodeCommand.ts 실측).
+    if (plan?.kind === 'prompt') text = plan.text
 
     // `!명령` 은 LLM 을 거치지 않고 프로젝트 폴더에서 바로 실행한다 — 스트리밍과 무관하다
     if (detectComposerMode(text) === 'shell') {

@@ -1,17 +1,17 @@
 import { describe, expect, it } from 'vitest'
-import { createDavisApi, METHOD_PROGRESS } from './davisApi'
-import { dispatchDavisApi, REFUSE_STORAGE, refuseAsk, refuseAskText, refuseExport } from './serviceDispatch'
+import { createExtensionApi, METHOD_PROGRESS } from './extensionApi'
+import { dispatchExtensionApi, REFUSE_STORAGE, refuseAsk, refuseAskText, refuseExport } from './serviceDispatch'
 import { ExtensionWorkspace } from './workspaceApi'
 import type { ExtensionProgressPayload } from '../../shared/ipc/extensionPayloads'
 
-// `davis.progress` 의 **주인 표시** 계약.
+// `code.progress` 의 **주인 표시** 계약.
 //
 // 잡는 회귀: 진행 문구에 낸 확장 이름이 없으면, 지금 보고 있는 확장의 바에 **남의 문구**가
 // 찍힌다. `redraw` 가 켜진 확장 전부를 돌리므로(`extensionLoader.ts` 의 `redraws`) 흔한
 // 상황이다 — 실측: 테스트 시나리오 트리를 보는 중에 현행분석의
 // 「analyzer(http://localhost:8080) 에서 실행을 찾는 중…」이 그 자리에 떴다.
 //
-// 행·화면·트리는 `viewId` 로 갈리는데 진행만 안 갈렸다. 진행은 뷰를 모르므로(`davis.progress`
+// 행·화면·트리는 `viewId` 로 갈리는데 진행만 안 갈렸다. 진행은 뷰를 모르므로(`code.progress`
 // 가 뷰를 받지 않는다) **확장 이름**으로 가른다.
 
 /** 진행만 보는 최소 배선. 다른 포트는 불리면 안 되므로 거절 함수 그대로 둔다. */
@@ -41,10 +41,10 @@ function bedFor(projectId: string | null) {
   return { seen, deps }
 }
 
-describe('davis.progress 의 주인 표시', () => {
+describe('code.progress 의 주인 표시', () => {
   it('확장 이름을 확장이 아니라 API 층이 채운다 — 남의 이름을 실을 수 없다', async () => {
     const sent: unknown[] = []
-    const api = createDavisApi(
+    const api = createExtensionApi(
       (method, params) => {
         sent.push({ method, params })
         return Promise.resolve(undefined)
@@ -65,13 +65,13 @@ describe('davis.progress 의 주인 표시', () => {
   it('두 확장이 함께 알려도 각자의 이름이 붙어 나간다', async () => {
     const { seen, deps } = bedFor('p1')
 
-    await dispatchDavisApi(deps, {
+    await dispatchExtensionApi(deps, {
       kind: 'request' as const,
       id: '1',
       method: METHOD_PROGRESS,
       params: { extension: 'current-analysis', text: 'analyzer 에서 실행을 찾는 중…' },
     })
-    await dispatchDavisApi(deps, {
+    await dispatchExtensionApi(deps, {
       kind: 'request' as const,
       id: '2',
       method: METHOD_PROGRESS,
@@ -88,7 +88,7 @@ describe('davis.progress 의 주인 표시', () => {
     const { seen, deps } = bedFor('p1')
 
     await expect(
-      dispatchDavisApi(deps, { kind: 'request' as const, id: '3', method: METHOD_PROGRESS, params: { text: '도는 중…' } }),
+      dispatchExtensionApi(deps, { kind: 'request' as const, id: '3', method: METHOD_PROGRESS, params: { text: '도는 중…' } }),
     ).rejects.toThrow('extension')
     expect(seen).toEqual([])
   })
@@ -96,7 +96,7 @@ describe('davis.progress 의 주인 표시', () => {
   it('끝났다는 알림(text: null)에도 이름이 실린다 — 지울 칸을 골라야 한다', async () => {
     const { seen, deps } = bedFor('p1')
 
-    await dispatchDavisApi(deps, {
+    await dispatchExtensionApi(deps, {
       kind: 'request' as const,
       id: '4',
       method: METHOD_PROGRESS,
@@ -113,7 +113,7 @@ describe('쌓을 줄과 겹쳐 도는 갈래', () => {
   /** 한 번 보내고 그 payload 하나를 돌려준다 */
   async function send(params: Record<string, unknown>) {
     const { seen, deps } = bedFor('p1')
-    await dispatchDavisApi(deps, { kind: 'request' as const, id: '9', method: METHOD_PROGRESS, params })
+    await dispatchExtensionApi(deps, { kind: 'request' as const, id: '9', method: METHOD_PROGRESS, params })
     return seen[0]!
   }
 

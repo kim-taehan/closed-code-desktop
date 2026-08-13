@@ -3,7 +3,7 @@ import { appExtensionPorts } from './appPorts'
 import type { HostPortsResult } from './hostPorts'
 import type { ForkFn } from './host'
 import type { ProjectRegistry } from '../projects/projectRegistry'
-import type { AgentLaneConfig } from '../agentLane/askAgent'
+import type { AskResult } from './chatAsk'
 import type { ExtensionAskText } from './serviceDispatch'
 
 // 확장 호스트를 **띄우는** 자리. `main.ts` 에서 갈라냈다 — `appPorts.ts` 와 같은 이유로,
@@ -26,8 +26,8 @@ export interface AppHostDeps {
   /** 실제 `utilityProcess.fork`. 주입받아 vitest(electron 이 가짜)에서도 돈다 */
   fork: ForkFn
   registry: () => ProjectRegistry | null
-  /** 그 프로젝트의 세션이 쥔 어시스턴트 연결 (`SessionBridge.laneFor`) */
-  laneFor: (projectId: string | null) => AgentLaneConfig | null
+  /** 그 프로젝트의 **채팅으로** 묻는다 (`SessionBridge.ask`, 설계 2026-08-13) */
+  askViaChat: (projectId: string | null, prompt: string) => Promise<AskResult>
   /** 지금 보고 있는 파일. **함수다** — 사유는 `appPorts.ts` 의 같은 이름 필드에 */
   activeFile: () => unknown
   /** 사람에게 묻는 통로. 같은 이유로 함수다 — 창과 함께 생긴다 */
@@ -48,7 +48,7 @@ export function startExtensionHost(deps: AppHostDeps): {
   const ports = appExtensionPorts({
     userDataDir: deps.userDataDir,
     registry: deps.registry,
-    laneFor: deps.laneFor,
+    askViaChat: deps.askViaChat,
     activeFile: deps.activeFile,
     ...(deps.askText === undefined ? {} : { askText: deps.askText }),
   })

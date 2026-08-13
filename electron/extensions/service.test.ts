@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ExtensionService } from './service'
 import type { ExtensionWorkspace } from './workspaceApi'
 import { METHOD_LOAD_EXTENSIONS, METHOD_RUN_COMMAND, okResponse } from './rpc'
-import { METHOD_READ_FILE, METHOD_SET_ROWS } from './davisApi'
+import { METHOD_READ_FILE, METHOD_SET_ROWS } from './extensionApi'
 import { makeExtensionsDir, makeExtensionService, type FakeChild } from '../../tests/extensions/serviceKit'
 
 // 부모 쪽 계약만 본다. 확장을 실제로 싣는 왕복은 todoCollector.test.ts 가 잡는다.
@@ -132,7 +132,7 @@ describe('runCommand', () => {
   })
 })
 
-describe('자식이 부른 davis.* 에 답한다', () => {
+describe('자식이 부른 code.* 에 답한다', () => {
   it('view.setRows 를 구독자에게 올리고 ok 로 답한다', async () => {
     const { service, child } = makeService()
     const seen: [string, unknown[]][] = []

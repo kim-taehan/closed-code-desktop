@@ -119,7 +119,7 @@ describe('IPC 배선', () => {
     reload: () => Promise.resolve(),
       restart: () => Promise.resolve(),
       },
-      views: { register: () => 'davis-ext://view/1' },
+      views: { register: () => 'code-ext://view/1' },
       activeProjectId: () => null,
       extensionsDir: join(dir, 'desktop-extensions'),
       settings,

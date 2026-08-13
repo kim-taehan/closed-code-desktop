@@ -12,7 +12,7 @@ import { LiveChild } from '../../tests/extensions/liveChild'
 // 확장을 고쳐서 통과시키면 검증이 아니라 조작이므로, 이 파일은 확장을 손대지 않는다.
 //
 // 프로세스 경계(utilityProcess)만 가짜다(`LiveChild`). 그 안쪽은 전부 진짜다 —
-// registry 훑기 · resolveInside · require · activate · davis.* 왕복 · ProjectFs · glob.
+// registry 훑기 · resolveInside · require · activate · code.* 왕복 · ProjectFs · glob.
 
 const FIXTURES = join(__dirname, '../../tests/fixtures/extensions')
 

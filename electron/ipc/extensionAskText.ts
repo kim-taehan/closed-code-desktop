@@ -3,7 +3,7 @@ import { Channel } from '../../shared/ipc/channels'
 import type { ExtensionAskTextResponsePayload } from '../../shared/ipc/channels'
 import type { ExtensionAskText } from '../extensions/serviceDispatch'
 
-// 확장이 사람에게 글을 묻는 자리 (`davis.ui.askText`).
+// 확장이 사람에게 글을 묻는 자리 (`code.ui.askText`).
 //
 // `extensionExportFile.ts` 와 **자리는 같고 창이 다르다.** 저쪽은 Electron 이 가진 저장
 // 대화상자를 띄우면 끝인데, 글 입력에는 그런 것이 없다. 그래서 renderer 에 물음을 밀고

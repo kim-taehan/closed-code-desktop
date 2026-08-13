@@ -80,10 +80,10 @@ function makeBridge(options: { projectId?: string | null; destroyed?: boolean } 
       reload: () => Promise.resolve(),
       restart: () => Promise.resolve(),
     },
-    views: { register: () => 'davis-ext://view/1' },
+    views: { register: () => 'code-ext://view/1' },
     activeProjectId: () => active,
     // 배포처 핸들러도 같은 브리지에 산다. 이 시험은 거기 닿지 않지만 생성에는 필요하다
-    settings: new SettingsStore(join(tmpdir(), `davis-extbridge-${process.pid}.json`)),
+    settings: new SettingsStore(join(tmpdir(), `code-extbridge-${process.pid}.json`)),
   })
 
   return {

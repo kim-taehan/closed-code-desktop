@@ -81,7 +81,7 @@ export interface ExtensionSource {
   onViewTree(
     handler: (viewId: string, nodes: unknown[], projectId: string | null) => void,
   ): () => void
-  /** `davis.progress` 로 올라온 진행 상황. 겉봉 규칙은 같고, 주인은 payload 안에 있다. */
+  /** `code.progress` 로 올라온 진행 상황. 겉봉 규칙은 같고, 주인은 payload 안에 있다. */
   onProgress(handler: (payload: ExtensionProgressPayload, projectId: string | null) => void): () => void
 }
 
@@ -91,7 +91,7 @@ export interface ExtensionBridgeOptions {
   /** 목록·명령 실행을 맡는 확장 호스트 */
   service: ExtensionSource
   /**
-   * 확장 화면을 `davis-ext://` 로 내주는 곳 (`ExtensionViewHost`).
+   * 확장 화면을 `code-ext://` 로 내주는 곳 (`ExtensionViewHost`).
    *
    * 구체 클래스를 물지 않는다 — `service` 와 같은 이유로 시험에서 가짜를 끼운다.
    */
@@ -118,7 +118,7 @@ export interface ExtensionBridgeOptions {
    * 자리에서만 끊을 수 있다. 안 주면 중단 요청이 조용히 무시된다.
    */
   cancel?: (projectId: string | null) => void
-  /** 패키지가 풀리는 곳. 기본은 `~/.davis-code/desktop-extensions` */
+  /** 패키지가 풀리는 곳. 기본은 `~/.open-code/desktop-extensions` */
   extensionsDir?: string
   /** 시험에서 갈아끼운다. 기본은 main 프로세스의 전역 fetch */
   fetchImpl?: typeof fetch

@@ -6,12 +6,16 @@
 
 import type { PickedAttachment } from './attachmentPayloads'
 import type {
-  SkillListPayload, SkillSummaryPayload,
+  CommandListPayload, CommandSummaryPayload,
+  OpencodeConfigPayload, OpencodeConfigFilePayload, OpencodeConfigWritePayload,
+  ExtensionChatAskPayload,
   FileListPayload, SearchMatchPayload, SearchPayload, SearchResultPayload,
 } from './searchPayloads'
 
 export type {
-  SkillListPayload, SkillSummaryPayload,
+  CommandListPayload, CommandSummaryPayload,
+  OpencodeConfigPayload, OpencodeConfigFilePayload, OpencodeConfigWritePayload,
+  ExtensionChatAskPayload,
   FileListPayload, PickedAttachment,
   SearchMatchPayload, SearchPayload, SearchResultPayload,
 }

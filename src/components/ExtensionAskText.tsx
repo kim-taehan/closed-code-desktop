@@ -2,10 +2,10 @@ import { useEffect, useState } from 'react'
 import type { ExtensionAskTextPayload } from '../../shared/ipc/channels'
 import { t } from '../i18n/messages'
 
-// 확장이 사람에게 글을 묻는 창 (`davis.ui.askText`).
+// 확장이 사람에게 글을 묻는 창 (`code.ui.askText`).
 //
 // **모양은 앱이 정한다.** 확장은 무엇을 묻는지만 말하고 HTML 을 주지 못한다 —
-// 확장 화면(`davis-ext://`)은 iframe sandbox 안에 가둬 두는데, 물음창까지 확장이 그리게
+// 확장 화면(`code-ext://`)은 iframe sandbox 안에 가둬 두는데, 물음창까지 확장이 그리게
 // 하면 그 울타리가 무의미해진다 (표준 §4.2).
 //
 // **어느 확장이 묻는지 반드시 보인다.** 익명으로 뜨는 입력창은 사용자가 무엇에 답하는지

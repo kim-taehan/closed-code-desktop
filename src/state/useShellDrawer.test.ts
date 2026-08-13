@@ -70,12 +70,14 @@ describe('useShellDrawer', () => {
 
     it('모르는 값은 기본값으로 돌린다', () => {
       localStorage.setItem(KEY, '망가진 값')
-      expect(renderHook(() => useShellDrawer()).result.current.height).toBe(220)
+      // 칸이 입력창 아래 맨 밑으로 내려가면서 기본값을 줄였다 (220 → 160)
+      expect(renderHook(() => useShellDrawer()).result.current.height).toBe(160)
     })
   })
 
   describe('드래그', () => {
-    // 칸은 아래에 붙어 있으므로 바닥에서 커서까지의 거리가 곧 높이다
+    // 칸은 **화면 맨 아래**에 붙어 있으므로 바닥에서 커서까지의 거리가 곧 높이다
+    // (칸 밑에 입력창이 있던 시절에는 이 계산이 그 높이만큼 어긋났다)
     it('마우스를 올리면 높이가 늘고, 손을 떼면 저장한다', () => {
       window.innerHeight = 800
       const { result } = renderHook(() => useShellDrawer())

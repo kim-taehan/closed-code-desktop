@@ -9,6 +9,7 @@ import {
   type TaskNoticePayload,
   type ChatSnapshotPayload,
   type DesktopMcpOpenFilePayload,
+  type ExtensionChatAskPayload,
   type PermissionModePayload,
   type WorkingDirPayload,
   type HistoryIdPayload,
@@ -53,7 +54,9 @@ import {
   type FileListPayload,
   type PickedAttachment,
   type SearchPayload,
-  type SkillListPayload,
+  type CommandListPayload,
+  type OpencodeConfigPayload,
+  type OpencodeConfigWritePayload,
   type SearchResultPayload,
   type ReadDirPayload,
   type ReadFilePayload,
@@ -164,7 +167,13 @@ const bridge: DesktopBridge = {
     ipcRenderer.invoke(Channel.SERVER_PING, payload) as Promise<{ ok: boolean; detail: string }>,
   reconnectProject: () => ipcRenderer.invoke(Channel.SESSION_RECONNECT) as Promise<void>,
   restartRuntime: () => ipcRenderer.invoke(Channel.RUNTIME_RESTART) as Promise<void>,
-  listSkills: () => ipcRenderer.invoke(Channel.SKILL_LIST) as Promise<SkillListPayload>,
+  listCommands: () => ipcRenderer.invoke(Channel.COMMAND_LIST) as Promise<CommandListPayload>,
+  readOpencodeConfig: () =>
+    ipcRenderer.invoke(Channel.OPENCODE_CONFIG_READ) as Promise<OpencodeConfigPayload>,
+  writeOpencodeConfig: (payload: { path: string; content: string }) =>
+    ipcRenderer.invoke(Channel.OPENCODE_CONFIG_WRITE, payload) as Promise<OpencodeConfigWritePayload>,
+  reloadOpencodeConfig: () =>
+    ipcRenderer.invoke(Channel.OPENCODE_CONFIG_RELOAD) as Promise<{ ok: boolean; error?: string }>,
   requestMcpStatus: () => ipcRenderer.invoke(Channel.MCP_STATUS) as Promise<void>,
   setMcpCredentials: (payload: {
     serverName: string
@@ -176,6 +185,8 @@ const bridge: DesktopBridge = {
   onMcpState: (handler: ProjectHandler<McpState>) => subscribe<McpState>(Channel.MCP_STATE, handler),
   onDesktopMcpOpenFile: (handler: ProjectHandler<DesktopMcpOpenFilePayload>) =>
     subscribe<DesktopMcpOpenFilePayload>(Channel.DESKTOP_MCP_OPEN_FILE, handler),
+  onExtensionChatAsk: (handler: ProjectHandler<ExtensionChatAskPayload>) =>
+    subscribe<ExtensionChatAskPayload>(Channel.EXTENSION_CHAT_ASK, handler),
   requestModelOptions: () => ipcRenderer.invoke(Channel.MODEL_OPTIONS_REQUEST) as Promise<void>,
   onModelState: (handler: ProjectHandler<LlmModelStatePayload>) =>
     subscribe<LlmModelStatePayload>(Channel.MODEL_STATE, handler),

@@ -5,7 +5,7 @@ import { errorResponse, METHOD_LOAD_EXTENSIONS, NOTICE_READY, okResponse, type R
 import { ProjectEnvelope } from './projectEnvelope'
 import { createInvoker, type Invoker } from './serviceInvoke'
 import { describe, toSkips } from './serviceParse'
-import { dispatchDavisApi, portsOf, type DispatchPorts } from './serviceDispatch'
+import { dispatchExtensionApi, portsOf, type DispatchPorts } from './serviceDispatch'
 import { defaultExtensionsDir, scanExtensions, type ExtensionScan, type SkippedExtension } from './registry'
 import { disabledNames, onlyEnabled, withEnabled, type ListedExtension } from './serviceEnabled'
 import type { ExtensionLoadFailed } from './extensionLoader'
@@ -14,7 +14,7 @@ import type { ExtensionProgressPayload } from '../../shared/ipc/extensionPayload
 // main 쪽 확장 진입점. 바깥(IPC 배선·메뉴)이 확장에 닿는 유일한 표면이다.
 //
 // 하는 일은 셋이다:
-//   훑기(registry) → 자식에 실으라고 넘기기 → 자식이 부르는 davis.* 를 대신 수행
+//   훑기(registry) → 자식에 실으라고 넘기기 → 자식이 부르는 code.* 를 대신 수행
 //
 // **호스트 수명은 여기서 정책을 갖지 않는다** — 기동·종료·크래시는 ExtensionHost 것이고,
 // 이 클래스는 그 위에 "무엇을 싣고 무엇을 답할지" 만 얹는다 (host.ts 머리말과 같은 경계).
@@ -39,7 +39,7 @@ export interface ExtensionServiceOptions extends DispatchPorts {
   /** hostEntry.js 의 절대 경로 */
   entryPath: string
   fork: ForkFn
-  /** 기본값은 `~/.davis-code/desktop-extensions` */
+  /** 기본값은 `~/.open-code/desktop-extensions` */
   extensionsDir?: string
   /**
    * 꺼 둔 확장 이름. 부를 때마다 읽는다 — 설정은 앱이 도는 중에 바뀐다.
@@ -176,7 +176,7 @@ export class ExtensionService {
   }
 
   /**
-   * 확장이 `davis.view.setRows` 로 넘긴 행. 화면 쪽이 여기에 붙는다.
+   * 확장이 `code.view.setRows` 로 넘긴 행. 화면 쪽이 여기에 붙는다.
    *
    * 세 번째 인자는 그 행을 낸 명령의 프로젝트다 (`commandProjectId`).
    */
@@ -184,20 +184,20 @@ export class ExtensionService {
     return this.views.rows.add(handler)
   }
 
-  /** 확장이 `davis.view.setHtml` 로 넘긴 화면. **날 것 그대로 흘린다** — 격리는 renderer 몫이다. */
+  /** 확장이 `code.view.setHtml` 로 넘긴 화면. **날 것 그대로 흘린다** — 격리는 renderer 몫이다. */
   onViewHtml(handler: (viewId: string, html: string, projectId: string | null) => void): Unsubscribe {
     return this.views.html.add(handler)
   }
 
   /**
-   * 확장이 `davis.progress` 로 알린 진행 상황. 오래 걸리는 명령이 살아 있음을 말하는 통로다.
+   * 확장이 `code.progress` 로 알린 진행 상황. 오래 걸리는 명령이 살아 있음을 말하는 통로다.
    * 뷰 id 가 없다 — 확장 하나에 한 줄이다. 주인(`extension`)은 payload 안에 있다.
    */
   onProgress(handler: (payload: ExtensionProgressPayload, projectId: string | null) => void): Unsubscribe {
     return this.views.progress.add(handler)
   }
 
-  /** 확장이 `davis.view.setTree` 로 넘긴 트리. 그리기도 **선택 상태도** renderer 가 쥔다. */
+  /** 확장이 `code.view.setTree` 로 넘긴 트리. 그리기도 **선택 상태도** renderer 가 쥔다. */
   onViewTree(handler: (viewId: string, nodes: unknown[], projectId: string | null) => void): Unsubscribe {
     return this.views.tree.add(handler)
   }
@@ -264,16 +264,16 @@ export class ExtensionService {
     }
   }
 
-  /** 자식이 부른 davis.* 를 대신 수행하고 반드시 답한다 — 답을 빠뜨리면 확장의 await 가 영원히 걸린다. */
+  /** 자식이 부른 code.* 를 대신 수행하고 반드시 답한다 — 답을 빠뜨리면 확장의 await 가 영원히 걸린다. */
   private async serve(request: RpcRequest): Promise<void> {
     try {
       this.host.respond(
         okResponse(
           request.id,
-          await dispatchDavisApi(
+          await dispatchExtensionApi(
             portsOf(this.options, {
               ...this.views.bindings(() => this.envelope.current()),
-              // 응답으로 못 보내는 것들의 통로 (`NOTICE_AGENT_ACTIVITY`).
+              // 응답으로 못 보내는 것들의 통로.
               // 자식이 죽었으면 `notify` 가 false 를 돌려주는데, 곁가지라 그냥 흘린다.
               notifyChild: (method, params) => {
                 this.host.notify(method, params)

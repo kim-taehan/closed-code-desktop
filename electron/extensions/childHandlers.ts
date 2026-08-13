@@ -9,7 +9,7 @@ import {
 import {
   loadExtensions,
   type CommandHandler,
-  type DavisApiFor,
+  type ExtensionApiFor,
   type ExtensionSource,
   type LoadDeps,
   type RedrawHandler,
@@ -30,7 +30,7 @@ import type { ActiveFileRef } from './extensionLoader'
  * 모르는 메서드는 **던진다.** 부르는 쪽(hostEntry)이 그것을 오류 응답으로 바꾼다 —
  * 삼키면 부모의 await 가 영원히 걸린다.
  */
-export function createChildHandler(davisFor: DavisApiFor, deps: LoadDeps): (request: RpcRequest) => Promise<unknown> {
+export function createChildHandler(apiFor: ExtensionApiFor, deps: LoadDeps): (request: RpcRequest) => Promise<unknown> {
   let commands = new Map<string, CommandHandler>()
   let redraws: RedrawHandler[] = []
   let activeFiles: ActiveFileHandler[] = []
@@ -39,7 +39,7 @@ export function createChildHandler(davisFor: DavisApiFor, deps: LoadDeps): (requ
     if (request.method === METHOD_PING) return { pid: process.pid }
 
     if (request.method === METHOD_LOAD_EXTENSIONS) {
-      const result = await loadExtensions(toSources(request.params), davisFor, deps)
+      const result = await loadExtensions(toSources(request.params), apiFor, deps)
       commands = result.commands
       redraws = result.redraws
       activeFiles = result.activeFiles

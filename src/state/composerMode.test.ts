@@ -5,7 +5,6 @@ import {
   replaceSlashContext,
   shellCommandOf,
   skillAtCaret,
-  slashContextAtCaret,
 } from './composerMode'
 
 // 첫 글자가 무엇을 받을지 정한다.
@@ -68,20 +67,10 @@ describe('스킬 모드', () => {
     expect(result.caret).toBe(result.text.length)
   })
 
-  // DC-980 — 2단계
-  it('카테고리 뒤 항목을 치는 동안에도 맥락을 유지한다', () => {
-    expect(slashContextAtCaret('/command cl', 11)).toBe('command cl')
-    expect(slashContextAtCaret('/command ', 9)).toBe('command ')
-  })
-
-  it('모르는 접두사 뒤 공백은 맥락이 아니다 — 평범한 글이다', () => {
-    expect(slashContextAtCaret('/pptx 로', 8)).toBeNull()
-  })
-
-  it('2단계 입력도 통째로 갈아끼운다', () => {
-    const result = replaceSlashContext('/command op', 11, '/open ')
-    expect(result.text).toBe('/open ')
-    expect(result.caret).toBe(result.text.length)
+  // 평면 한 단계다 — 공백이 나오면 그 뒤는 그 명령의 인자 구간이고 팝업은 닫힌다.
+  // (예전에는 `/command cl` 처럼 카테고리 뒤 항목을 치는 동안 맥락을 이어 갔다.)
+  it('이름 뒤 공백부터는 맥락이 아니다', () => {
+    expect(skillAtCaret('/init 인자', 8)).toBeNull()
   })
 })
 

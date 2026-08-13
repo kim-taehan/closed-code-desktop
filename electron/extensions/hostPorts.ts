@@ -3,8 +3,7 @@ import { join } from 'node:path'
 import { ExtensionWorkspace } from './workspaceApi'
 import { createExtensionStorage, type ExtensionStorage } from './storageStore'
 import { exportExtensionFile } from '../ipc/extensionExportFile'
-import { askViaLane, type AgentLaneConfig } from '../agentLane/askAgent'
-import { CancelBook } from '../agentLane/cancelBook'
+import type { AskResult } from './chatAsk'
 import type { DispatchPorts } from './serviceDispatch'
 import type { ProjectRegistry } from '../projects/projectRegistry'
 
@@ -21,27 +20,27 @@ export interface HostPortDeps {
   /** 확장의 파일 접근이 볼 프로젝트들. 확장보다 늦게 생겨 함수로 받는다. */
   registry: () => ProjectRegistry | null
   /**
-   * **그 프로젝트의** 코드 어시스턴트 연결. 없으면 `agent.ask` 가 사유와 함께 거절된다.
+   * **그 프로젝트의 채팅으로** 묻는다 (설계 2026-08-13). 사용자 대화에 턴이 만들어지고,
+   * 끝나면 답이 돌아온다. 붙은 세션이 없으면 거절이 돌아온다.
    *
    * 프로젝트를 받는다 — 저장소가 쓰는 프로젝트와 **같은 것**을 물어야 한다.
-   * 어긋나면 A 프로젝트의 목록을 B 워크스페이스에 물어보게 된다 (`bridge.laneFor` 머리말).
+   * 어긋나면 A 프로젝트의 목록을 B 워크스페이스에 물어보게 된다.
    */
-  lane: (projectId: string | null) => AgentLaneConfig | null
+  askViaChat: (projectId: string | null, prompt: string) => Promise<AskResult>
   /** 지금 보고 있는 프로젝트. 명령 밖에서 온 저장소 호출의 칸을 정한다. */
   activeProjectId: () => string | null
 }
 
-/** 포트들 + **중단 손잡이**. 배선하는 쪽(`main.ts`)이 브리지에 넘겨 준다. */
-export interface HostPortsResult extends DispatchPorts {
-  cancel: (projectId: string | null) => void
-}
+/**
+ * 확장이 앱에 닿는 포트들. 배선하는 쪽(`main.ts`)이 브리지에 넘겨 준다.
+ *
+ * **중단 손잡이가 없다.** 확장 질의는 이제 사용자 대화의 턴이라, 끊는 것은 사용자가
+ * 화면에서 한다 (설계 2026-08-13). 확장이 뒤에서 남의 턴을 죽이면 안 된다.
+ */
+export type HostPortsResult = DispatchPorts
 
 export function hostPorts(deps: HostPortDeps): HostPortsResult {
-  // 도는 질의를 끊을 손잡이. 프로젝트별로 갈린다 (`cancelBook.ts`).
-  const book = new CancelBook()
-
   return {
-    cancel: (projectId) => book.cancel(projectId ?? deps.activeProjectId()),
     // 확장의 파일 접근은 전부 이 객체를 거친다 — 프로젝트 밖은 여기서 막힌다.
     workspace: new ExtensionWorkspace(deps.registry),
 
@@ -53,13 +52,8 @@ export function hostPorts(deps: HostPortDeps): HostPortsResult {
     // 확장은 라이선스 키를 못 본다 — 호스트가 자기 레인으로 대신 묻는다.
     // **저장소와 같은 프로젝트에 묻는다.** 겉봉이 없으면(명령 밖) 활성 프로젝트로 —
     // 저장소의 `activeWhenUnknown` 과 같은 규칙이라 둘이 갈릴 자리가 없다.
-    ask: (prompt, projectId, onActivity) => {
-      const owner = projectId ?? deps.activeProjectId()
-      return book.run(owner, (signal) =>
-        // 활동 통로는 **주어질 때만** 잇는다 — 안 주면 청크를 예전처럼 그냥 버린다
-        askViaLane(deps.lane(owner), prompt, { signal, ...(onActivity ? { onActivity } : {}) }),
-      )
-    },
+    // 사용자 대화에 턴을 만들어 묻는다 (설계 2026-08-13). 곁길 소켓은 쓰지 않는다.
+    ask: (prompt, projectId) => deps.askViaChat(projectId ?? deps.activeProjectId(), prompt),
 
     // 확장별·프로젝트별. 분석 대상은 남의 레포라 **거기에 쓰지 않는다** (storageStore.ts 머리말).
     storage: activeWhenUnknown(

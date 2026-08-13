@@ -5,7 +5,7 @@
 // IPC 표면)에 손댈 수 있다. 확장 호스트(자식 프로세스)는 애초에 샌드박스가 아니지만
 // (`hostEntry.ts` 의 `require` 가 평범한 Node require 다), **화면까지 열어 줄 이유는 없다.**
 //
-// 이 문서는 **`srcdoc` 이 아니라 URL 로** 실린다 (`davis-ext://`, `electron/extensions/viewHost.ts`).
+// 이 문서는 **`srcdoc` 이 아니라 URL 로** 실린다 (`code-ext://`, `electron/extensions/viewHost.ts`).
 // srcdoc 문서는 앱 CSP 를 물려받아 여기 적은 `script-src` 가 통째로 무시된다 — 실측으로
 // 클릭 다리가 죽었다. URL 로 실린 문서만 아래 정책이 정본이 된다.
 //
@@ -176,7 +176,7 @@ code { background: ${palette.surface}; padding: 1px 4px; border-radius: 4px; }
 /**
  * 확장 HTML 을 격리 문서로 감싼다.
  *
- * 결과는 `davis-ext://` 로 등록해 iframe `src` 에 넣는다 — `srcdoc` 에 넣으면 아래 CSP 가
+ * 결과는 `code-ext://` 로 등록해 iframe `src` 에 넣는다 — `srcdoc` 에 넣으면 아래 CSP 가
  * 앱 정책에 덮여 무시된다 (머리말).
  */
 export function extensionHtmlDoc(html: string, options: { palette?: ExtensionHtmlPalette } = {}): string {

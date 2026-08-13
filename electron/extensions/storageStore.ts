@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 
-// 확장이 자기 결과를 들고 있는 곳 (`davis.storage`).
+// 확장이 자기 결과를 들고 있는 곳 (`code.storage`).
 //
 // **확장별 · 프로젝트별로 가른다.** 자식(확장 호스트)은 확장 전부를 한 프로세스에 싣고
 // 같은 RPC 통로를 쓰므로, 이름으로 가르지 않으면 `results` 같은 흔한 키가 확장끼리 충돌한다.

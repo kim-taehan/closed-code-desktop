@@ -240,9 +240,6 @@ export function App() {
         scrollRef={scrollRef}
       />
 
-      {/* 본문과 입력창 사이. 한 번도 편 적 없으면 아예 안 그린다 (`everOpened`) */}
-      <ShellDrawer projectId={projects.activeId} drawer={shell} theme={theme.choice} />
-
       <AppDialogs
         palette={palette}
         onClosePalette={() => setPalette(null)}
@@ -287,6 +284,12 @@ export function App() {
         onToast={toasts.show}
         turnMetas={snapshot.turnMetas}
       />
+
+      {/* **입력창 아래, 화면 맨 밑.** 예전에는 본문과 입력창 사이였는데 검은 터미널 위에
+          입력창이 얹힌 꼴이라 둘이 겹쳐 보였다. 맨 아래로 내리면서 높이 드래그도 맞아
+          떨어진다 — `useShellDrawer` 는 **바닥에서 커서까지**를 높이로 재기 때문이다.
+          한 번도 편 적 없으면 아예 안 그린다 (`everOpened`) */}
+      <ShellDrawer projectId={projects.activeId} drawer={shell} theme={theme.choice} />
       </div>
       </div>
 

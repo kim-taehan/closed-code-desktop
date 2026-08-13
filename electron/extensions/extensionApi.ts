@@ -1,4 +1,5 @@
-// 확장이 받는 `davis` 객체 — 확장 개발자가 보는 유일한 계약이다.
+import type { AskResult } from './chatAsk'
+// 확장이 받는 `code` 객체 — 확장 개발자가 보는 유일한 계약이다.
 //
 // **여기에 구현은 없다.** 파일 접근도 화면 갱신도 전부 부모(main)가 한다.
 // 자식(확장 호스트)에는 어떤 프로젝트가 열려 있는지가 없고, 경로 경계 판정은
@@ -8,7 +9,6 @@
 //
 // ⚠️ runtime 의 **플러그인**(`src/app/plugins/`)과 다른 체계다 (계획서 §0).
 
-import { listenAgentActivity, type AgentActivity } from './agentActivityBus'
 import type { ExtensionProgressKind, ExtensionProgressLane } from '../../shared/ipc/extensionPayloads'
 import {
   asActiveFile,
@@ -17,16 +17,16 @@ import {
   asStrings,
   asTextOrNull,
   type ActiveFile,
-} from './davisApiParse'
+} from './extensionApiParse'
 
 
-// 메서드 이름은 `davisApiMethods.ts` 에 산다 — 여기로 **그대로 다시 내보낸다.**
+// 메서드 이름은 `extensionApiMethods.ts` 에 산다 — 여기로 **그대로 다시 내보낸다.**
 // 부르는 쪽(`serviceDispatch`·시험)은 어느 파일에서 오는지 몰라도 되고, 갈라낸 것 때문에
 // import 를 고쳐 다닐 이유도 없다.
-export * from './davisApiMethods'
+export * from './extensionApiMethods'
 import {
   METHOD_ACTIVE_FILE,
-  METHOD_AGENT_ASK,
+  METHOD_CHAT_ASK,
   METHOD_EXPORT_SAVE,
   METHOD_GET_PROJECT_PATH,
   METHOD_LIST_FILES,
@@ -38,7 +38,7 @@ import {
   METHOD_STORAGE_GET,
   METHOD_STORAGE_SET,
   METHOD_UI_ASK_TEXT,
-} from './davisApiMethods'
+} from './extensionApiMethods'
 
 
 /** 확장이 만드는 트리의 마디. 화면 쪽 `ExtensionTreeNodePayload` 와 같은 모양이다. */
@@ -62,7 +62,7 @@ export interface AskTextOptions {
   multiline?: boolean
 }
 
-export interface DavisApi {
+export interface ExtensionApi {
   workspace: {
     getProjectPath(): Promise<string>
     listFiles(glob: string): Promise<string[]>
@@ -98,11 +98,13 @@ export interface DavisApi {
     /**
      * 최종 답 텍스트. 도구 호출·사고 과정은 빼고 결론만 온다. 실패하면 던진다.
      *
-     * `onActivity` 를 주면 **답을 만드는 동안** 어시스턴트가 무엇을 하는지 한 줄씩 온다.
-     * 질의 하나가 수십 초~수 분이라, 그동안 확장이 화면에 말할 것이 없으면 사람은 멈춘
-     * 것으로 읽는다. **결론이 아니다** — 화면에 보이기만 하고 파싱하지 않는다.
+     * **사용자 대화에 턴이 만들어진다** (설계 2026-08-13). 질문도 답도 화면에 그대로 보이고,
+     * 도구 승인·질문 카드는 사용자가 답한다. 그래서 진행 상황을 따로 중계하지 않는다 —
+     * 예전에는 안 보이는 곁길이라 활동을 한 줄씩 흘려보내야 했다.
+     *
+     * 사용자가 끊으면 `cancelled`, 보낼 곳이 없으면 `rejected` 다. **던지지 않는다.**
      */
-    ask(prompt: string, onActivity?: (activity: AgentActivity) => void): Promise<string>
+    ask(prompt: string): Promise<AskResult>
   }
   ui: {
     /**
@@ -135,7 +137,7 @@ export type RpcCall = (method: string, params?: unknown) => Promise<unknown>
  *   표시 이름을 열쇠로 쓰면 확장이 이름을 바꾸는 순간 저장된 것이 통째로 사라진다.
  * @param extensionLabel 사람이 읽는 이름(`displayName`). 물음창에만 쓴다. 생략하면 `name`.
  */
-export function createDavisApi(call: RpcCall, extensionName: string, extensionLabel?: string): DavisApi {
+export function createExtensionApi(call: RpcCall, extensionName: string, extensionLabel?: string): ExtensionApi {
   return {
     workspace: {
       getProjectPath: async () => asString(await call(METHOD_GET_PROJECT_PATH), METHOD_GET_PROJECT_PATH),
@@ -174,20 +176,7 @@ export function createDavisApi(call: RpcCall, extensionName: string, extensionLa
       save: async (fileName, text) => asPathOrNull(await call(METHOD_EXPORT_SAVE, { fileName, text })),
     },
     agent: {
-      // `extension` 을 여기서 채운다 — 활동 통지를 어느 확장에 배달할지 가르는 열쇠라,
-      // 확장이 실어 보내면 남의 화면에 자기 활동을 찍을 수 있다 (`storage` 와 같은 규칙).
-      ask: async (prompt, onActivity) => {
-        const stop = onActivity ? listenAgentActivity(extensionName, onActivity) : null
-        try {
-          return asString(
-            await call(METHOD_AGENT_ASK, { extension: extensionName, prompt }),
-            METHOD_AGENT_ASK,
-          )
-        } finally {
-          // **반드시 거둔다.** 안 거두면 다음 질의의 활동이 앞 질의의 화면으로 흘러간다
-          stop?.()
-        }
-      },
+      ask: async (prompt) => (await call(METHOD_CHAT_ASK, { prompt })) as AskResult,
     },
     ui: {
       askText: async (options) =>
@@ -216,5 +205,4 @@ export function createDavisApi(call: RpcCall, extensionName: string, extensionLa
 
 export type { ActiveFile }
 
-// 활동 조각의 모양은 확장 계약의 일부다 — `davis.agent.ask` 의 인자에 나온다
-export type { AgentActivity }
+// 활동 조각의 모양은 확장 계약의 일부다 — `code.chat.ask` 의 인자에 나온다

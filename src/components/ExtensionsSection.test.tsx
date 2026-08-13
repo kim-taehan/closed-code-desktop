@@ -56,7 +56,7 @@ describe('설치됨 탭', () => {
           displayName: '샘플 확장',
           version: '0.1.0',
           description: '무언가를 모읍니다',
-          dir: '/home/u/.davis-code/desktop-extensions/sample-ext',
+          dir: '/home/u/.open-code/desktop-extensions/sample-ext',
           enabled: true,
         },
       ],

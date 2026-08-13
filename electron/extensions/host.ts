@@ -19,7 +19,7 @@ import {
 export const SHUTDOWN_WAIT_MS = 3_000
 
 /** app.getAppMetrics() 에 이 이름으로 뜬다 — 좀비 추적의 유일한 창구다 (spike §영향 7). */
-export const SERVICE_NAME = 'davis-extension-host'
+export const SERVICE_NAME = 'code-extension-host'
 
 /**
  * 'error'(V8 FatalError)에는 종료 코드가 없다. 정상 종료(0)와 구분되기만 하면 되므로

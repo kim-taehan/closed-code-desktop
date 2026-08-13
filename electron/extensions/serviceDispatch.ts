@@ -1,5 +1,6 @@
+import type { AskResult } from './chatAsk'
 import {
-  METHOD_AGENT_ASK,
+  METHOD_CHAT_ASK,
   METHOD_EXPORT_SAVE,
   METHOD_STORAGE_GET,
   METHOD_STORAGE_SET,
@@ -12,7 +13,7 @@ import {
   METHOD_PROGRESS,
   METHOD_SET_TREE,
   METHOD_UI_ASK_TEXT,
-} from './davisApi'
+} from './extensionApi'
 import { asProgressKind, asProgressLanes, asRecord, requireString } from './serviceParse'
 import type { ExtensionProgressPayload } from '../../shared/ipc/extensionPayloads'
 import {
@@ -23,11 +24,11 @@ import {
   type ExtensionAskText,
   type ExtensionExportFile,
 } from './serviceRefuse'
-import { NOTICE_AGENT_ACTIVITY, type RpcRequest } from './rpc'
+import { type RpcRequest } from './rpc'
 import type { ExtensionWorkspace } from './workspaceApi'
 import type { ExtensionStorage } from './storageStore'
 
-// 자식이 부른 `davis.*` 를 대신 수행한다. `service.ts` 가 300줄 상한에 붙어 갈라냈다.
+// 자식이 부른 `code.*` 를 대신 수행한다. `service.ts` 가 300줄 상한에 붙어 갈라냈다.
 //
 // **여기가 확장이 앱에 닿는 유일한 문이다.** 새 API 를 여는 자리이자, 열지 않기로 한 것
 // (`net.fetch`·`secrets.*`)이 막히는 자리다 (표준 §4.2). 파일 접근 경계는 `workspace` 가 쥔다.
@@ -35,20 +36,16 @@ import type { ExtensionStorage } from './storageStore'
 // 서비스가 아니라 이 함수가 던지면 `serve` 가 오류 응답으로 감싼다 —
 // **답을 빠뜨리면 확장의 await 가 영원히 걸린다.**
 
-/** 코드 어시스턴트에게 묻는다. 답 텍스트만 돌아온다 (`agentLane/askAgent.ts`). */
 /**
+ * 코드 어시스턴트에게 묻는다 — **사용자 대화에 턴을 만들어** 묻고 그 답을 돌려준다
+ * (설계 2026-08-13). 화면에 안 보이는 곁길로 묻던 예전과 다르다.
+ *
  * 두 번째 인자는 **어느 프로젝트에 묻나**다. 저장소가 쓰는 프로젝트와 같아야 한다 —
  * 어긋나면 A 프로젝트의 목록을 B 워크스페이스에 물어보게 된다 (실측: 122개 중 42개 유실).
+ *
+ * 활동 통지 인자는 없앴다. 진행 과정이 채팅에 그대로 보이므로 따로 중계할 것이 없다.
  */
-/**
- * 세 번째 인자는 **답하는 도중의 활동**을 받을 자리다 (`agentLane/askAgent.ts` 의
- * `AgentActivity`). 안 쓰는 배선도 있어 선택이다 — 없으면 예전과 똑같이 결론만 온다.
- */
-export type ExtensionAsk = (
-  prompt: string,
-  projectId: string | null,
-  onActivity?: (activity: { kind: string; text: string }) => void,
-) => Promise<string>
+export type ExtensionAsk = (prompt: string, projectId: string | null) => Promise<AskResult>
 
 export interface DispatchDeps {
   workspace: ExtensionWorkspace
@@ -77,7 +74,7 @@ export interface DispatchDeps {
    */
   emitProgress: (payload: ExtensionProgressPayload, projectId: string | null) => void
   /**
-   * 자식에게 **응답 없는 통지**를 보낸다 (`NOTICE_AGENT_ACTIVITY`).
+   * 자식에게 **응답 없는 통지**를 보낸다.
    *
    * 응답으로 못 보내는 것들의 자리다 — 왕복 하나에 답이 여럿이면 `PendingRequests` 가
    * 깨진다. 지금 쓰는 곳은 어시스턴트 활동 하나뿐이다.
@@ -94,7 +91,7 @@ export interface DispatchDeps {
 export interface DispatchPorts {
   /** 확장의 파일 접근. 프로젝트 밖은 여기서 막힌다. */
   workspace: ExtensionWorkspace
-  /** 산출물 내보내기. 프로젝트 경계 밖이라 `workspace` 와 갈라 둔다 (`davisApi.ts` 머리말). */
+  /** 산출물 내보내기. 프로젝트 경계 밖이라 `workspace` 와 갈라 둔다 (`extensionApi.ts` 머리말). */
   exportFile?: ExtensionExportFile
   /** 코드 어시스턴트에 묻는 통로. */
   ask?: ExtensionAsk
@@ -136,7 +133,7 @@ export function portsOf(
   }
 }
 
-export async function dispatchDavisApi(deps: DispatchDeps, request: RpcRequest): Promise<unknown> {
+export async function dispatchExtensionApi(deps: DispatchDeps, request: RpcRequest): Promise<unknown> {
   const params = asRecord(request.params)
   const { workspace } = deps
 
@@ -213,16 +210,10 @@ export async function dispatchDavisApi(deps: DispatchDeps, request: RpcRequest):
         requireString(params['fileName'], 'fileName'),
         requireString(params['text'], 'text'),
       )
-    case METHOD_AGENT_ASK: {
-      // **확장 이름은 `createDavisApi` 가 채운다** (`storage` 와 같은 규칙).
-      // 활동 통지를 어느 확장에 배달할지 가르는 열쇠라, 확장이 실으면 남의 화면에 찍힌다.
-      const extension = requireString(params['extension'], 'extension')
+    case METHOD_CHAT_ASK:
       // **겉봉을 함께 넘긴다** — 저장소가 쓰는 프로젝트와 같은 곳에 물어야 한다
-      return deps.ask(requireString(params['prompt'], 'prompt'), deps.projectId(), (activity) => {
-        deps.notifyChild(NOTICE_AGENT_ACTIVITY, { extension, ...activity })
-      })
-    }
-    // **확장 이름은 `createDavisApi` 가 채운다** (`storage` 와 같은 규칙).
+      return deps.ask(requireString(params['prompt'], 'prompt'), deps.projectId())
+    // **확장 이름은 `createExtensionApi` 가 채운다** (`storage` 와 같은 규칙).
     // 확장이 직접 실어 보내면 남의 이름으로 창을 띄울 수 있다.
     case METHOD_UI_ASK_TEXT: {
       const hint = params['hint']

@@ -2,7 +2,7 @@ import type { ShellDrawer as DrawerState } from '../state/useShellDrawer'
 import type { ThemeChoice } from '../state/useTheme'
 import { DrawerTerminal } from './DrawerTerminal'
 
-// 본문 밑에 붙는 셸 칸 (⌘↓ 열기 / ⌘↑ 접기).
+// **입력창 아래, 화면 맨 밑**에 붙는 셸 칸 (⌘↓ 열기 / ⌘↑ 접기 / 위 테두리를 끌어 높이 조절).
 //
 // **접혀도 언마운트하지 않는다** — 숨기기만 한다. 내리면 xterm 이 사라져 그때까지 흘러간
 // 화면이 통째로 날아간다. (서버 쪽 pty 는 그래도 살아 있지만, 다시 그리는 동안 깜빡인다.)
@@ -38,6 +38,8 @@ export function ShellDrawer({ projectId, drawer, theme }: Props): React.ReactEle
         role="separator"
         aria-orientation="horizontal"
         aria-label="셸 칸 높이 조절"
+        // 띠가 눈에 안 띄어 끌 수 있는 줄 모른다 — 손을 올리면 알려준다
+        title="끌어서 높이 조절"
       />
 
       <div className="drawer__bar">

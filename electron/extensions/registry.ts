@@ -9,7 +9,7 @@ import {
 
 // 설치된 확장을 훑어 목록을 만든다.
 //
-// 설치 경로: ~/.davis-code/desktop-extensions/{name}/manifest.json (계획서 §2.2)
+// 설치 경로: ~/.open-code/desktop-extensions/{name}/manifest.json (계획서 §2.2)
 // 에어갭에서 **폴더째 복사**로 설치되므로, 사람이 손으로 만든 매니페스트가 온다.
 // → 깨진 것을 조용히 버리면 "복사했는데 목록에 안 뜬다" 로 끝난다.
 //   **건너뛴 것도 사유와 함께 돌려준다.**
@@ -49,9 +49,9 @@ export interface ExtensionScan {
  * `defaultRuntimeHome`/`defaultInstancesDir` 과 같은 시그니처다.
  */
 export function defaultExtensionsDir(env: NodeJS.ProcessEnv = process.env): string {
-  const override = env['DAVIS_EXTENSIONS_DIR']
+  const override = env['OPEN_CODE_EXTENSIONS_DIR']
   if (override) return override
-  return join(homedir(), '.davis-code', 'desktop-extensions')
+  return join(homedir(), '.open-code', 'desktop-extensions')
 }
 
 /**
@@ -83,7 +83,7 @@ export async function scanExtensions(extensionsDir: string): Promise<ExtensionSc
     //
     // **단 심링크는 따라간다.** `readdir(withFileTypes)` 는 심링크에
     // `isDirectory() === false` 를 주는데, 확장을 개발 트리에 걸어두는
-    // (`ln -s ~/dev/my-ext ~/.davis-code/desktop-extensions/my-ext`) 것은 흔한 워크플로다.
+    // (`ln -s ~/dev/my-ext ~/.open-code/desktop-extensions/my-ext`) 것은 흔한 워크플로다.
     // 그냥 넘기면 설치한 확장이 **사유도 없이 사라진다** — 계획서 §3 P1 이 금지한 것이다.
     if (entry.isSymbolicLink()) {
       const target = await followLink(dir)

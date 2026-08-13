@@ -14,7 +14,12 @@ const KEY = 'davis.shellDrawerHeight'
 /** 이보다 낮으면 두 줄도 안 보인다 — 접은 것과 다를 바 없다 */
 const MIN = 80
 const MAX = 720
-const DEFAULT = 220
+/**
+ * 처음 펼 때 높이. 칸은 **입력창 아래 맨 밑**에 붙으므로 대화가 그만큼 밀린다 —
+ * 셸은 곁눈질하는 자리고 주인공은 대화라, 여남은 줄만 보이게 잡는다.
+ * 더 크게 쓰던 사람은 끌어 둔 값이 localStorage 에 남아 있어 그대로 복원된다.
+ */
+const DEFAULT = 160
 
 export interface ShellDrawer {
   open: boolean
@@ -75,7 +80,9 @@ export function useShellDrawer(): ShellDrawer {
   useEffect(() => {
     if (!dragging) return
 
-    // 칸은 아래에 붙어 있으므로 **바닥에서 커서까지의 거리**가 곧 높이다
+    // 칸은 **화면 맨 아래**에 붙어 있으므로 바닥에서 커서까지의 거리가 곧 높이다.
+    // 예전에는 칸 밑에 입력창이 하나 더 있어서 이 계산이 그 높이(약 110px)만큼 어긋났다 —
+    // 손잡이를 잡고 끌면 커서보다 칸이 더 크게 자랐다. 자리를 내리면서 맞아떨어졌다.
     const onMove = (event: MouseEvent): void => {
       const next = clamp(window.innerHeight - event.clientY)
       latest.current = next

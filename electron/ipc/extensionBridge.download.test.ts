@@ -37,7 +37,7 @@ describe('못 받은 사유가 그대로 올라온다', () => {
 
   beforeEach(async () => {
     handlers.clear()
-    dir = await mkdtemp(join(tmpdir(), 'davis-extinst-'))
+    dir = await mkdtemp(join(tmpdir(), 'code-extinst-'))
     const { ExtensionBridge } = await import('./extensionBridge')
     const { SettingsStore } = await import('../settings/settingsStore')
     fetchImpl = vi.fn()
@@ -55,7 +55,7 @@ describe('못 받은 사유가 그대로 올라온다', () => {
     reload: () => Promise.resolve(),
         restart: () => Promise.resolve(),
       },
-      views: { register: () => 'davis-ext://view/1' },
+      views: { register: () => 'code-ext://view/1' },
       activeProjectId: () => null,
       extensionsDir: join(dir, 'desktop-extensions'),
       settings: new SettingsStore(join(dir, 'settings.json')),

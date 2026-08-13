@@ -1,5 +1,5 @@
 {
-  "manifestVersion": 1,
+  "manifestVersion": 2,
   "name": "echo-rows",
   "displayName": "행 내보내기 (시험용)",
   "version": "1.0.0",

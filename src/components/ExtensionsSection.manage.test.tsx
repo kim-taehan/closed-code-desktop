@@ -23,7 +23,7 @@ function extension(overrides: Partial<ExtensionEntryPayload> = {}): ExtensionEnt
     name: 'line-checker',
     displayName: '라인 체커',
     version: '0.3.0',
-    dir: '/home/u/.davis-code/desktop-extensions/line-checker',
+    dir: '/home/u/.open-code/desktop-extensions/line-checker',
     enabled: true,
     ...overrides,
   }
@@ -113,7 +113,7 @@ describe('삭제', () => {
 
     await waitFor(() =>
       expect(davisStub.uninstallExtension).toHaveBeenCalledWith({
-        dir: '/home/u/.davis-code/desktop-extensions/line-checker',
+        dir: '/home/u/.open-code/desktop-extensions/line-checker',
       }),
     )
   })

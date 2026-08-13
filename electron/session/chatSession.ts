@@ -1,7 +1,5 @@
-import { parseInbound } from '../../shared/protocol/envelope'
-import { Action, Kind } from '../../shared/protocol/kinds'
+import { dispatchChatFrame } from './frameDispatch'
 import { approvalFrame, cancelFrame, chatRequestFrame, planResponseFrame, userAnswerFrame, type ApprovalFollowUp } from './chatFrames'
-import type { StreamEndData } from '../../shared/protocol/chunkTypes'
 import type { ChatSendContext } from '../../shared/ipc/chatPayloads'
 import type { TurnEvent } from '../../shared/ipc/channels'
 import type { ChatMessage, TurnMeta } from '../../shared/ipc/messageTypes'
@@ -11,6 +9,8 @@ import { interruptTurnEvents } from './interrupts'
 import { MessageStore } from './messageStore'
 import { TurnMetaStore } from './turnMeta'
 import { TurnGate } from './turnGate'
+import type { TurnBinder } from './turnBinder'
+import { emitRouteEffect } from './routeEffects'
 import { ReplyWatch } from './replyWatch'
 import { ReplayGate } from './replayGate'
 import { AgentTaskStore } from './agentTaskStore'
@@ -23,6 +23,8 @@ import type { AgentTask } from '../../shared/ipc/agentTask'
 export interface ChatSessionOptions {
   /** 승인 요청이 왔을 때 자동 승인할지. 기본 false — 사용자에게 묻는다. */
   autoApprove?: boolean
+  /** 확장이 보낸 턴을 그 요청과 묶어 주는 자리 (`turnBinder.ts`). 없으면 아무 일도 안 한다. */
+  binder?: TurnBinder
 }
 
 export interface ChatSnapshot {
@@ -119,6 +121,12 @@ export class ChatSession {
     // 첨부는 **요약만** 남긴다 — 내용을 담으면 스냅샷마다 수 MB 가 오간다
     this.messages.addUserMessage(query, context.attachments ?? [])
     const sent = this.transport.send(chatRequestFrame(query, context, { chatId: this.chatId }))
+    // 확장이 보낸 것이면 다음에 열리는 턴이 그 요청의 턴이다 (`turnBinder.ts`)
+    const asked = context.extensionRequestId
+    if (asked) {
+      if (sent) this.options.binder?.markPending(asked)
+      else this.options.binder?.rejectPending('연결이 끊겨 보내지 못했습니다')
+    }
     // 사용자 말풍선은 이미 올라갔다. 여기서 실패를 삼키면 화면은 "보냈다" 고 말하면서
     // 영원히 답이 오지 않는다 — 답이 없는 채로 끝나는 경우는 없어야 한다.
     if (sent) this.reply.arm()
@@ -139,6 +147,8 @@ export class ChatSession {
   /** 진행 중인 스트림을 취소한다. runtime 이 취소 안내 + stream_end 를 보내 턴은 정상 닫힌다. */
   cancel(): boolean {
     if (!this.gate.isOpen) return false
+    // 확장이 기다리는 턴이면 취소로 돌려준다 — 뒤이어 올 stream_end 보다 뜻이 정확하다
+    if (this.gate.streamId) this.options.binder?.onCancelled(this.gate.streamId)
     this.gate.requestCancel()
     return this.transport.send(
       cancelFrame({ chatId: this.chatId, streamId: this.gate.streamId }),
@@ -203,31 +213,27 @@ export class ChatSession {
     return this.transport.send(planResponseFrame(planId, approved, comment, { chatId: this.chatId }))
   }
 
+  // 프레임을 누구에게 넘길지는 `frameDispatch` 가 정한다 (해석은 여전히 ChunkRouter 몫이다).
   private handleMessage(raw: string): void {
-    const frame = parseInbound(raw)
-    if (!frame || frame.kind !== Kind.CHAT) return
-
-    // 서버가 chatId 를 발급하면 이후 요청에 실어 보낸다 (chat_service.py:1429-1430)
-    if (typeof frame.chatId === 'string' && frame.chatId) this.chatId = frame.chatId
-
-    const streamId = typeof frame.streamId === 'string' ? frame.streamId : undefined
-
-    // 이력 재생 중 runtime 이 사용자 chat_request 를 되돌린다 — 질문 복원 (라이브 땐 안 와 중복 없음)
-    if (frame.action === Action.CHAT_REQUEST) {
-      const query = (frame.data as { query?: unknown } | undefined)?.query
-      if (typeof query === 'string' && query) {
+    dispatchChatFrame(raw, {
+      // 서버가 chatId 를 발급하면 이후 요청에 실어 보낸다 (chat_service.py:1429-1430)
+      onChatId: (chatId) => (this.chatId = chatId),
+      onUserQuery: (query) => {
         this.messages.addUserMessage(query)
         this.pushSnapshot()
-      }
-      return
-    }
-    if (frame.action === Action.STREAM_START) {
-      if (streamId) this.gate.onStreamStart(streamId)
-      return
-    }
-    if (frame.action === Action.STREAM_CHUNK) return this.handleChunk(frame.data, streamId)
-    if (frame.action === Action.STREAM_END) return this.gate.onStreamEnd(frame.data as StreamEndData)
-    if (frame.action === Action.ERROR) return this.handleErrorFrame(frame.data)
+      },
+      onStreamStart: (streamId) => {
+        this.options.binder?.onStreamStart(streamId)
+        this.gate.onStreamStart(streamId)
+      },
+      onChunk: (data, streamId) => this.handleChunk(data, streamId),
+      onStreamEnd: (data, streamId) => {
+        // 게이트보다 **먼저** 넘긴다 — 게이트가 턴을 닫으며 메시지를 손대기 전의 답이 필요하다
+        if (streamId) this.options.binder?.onStreamEnd(streamId, this.lastAssistantText())
+        this.gate.onStreamEnd(data)
+      },
+      onError: (data) => this.handleErrorFrame(data),
+    })
   }
 
   private handleChunk(data: unknown, streamId?: string): void {
@@ -249,29 +255,13 @@ export class ChatSession {
 
   /** 라우터가 해석한 결과를 이벤트로 옮긴다. 여기서 청크를 다시 읽지 않는다. */
   private emitEffect(effect: RouteEffect): void {
-    if (effect.type === 'turn_started') {
-      this.reply.disarm()
-      this.gate.onTurnStarted(effect.turnId)
-      this.emit({ type: 'turn_started', turnId: effect.turnId })
-      return
-    }
-    if (effect.type === 'text') {
-      this.emit({ type: 'text', turnId: this.gate.turnId(), text: effect.text })
-      return
-    }
-    if (effect.type === 'tool_call') {
-      this.emit({
-        type: 'tool_call',
-        turnId: this.gate.turnId(),
-        toolName: effect.toolName,
-        ...(effect.toolCallId !== undefined ? { toolCallId: effect.toolCallId } : {}),
-      })
-      return
-    }
-    this.emit({
-      type: 'error',
-      message: effect.message,
-      ...(effect.code !== undefined ? { code: effect.code } : {}),
+    emitRouteEffect(effect, {
+      onTurnStarted: (turnId) => {
+        this.reply.disarm()
+        this.gate.onTurnStarted(turnId)
+      },
+      turnId: () => this.gate.turnId(),
+      emit: (event) => this.emit(event),
     })
   }
 
@@ -291,6 +281,16 @@ export class ChatSession {
 
   private emit(event: TurnEvent): void {
     this.eventHandlers.emit(event)
+  }
+
+  /** 이번 턴의 답. 확장에 돌려줄 것이라 **마지막 assistant 메시지 하나**만 본다. */
+  private lastAssistantText(): string {
+    const messages = this.messages.snapshot()
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+      const message = messages[index]
+      if (message?.author === 'assistant' && message.content) return message.content
+    }
+    return ''
   }
 
   private pushSnapshot(): void {

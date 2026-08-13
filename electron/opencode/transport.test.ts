@@ -1,77 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { Handshake } from '../session/handshake'
 import { OpencodeTransport } from './transport'
+import { fakeServer, makeTransport, tick } from './transportTestKit'
 
 // 이 파일의 목적은 조각 검증이 아니라 **실제 Handshake 가 이 어댑터로 4단계를 통과하는가** 다.
 // 위층을 고치지 않는 것이 부패방지 계층의 계약이므로, 위층 진짜 코드를 그대로 물려 확인한다.
 
-interface Recorded {
-  url: string
-  method: string
-  body: unknown
-}
-
-/** SSE 를 손으로 밀어 넣을 수 있는 가짜 서버 */
-function fakeServer() {
-  const calls: Recorded[] = []
-  let push: ((chunk: string) => void) | null = null
-  let closeStream: (() => void) | null = null
-
-  const fetchImpl = (async (input: string | URL | Request, init?: RequestInit) => {
-    const url = typeof input === 'string' ? input : input.toString()
-    const method = init?.method ?? 'GET'
-    calls.push({ url, method, body: init?.body ? JSON.parse(String(init.body)) : undefined })
-
-    if (url.includes('/event')) {
-      const encoder = new TextEncoder()
-      const stream = new ReadableStream<Uint8Array>({
-        start(controller) {
-          push = (chunk) => controller.enqueue(encoder.encode(chunk))
-          closeStream = () => controller.close()
-        },
-      })
-      return new Response(stream, { status: 200 })
-    }
-    if (url.includes('/api/session') && method === 'POST' && url.endsWith('/api/session')) {
-      // **`/api/*` 응답은 `{ data: ... }` 로 감싸여 온다** — 실측 그대로 흉내낸다.
-      // 감싸지 않은 가짜를 쓰면 클라이언트의 언랩 버그를 테스트가 못 잡는다 (실제로 놓쳤다).
-      return new Response(JSON.stringify({ data: { id: 'ses_fake' } }), { status: 200 })
-    }
-    return new Response('', { status: 200 })
-  }) as unknown as typeof fetch
-
-  return {
-    calls,
-    fetchImpl,
-    /** `/api/event` 와 같은 봉투로 민다 — 페이로드는 `properties` 가 아니라 `data` 다 */
-    emit(type: string, data: Record<string, unknown> = {}) {
-      push?.(`data: ${JSON.stringify({ id: 'evt_1', type, data })}\n\n`)
-    },
-    end() {
-      closeStream?.()
-    },
-    get lastCall() {
-      return calls[calls.length - 1]
-    },
-    find(predicate: (call: Recorded) => boolean) {
-      return calls.find(predicate)
-    },
-  }
-}
-
-function makeTransport(server: ReturnType<typeof fakeServer>) {
-  return new OpencodeTransport({
-    baseUrl: 'http://127.0.0.1:4096',
-    fetchImpl: server.fetchImpl,
-    autoReconnect: false,
-  })
-}
-
-/** 이벤트 루프를 몇 번 돌려 SSE 펌프와 fetch 프로미스가 진행되게 한다 */
-async function tick(times = 6): Promise<void> {
-  for (let i = 0; i < times; i += 1) await Promise.resolve()
-  await new Promise((resolve) => setTimeout(resolve, 0))
-}
 
 describe('핸드셰이크 4단계', () => {
   it('server.connected 만으로 auth·workspace 를 합성해 ready 까지 간다', async () => {
@@ -197,6 +131,37 @@ describe('채팅', () => {
     const prompt = server.find((call) => call.url.endsWith('/prompt'))
     expect(prompt?.url).toBe('http://127.0.0.1:4096/api/session/ses_fake/prompt')
     expect(prompt?.body).toEqual({ prompt: { text: '안녕' } })
+    transport.close()
+  })
+
+  // ⚠️ **이 테스트는 경보기다.** 확장 질의를 사용자 대화와 같은 세션으로 돌리기로 한 결정
+  // (설계 2026-08-13-extension-ipc-redesign)의 근거가 여기 걸려 있다.
+  //
+  // davis 시절 확장은 **곁길**(`electron/agentLane/`, 지금은 삭제)로 물었다. 사유는 하나였다 —
+  // `ChatSession` 이 들어오는 프레임의 `chatId` 로 자기 것을 갈아끼워서, 한 세션을 나눠 쓰면
+  // **사용자 대화가 확장 쪽으로 이어졌다**(`chatSession.ts:210`). opencode 어댑터는 `chatId` 를
+  // 아예 안 싣기 때문에 그 위험이 없고, 그래서 곁길을 없앨 수 있다.
+  //
+  // 여기가 빨개지면 곁길을 없앤 근거가 무너진 것이다. 프레임에 chatId 를 더하기 전에
+  // 확장 질의 격리를 어떻게 할지부터 다시 정해야 한다.
+  it('어댑터가 내는 프레임에는 chatId 가 없다 — 세션을 나눠 써도 대화가 섞이지 않는 근거', async () => {
+    const { server, transport, frames } = await readySession()
+    transport.send(
+      JSON.stringify({ kind: 'chat', action: 'chat_request', reqId: 'r', data: { query: '안녕' } }),
+    )
+    await tick()
+    // 한 턴을 통째로 흘린다 — 시작·본문·도구·종료 어디서도 붙지 않아야 한다
+    server.emit('session.next.step.started', { sessionID: 'ses_fake' })
+    server.emit('session.next.text.delta', { sessionID: 'ses_fake', text: '반가워' })
+    server.emit('session.next.tool.input.started', { sessionID: 'ses_fake', name: 'read', callID: 'c1' })
+    server.emit('session.next.tool.success', { sessionID: 'ses_fake', callID: 'c1', output: 'ok' })
+    server.emit('session.next.step.ended', { sessionID: 'ses_fake', finish: 'stop' })
+    await tick()
+
+    expect(frames.length).toBeGreaterThan(0)
+    for (const raw of frames) {
+      expect(JSON.parse(raw), raw.slice(0, 120)).not.toHaveProperty('chatId')
+    }
     transport.close()
   })
 

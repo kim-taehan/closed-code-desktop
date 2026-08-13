@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { loadExtensions, type ExtensionSource } from './extensionLoader'
-import type { DavisApi } from './davisApi'
+import type { ExtensionApi } from './extensionApi'
 import type { ExtensionManifest } from '../../shared/extensions/manifest'
 
 // 진짜 임시 디렉토리를 쓴다 — `vi.mock('node:fs')` 를 쓰면 resolveInside 의 realpath 가
@@ -28,10 +28,10 @@ afterEach(async () => {
   while (roots.length > 0) await rm(roots.pop() as string, { recursive: true, force: true })
 })
 
-const davis = {} as DavisApi
+const code = {} as ExtensionApi
 
 function manifest(overrides: Partial<ExtensionManifest> = {}): ExtensionManifest {
-  return { manifestVersion: 1, name: 'demo', displayName: '데모', version: '0.1.0', main: 'main.js', ...overrides }
+  return { manifestVersion: 2, name: 'demo', displayName: '데모', version: '0.1.0', main: 'main.js', ...overrides }
 }
 
 async function makeExtension(name: string, main = 'main.js'): Promise<ExtensionSource> {
@@ -47,11 +47,11 @@ describe('loadExtensions — 정상 경로', () => {
     const scan = vi.fn(() => 'scanned')
     const activate = vi.fn(() => ({ commands: { 'demo.scan': scan } }))
 
-    const result = await loadExtensions([source], () => davis, { requireModule: () => ({ activate }) })
+    const result = await loadExtensions([source], () => code, { requireModule: () => ({ activate }) })
 
     expect(result.loaded).toEqual(['demo'])
     expect(result.failed).toEqual([])
-    expect(activate).toHaveBeenCalledWith(davis)
+    expect(activate).toHaveBeenCalledWith(code)
     expect(result.commands.get('demo.scan')).toBe(scan)
   })
 
@@ -59,7 +59,7 @@ describe('loadExtensions — 정상 경로', () => {
     const source = await makeExtension('demo')
     const activate = async () => ({ commands: { 'demo.scan': () => 1 } })
 
-    const result = await loadExtensions([source], () => davis, { requireModule: () => ({ activate }) })
+    const result = await loadExtensions([source], () => code, { requireModule: () => ({ activate }) })
 
     expect(result.commands.has('demo.scan')).toBe(true)
   })
@@ -71,7 +71,7 @@ describe('loadExtensions — 정상 경로', () => {
     const blind = await makeExtension('알림없음')
     const onActiveFile = vi.fn()
 
-    const result = await loadExtensions([seeing, blind], () => davis, {
+    const result = await loadExtensions([seeing, blind], () => code, {
       requireModule: (path: string) =>
         path.includes('알림받음') ? { activate: () => ({ onActiveFile }) } : { activate: () => ({}) },
     })
@@ -82,7 +82,7 @@ describe('loadExtensions — 정상 경로', () => {
   it('commands 를 안 돌려줘도 실린 것으로 본다 — 화면만 얹는 확장이 있을 수 있다', async () => {
     const source = await makeExtension('demo')
 
-    const result = await loadExtensions([source], () => davis, { requireModule: () => ({ activate: () => undefined }) })
+    const result = await loadExtensions([source], () => code, { requireModule: () => ({ activate: () => undefined }) })
 
     expect(result.loaded).toEqual(['demo'])
     expect(result.commands.size).toBe(0)
@@ -97,7 +97,7 @@ describe('loadExtensions — 정상 경로', () => {
     await symlink(join(dir, 'real.js'), join(dir, 'entry.js'), 'file')
     const requireModule = vi.fn(() => ({ activate: () => undefined }))
 
-    await loadExtensions([{ dir, manifest: manifest({ main: 'entry.js' }) }], () => davis, { requireModule })
+    await loadExtensions([{ dir, manifest: manifest({ main: 'entry.js' }) }], () => code, { requireModule })
 
     expect(requireModule).toHaveBeenCalledWith(join(dir, 'real.js'))
     expect(requireModule).not.toHaveBeenCalledWith(join(dir, 'entry.js'))
@@ -113,7 +113,7 @@ describe('loadExtensions — 경로 경계', () => {
 
     const result = await loadExtensions(
       [{ dir, manifest: manifest({ main: '../../evil.js' }) }],
-      () => davis,
+      () => code,
       { requireModule },
     )
 
@@ -130,7 +130,7 @@ describe('loadExtensions — 경로 경계', () => {
 
     const result = await loadExtensions(
       [{ dir, manifest: manifest({ main: '/etc/hosts' }) }],
-      () => davis,
+      () => code,
       { requireModule },
     )
 
@@ -144,7 +144,7 @@ describe('loadExtensions — 경로 경계', () => {
 
     const result = await loadExtensions(
       [{ dir, manifest: manifest({ main: 'dist/main.js' }) }],
-      () => davis,
+      () => code,
       { requireModule: () => ({ activate: () => undefined }) },
     )
 
@@ -159,7 +159,7 @@ describe('loadExtensions — 경로 경계', () => {
     await symlink(join(root, 'evil.js'), join(dir, 'main.js'), 'file')
     const requireModule = vi.fn(() => ({ activate: () => undefined }))
 
-    const result = await loadExtensions([{ dir, manifest: manifest() }], () => davis, { requireModule })
+    const result = await loadExtensions([{ dir, manifest: manifest() }], () => code, { requireModule })
 
     // 문자열상으로는 안쪽이라 "없는 파일" 로 보이기 쉽다. lstat 이 그 착각을 걷어낸다.
     expect(requireModule).not.toHaveBeenCalled()
@@ -173,7 +173,7 @@ describe('loadExtensions — 경로 경계', () => {
     const result = await loadExtensions(
       // `dir/tmp/절대.js` 는 존재하지 않는다. 존재 여부부터 보면 main_missing 이 나온다.
       [{ dir, manifest: manifest({ main: '/tmp/절대.js' }) }],
-      () => davis,
+      () => code,
       { requireModule: () => ({ activate: () => undefined }) },
     )
 
@@ -189,7 +189,7 @@ describe('loadExtensions — main 이 파일이 아닐 때', () => {
     await mkdir(join(dir, 'lib'), { recursive: true })
     const requireModule = vi.fn(() => ({ activate: () => undefined }))
 
-    const result = await loadExtensions([{ dir, manifest: manifest({ main: 'lib' }) }], () => davis, { requireModule })
+    const result = await loadExtensions([{ dir, manifest: manifest({ main: 'lib' }) }], () => code, { requireModule })
 
     expect(requireModule).not.toHaveBeenCalled()
     expect(result.failed).toEqual([{ dir, reason: 'main_not_file' }])
@@ -202,7 +202,7 @@ describe('loadExtensions — main 이 파일이 아닐 때', () => {
     await mkdir(dir, { recursive: true })
     const requireModule = vi.fn(() => ({ activate: () => undefined }))
 
-    const result = await loadExtensions([{ dir, manifest: manifest({ main: '' }) }], () => davis, { requireModule })
+    const result = await loadExtensions([{ dir, manifest: manifest({ main: '' }) }], () => code, { requireModule })
 
     expect(requireModule).not.toHaveBeenCalled()
     expect(result.failed).toEqual([{ dir, reason: 'main_not_file' }])
@@ -214,7 +214,7 @@ describe('loadExtensions — 하나가 죽어도 나머지는 산다', () => {
     const broken = await makeExtension('broken')
     const good = await makeExtension('good')
 
-    const result = await loadExtensions([broken, good], () => davis, {
+    const result = await loadExtensions([broken, good], () => code, {
       requireModule: (path) => {
         if (path.includes('broken')) throw new Error('Unexpected token')
         return { activate: () => ({ commands: { 'good.run': () => 1 } }) }
@@ -230,7 +230,7 @@ describe('loadExtensions — 하나가 죽어도 나머지는 산다', () => {
     const broken = await makeExtension('broken')
     const good = await makeExtension('good')
 
-    const result = await loadExtensions([broken, good], () => davis, {
+    const result = await loadExtensions([broken, good], () => code, {
       requireModule: (path) =>
         path.includes('broken')
           ? {
@@ -248,7 +248,7 @@ describe('loadExtensions — 하나가 죽어도 나머지는 산다', () => {
   it('activate 를 export 하지 않으면 사유를 따로 준다', async () => {
     const source = await makeExtension('demo')
 
-    const result = await loadExtensions([source], () => davis, { requireModule: () => ({ run: () => 1 }) })
+    const result = await loadExtensions([source], () => code, { requireModule: () => ({ run: () => 1 }) })
 
     expect(result.failed).toEqual([{ dir: source.dir, reason: 'no_activate' }])
   })
@@ -261,7 +261,7 @@ describe('loadExtensions — 명령 id 충돌', () => {
     const firstHandler = () => 'first'
     const log = vi.fn()
 
-    const result = await loadExtensions([first, second], () => davis, {
+    const result = await loadExtensions([first, second], () => code, {
       log,
       requireModule: (path) => ({
         activate: () => ({
@@ -279,7 +279,7 @@ describe('loadExtensions — 명령 id 충돌', () => {
   it('함수가 아닌 명령은 담지 않는다', async () => {
     const source = await makeExtension('demo')
 
-    const result = await loadExtensions([source], () => davis, {
+    const result = await loadExtensions([source], () => code, {
       requireModule: () => ({ activate: () => ({ commands: { 'demo.bad': '실행되지 않는 값' } }) }),
     })
 

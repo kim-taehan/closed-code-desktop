@@ -63,22 +63,6 @@ export const METHOD_REDRAW = 'host.redraw'
  */
 export const METHOD_ACTIVE_FILE = 'host.activeFile'
 
-/**
- * 부모 → 자식. **어시스턴트가 지금 무엇을 하고 있나** (`{ extension, kind, text }`).
- *
- * `davis.agent.ask` 는 최종 답만 돌려준다. 그런데 질의 하나가 수십 초~수 분이라 그동안
- * 확장이 화면에 말할 것이 없어 **멈춘 것처럼 보인다** (실측 불만: *"채팅 진행중인 내용도
- * 보여주면 안될까 멈춘것 같아"*). 레인에는 `thinking`·`tool_call` 청크가 이미 들어오는데
- * 텍스트만 남기고 버리고 있었다 (`agentLane/askAgent.ts`).
- *
- * **응답이 아니라 통지다.** 답을 기다리는 그 호출과 짝지으면 왕복 하나에 응답이 여럿이
- * 되어 `PendingRequests` 의 계약이 깨진다. 대신 **확장 이름**으로 배달한다.
- *
- * ponytail: 한 확장이 `ask` 를 **동시에 둘** 걸면 두 질의의 활동이 한 곳으로 섞인다.
- * 지금 확장들은 전부 `await` 로 하나씩 물으므로 그 경우가 없다. 생기면 호출 id 를 실어
- * 가른다 (`RpcRequest.id` 가 이미 있다).
- */
-export const NOTICE_AGENT_ACTIVITY = 'host.agentActivity'
 
 /** 응답을 기다리는 호출. 양방향으로 흐른다 (부모→자식: 명령 / 자식→부모: 확장 API). */
 export interface RpcRequest {
@@ -200,7 +184,7 @@ export class PendingRequests {
 }
 
 // 이 레포는 asRecord 를 공용으로 두지 않고 쓰는 파일마다 비공개로 둔다
-// (mcpConfig.ts:92 · licenseCheck.ts:115 · skillList.ts:138). 그 관례를 따른다.
+// (mcpConfig.ts:92 · licenseCheck.ts:115). 그 관례를 따른다.
 function asRecord(value: unknown): Record<string, unknown> {
   return value !== null && typeof value === 'object' ? (value as Record<string, unknown>) : {}
 }

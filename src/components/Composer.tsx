@@ -1,10 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { MODE_HINT, detectComposerMode } from '../state/composerMode'
 import { mentionAtCaret, replaceMention } from '../state/atMentions'
-import { openArgAtCaret, replaceSlashContext, slashContextAtCaret } from '../state/composerMode'
+import { openArgAtCaret, replaceSlashContext, skillAtCaret } from '../state/composerMode'
 import { findSlashCommand, type SlashChoice } from '../state/slashCommands'
 import { wantsHistoryNav } from '../state/composerArrowKeys'
-import { categoryInsertText } from '../state/slashNamespace'
 import { useAutoGrow, useDoubleEscape } from './composerHooks'
 import { MentionPopup } from './MentionPopup'
 import { SlashPopup } from './SlashPopup'
@@ -55,7 +54,7 @@ export function Composer({
   const mode = detectComposerMode(value)
   /** `@` 뒤에 치고 있는 것. null 이면 자동완성을 띄우지 않는다. */
   const [mention, setMention] = useState<string | null>(null)
-  /** `/` 뒤에 치고 있는 스킬 이름 */
+  /** `/` 뒤에 치고 있는 명령·스킬 이름 */
   const [slash, setSlash] = useState<string | null>(null)
   /** `/open ` 뒤에 치고 있는 파일 이름 토막. null 이면 인라인 파일 리스트를 띄우지 않는다. */
   const [openArg, setOpenArg] = useState<string | null>(null)
@@ -69,24 +68,19 @@ export function Composer({
     setOpenArg(arg)
     // `/open @…` 처럼 인자 구간에서는 파일 리스트만 띄운다 — 두 팝업이 키를 나눠 먹으면 안 된다
     setMention(arg === null ? mentionAtCaret(text, caret) : null)
-    setSlash(slashContextAtCaret(text, caret))
+    setSlash(skillAtCaret(text, caret))
   }
 
   function pickSlash(choice: SlashChoice): void {
-    // 카테고리는 `/이름 ` 만 넣고 항목 단계로 넘긴다 (DC-980 2단계).
-    // 스킬은 `/스킬명` 을 넣어 두고 사용자가 이어 쓴다.
-    // 인자를 받는 명령도 마찬가지로 `/이름 ` 을 넣어 두고, 전송 때 가로챈다.
-    // 인자가 없는 명령은 고르는 즉시 실행하고 입력창을 비운다.
-    if (choice.kind === 'category') {
-      insertSlash(categoryInsertText(choice.namespace))
-      return
-    }
-    if (choice.kind === 'skill') {
+    // opencode 항목은 `/이름 ` 을 넣어 두고 사용자가 인자를 이어 친다 — **바로 실행하지
+    // 않는다.** 인자를 받는지(`hints`)는 목록만 봐서는 못 가리고, 실행해 버리면 인자를 넣을
+    // 기회가 사라진다. 전송할 때 템플릿이 전개된다 (resolveSlashSubmission).
+    // 인자를 받는 데스크톱 명령도 같다. 인자가 없는 것만 고르는 즉시 실행하고 입력창을 비운다.
+    if (choice.kind === 'opencode') {
       insertSlash(`/${choice.name} `)
       return
     }
     if (choice.command.takesArgs) {
-      // 2단계로 들어왔어도 canonical 한 단계 형태로 되돌린다 — 인자 구간·전송 가로채기 기준
       insertSlash(`/${choice.command.name} `)
       return
     }
@@ -99,9 +93,9 @@ export function Composer({
   /**
    * 커서 앞의 `/` 맥락을 넣을 텍스트로 갈아끼우고 커서를 뒤로 옮긴다.
    *
-   * 카테고리(`/command `)면 항목 단계로 이어지고, 항목(`/open `)이면 맥락이 닫힌다 —
-   * 넣은 뒤 다시 읽으므로 어느 쪽인지 여기서 따질 필요가 없다.
-   * `/open` 은 곧바로 파일 리스트로 이어지므로 인자 구간도 함께 다시 읽는다.
+   * 넣은 텍스트는 `/이름 ` 이라 맥락이 그 자리에서 닫힌다 — 넣은 뒤 다시 읽으므로
+   * 여기서 따질 필요가 없다. `/open` 은 곧바로 파일 리스트로 이어지므로 인자 구간도
+   * 함께 다시 읽는다.
    */
   function insertSlash(insert: string): void {
     const element = textareaRef.current
@@ -109,7 +103,7 @@ export function Composer({
     const next = replaceSlashContext(value, caret, insert)
 
     setValue(next.text)
-    setSlash(slashContextAtCaret(next.text, next.caret))
+    setSlash(skillAtCaret(next.text, next.caret))
     setOpenArg(openArgAtCaret(next.text, next.caret))
     requestAnimationFrame(() => element?.setSelectionRange(next.caret, next.caret))
   }

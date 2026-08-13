@@ -3,21 +3,22 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render, screen, waitFor, fireEvent } from '@testing-library/react'
 import { SlashPopup } from './SlashPopup'
 import { Composer } from './Composer'
-import { setOpenFileHandler, setSendToRuntime } from '../state/slashCommands'
-import type { SkillSummaryPayload } from '../../shared/ipc/channels'
+import { setOpenFileHandler } from '../state/slashCommands'
+import type { CommandSummaryPayload } from '../../shared/ipc/channels'
 
-// `/` 팝업은 **카테고리 → 항목 2단계**다 (DC-980).
-// 1단계에서 카테고리를 고르면 `/이름 ` 이 들어가고, 2단계에서 항목을 고르면 실행된다.
+// `/` 팝업은 **평면 한 단계**다 (opencode CLI 와 같은 모양).
+// 예전 davis 식 2단계(`/command clear`·`/skill pptx`)는 없앴다 — 데스크톱 명령과
+// opencode 가 주는 명령·스킬이 한 목록에 섞여 뜨고, 종류는 태그로만 갈린다.
 
-const SKILLS: SkillSummaryPayload[] = [
-  { name: 'pptx', description: '슬라이드 생성', context: 'inline', builtin: true },
-  { name: 'review', description: '코드 리뷰', context: 'inline' },
+const COMMANDS: CommandSummaryPayload[] = [
+  { name: 'init', description: 'AGENTS.md 만들기', source: 'command', template: '$ARGUMENTS' },
+  { name: 'pptx', description: '슬라이드 생성', source: 'skill', template: '# 스킬 본문', subtask: true },
 ]
 
 function stubDavis(overrides: Record<string, unknown> = {}) {
   ;(globalThis as unknown as { window: { davis: unknown } }).window ??= {} as never
   ;(window as unknown as { davis: unknown }).davis = {
-    listSkills: () => Promise.resolve({ skills: SKILLS }),
+    listCommands: () => Promise.resolve({ ok: true, commands: COMMANDS }),
     listFiles: () => Promise.resolve({ files: ['src/a.ts', 'src/b.ts'], dirs: [], truncated: false }),
     resetChat: vi.fn(),
     ...overrides,
@@ -27,72 +28,55 @@ function stubDavis(overrides: Record<string, unknown> = {}) {
 beforeEach(() => stubDavis())
 afterEach(cleanup)
 
-describe('SlashPopup — 2단계 네임스페이스', () => {
-  it('1단계에서는 카테고리만 보인다 — 항목이 쏟아지지 않는다', async () => {
+describe('SlashPopup — 평면 목록', () => {
+  it('`/` 하나에 데스크톱 명령과 opencode 항목이 함께 뜬다', async () => {
     render(<SlashPopup query="" onPick={() => {}} onClose={() => {}} />)
-    await waitFor(() => screen.getByText('command'))
+    await waitFor(() => screen.getByText('init'))
 
     const names = Array.from(document.querySelectorAll('.dc-mentions__name')).map((n) => n.textContent)
-    expect(names).toEqual(['command', 'skill'])
-    expect(document.querySelectorAll('.dc-skill__tag')).toHaveLength(2)
-    // 지금 어느 단계인지 머리말로 알려준다
-    expect(document.querySelector('.dc-mentions__head')?.textContent).toBe('카테고리')
-    // 항목은 아직 보이면 안 된다
-    expect(screen.queryByText('clear')).toBeNull()
-    expect(screen.queryByText('pptx')).toBeNull()
+    // 데스크톱 명령이 앞이다 — 이름이 겹치면 이쪽이 임자라 찾는 순서와 같아야 한다
+    expect(names).toEqual(['new', 'compact', 'open', 'rename', 'restart', 'logs', 'init', 'pptx'])
+    // 카테고리 단계가 없다
+    expect(screen.queryByText('command')).toBeNull()
+    expect(screen.queryByText('skill')).toBeNull()
   })
 
-  it('command 카테고리 안에서는 빌트인 명령만 보인다', async () => {
-    render(<SlashPopup query="command " onPick={() => {}} onClose={() => {}} />)
-    await waitFor(() => screen.getByText('clear'))
-
-    const names = Array.from(document.querySelectorAll('.dc-mentions__name')).map((n) => n.textContent)
-    // 런타임 조작 2종(restart·logs)도 별도 카테고리가 아니라 여기 있다
-    expect(names).toEqual(['clear', 'compact', 'open', 'rename', 'restart', 'logs'])
-    expect(screen.queryByText('pptx')).toBeNull()
-  })
-
-  it('skill 카테고리 안에서는 스킬만 보인다', async () => {
-    render(<SlashPopup query="skill " onPick={() => {}} onClose={() => {}} />)
-    await waitFor(() => screen.getByText('pptx'))
-
-    const names = Array.from(document.querySelectorAll('.dc-mentions__name')).map((n) => n.textContent)
-    expect(names).toEqual(['pptx', 'review'])
-    expect(screen.queryByText('clear')).toBeNull()
-  })
-
-  it('항목 단계에서 쿼리로 좁힌다', async () => {
-    render(<SlashPopup query="command cl" onPick={() => {}} onClose={() => {}} />)
-    await waitFor(() => screen.getByText('clear'))
+  it('이름·설명 어느 쪽으로든 좁힌다', async () => {
+    render(<SlashPopup query="ini" onPick={() => {}} onClose={() => {}} />)
+    await waitFor(() => screen.getByText('init'))
     expect(screen.queryByText('rename')).toBeNull()
   })
 
-  it('카테고리를 고르면 category choice 로 알린다', async () => {
-    const onPick = vi.fn()
-    render(<SlashPopup query="" onPick={onPick} onClose={() => {}} />)
-    await waitFor(() => screen.getByText('command'))
-    fireEvent.mouseDown(screen.getByText('command'))
-    expect(onPick).toHaveBeenCalledWith({ kind: 'category', namespace: 'command' })
+  it('opencode 항목에는 출처 태그가 붙는다 — 데스크톱 명령에는 없다', async () => {
+    render(<SlashPopup query="" onPick={() => {}} onClose={() => {}} />)
+    await waitFor(() => screen.getByText('pptx'))
+
+    expect(screen.getByText('스킬')).toBeTruthy()
+    expect(screen.getByText('subtask')).toBeTruthy()
+    // 명령(init·데스크톱 명령)은 태그가 없다 — 한 줄로 보이는 것이 opencode 의 모양이다
+    expect(document.querySelectorAll('.dc-skill__tag')).toHaveLength(2)
   })
 
-  it('항목을 고르면 command choice 로 알린다', async () => {
+  it('데스크톱 명령을 고르면 command choice 로 알린다', async () => {
     const onPick = vi.fn()
-    render(<SlashPopup query="command cl" onPick={onPick} onClose={() => {}} />)
-    await waitFor(() => screen.getByText('clear'))
-    fireEvent.mouseDown(screen.getByText('clear'))
+    render(<SlashPopup query="new" onPick={onPick} onClose={() => {}} />)
+    await waitFor(() => screen.getByText('new'))
+    fireEvent.mouseDown(screen.getByText('new'))
     expect(onPick).toHaveBeenCalledWith(expect.objectContaining({ kind: 'command' }))
   })
 
-  it('항목까지 고른 뒤(프롬프트 단계)에는 팝업이 사라진다', () => {
-    render(<SlashPopup query="command clear " onPick={() => {}} onClose={() => {}} />)
-    expect(document.querySelector('.dc-mentions')).toBeNull()
+  it('opencode 항목을 고르면 이름으로 알린다 — 전개는 전송 때 한다', async () => {
+    const onPick = vi.fn()
+    render(<SlashPopup query="init" onPick={onPick} onClose={() => {}} />)
+    await waitFor(() => screen.getByText('init'))
+    fireEvent.mouseDown(screen.getByText('init'))
+    expect(onPick).toHaveBeenCalledWith({ kind: 'opencode', name: 'init' })
   })
 
-  // 고르는 중인데 일치가 0행이면 상자는 남는다 — Esc 의 임자 판정(useShortcuts.ts:172)이
-  // `[role=listbox]` 로 팝업을 보기 때문이다. 사라지면 같은 Esc 가 턴 리뷰 거절까지
-  // 발동해 파일이 확인 없이 되돌아간다. **rows 가 비는 두 사유를 가르는 것**이 핵심이라
-  // 양쪽(위 프롬프트 단계 = 사라짐 / 아래 0행 = 남음)을 함께 잠근다.
-  it('고르는 중 일치가 0행이면 보이지 않는 상자를 남긴다 — Esc 임자 판정용', async () => {
+  // 일치가 0행이면 상자는 남는다 — Esc 의 임자 판정(useShortcuts.ts)이 `[role=listbox]` 로
+  // 팝업을 보기 때문이다. 사라지면 같은 Esc 가 응답 중단까지 발동해, 오타를 지우려던
+  // 손동작이 진행 중인 턴을 죽인다.
+  it('일치가 0행이면 보이지 않는 상자를 남긴다 — Esc 임자 판정용', async () => {
     render(<SlashPopup query="zzzz" onPick={() => {}} onClose={() => {}} />)
 
     await waitFor(() => expect(document.querySelector('[role="listbox"]')).not.toBeNull())
@@ -100,74 +84,62 @@ describe('SlashPopup — 2단계 네임스페이스', () => {
     expect(box.hasAttribute('hidden')).toBe(true) // 눈에는 안 보인다
     expect(document.querySelectorAll('[role="option"]')).toHaveLength(0)
   })
-
-  it('2단계에서 일치가 0행일 때도 마찬가지다', async () => {
-    render(<SlashPopup query="command zzzz" onPick={() => {}} onClose={() => {}} />)
-
-    await waitFor(() => expect(document.querySelector('[role="listbox"]')).not.toBeNull())
-    expect(document.querySelectorAll('[role="option"]')).toHaveLength(0)
-  })
 })
 
-describe('Composer — 2단계로 명령 실행', () => {
-  it('카테고리를 고르면 `/command ` 가 들어가고 항목 단계로 이어진다', async () => {
-    const view = render(<Composer onSubmit={() => {}} />)
-    const textarea = view.container.querySelector('textarea')!
-
-    fireEvent.change(textarea, { target: { value: '/' } })
-    await waitFor(() => screen.getByText('command'))
-    fireEvent.mouseDown(screen.getByText('command'))
-
-    expect(textarea.value).toBe('/command ')
-    await waitFor(() => screen.getByText('clear'))
-  })
-
-  it('/command 에서 clear 를 고르면 resetChat 를 부르고 입력창을 비운다', async () => {
+describe('Composer — 평면 목록에서 고르기', () => {
+  it('데스크톱 명령을 고르면 곧바로 실행하고 입력창을 비운다', async () => {
     const resetChat = vi.fn()
     stubDavis({ resetChat })
     const view = render(<Composer onSubmit={() => {}} />)
     const textarea = view.container.querySelector('textarea')!
 
-    fireEvent.change(textarea, { target: { value: '/command clear' } })
-    await waitFor(() => screen.getByText('clear'))
-    fireEvent.mouseDown(screen.getByText('clear'))
+    fireEvent.change(textarea, { target: { value: '/new' } })
+    await waitFor(() => screen.getByText('new'))
+    fireEvent.mouseDown(screen.getByText('new'))
 
     expect(resetChat).toHaveBeenCalledTimes(1)
     expect(textarea.value).toBe('')
   })
 
-  it('/command 에서 compact 를 고르면 전송 핸들러로 "/compact" 가 나간다', async () => {
-    const sent: string[] = []
-    setSendToRuntime((text) => sent.push(text))
+  it('opencode 항목을 고르면 `/이름 ` 이 들어가고 인자를 이어 칠 수 있다', async () => {
     const view = render(<Composer onSubmit={() => {}} />)
     const textarea = view.container.querySelector('textarea')!
 
-    fireEvent.change(textarea, { target: { value: '/command compact' } })
-    await waitFor(() => screen.getByText('compact'))
-    fireEvent.mouseDown(screen.getByText('compact'))
+    fireEvent.change(textarea, { target: { value: '/ini' } })
+    await waitFor(() => screen.getByText('init'))
+    fireEvent.mouseDown(screen.getByText('init'))
 
-    expect(sent).toEqual(['/compact'])
-    expect(textarea.value).toBe('')
+    // 바로 실행하지 않는다 — 인자를 넣을 기회가 사라진다
+    expect(textarea.value).toBe('/init ')
+  })
+
+  it('이름 뒤에 공백을 치면 팝업이 닫힌다 — 거기서부터는 인자 구간이다', async () => {
+    const view = render(<Composer onSubmit={() => {}} />)
+    const textarea = view.container.querySelector('textarea')!
+
+    fireEvent.change(textarea, { target: { value: '/init' } })
+    await waitFor(() => screen.getByText('init'))
+    fireEvent.change(textarea, { target: { value: '/init 한국어로' } })
+    await waitFor(() => expect(screen.queryByRole('listbox', { name: '명령·스킬' })).toBeNull())
   })
 })
 
 describe('Composer — /open 인라인 파일 리스트', () => {
-  it('`/open ` 뒤에서는 스킬 팝업이 닫히고 파일 리스트가 뜬다', async () => {
+  it('`/open ` 뒤에서는 명령 팝업이 닫히고 파일 리스트가 뜬다', async () => {
     const view = render(<Composer onSubmit={() => {}} />)
     const textarea = view.container.querySelector('textarea')!
 
     fireEvent.change(textarea, { target: { value: '/open ' } })
     await waitFor(() => screen.getByRole('listbox', { name: '파일 열기' }))
     expect(screen.getByText('src/a.ts')).toBeDefined()
-    // 스킬 팝업은 공백에서 닫힌다 — 파일 리스트만 떠야 한다
     expect(screen.queryByText('pptx')).toBeNull()
   })
 
-  it('/command 에서 open 을 고르면 `/open ` 이 들어가며 곧바로 파일 리스트로 이어진다', async () => {
+  it('목록에서 open 을 고르면 `/open ` 이 들어가며 곧바로 파일 리스트로 이어진다', async () => {
     const view = render(<Composer onSubmit={() => {}} />)
     const textarea = view.container.querySelector('textarea')!
 
-    fireEvent.change(textarea, { target: { value: '/command open' } })
+    fireEvent.change(textarea, { target: { value: '/ope' } })
     await waitFor(() => screen.getByRole('listbox', { name: '명령·스킬' }))
     fireEvent.mouseDown(screen.getByText('open'))
 

@@ -15,7 +15,7 @@ afterEach(async () => {
 })
 
 async function makeExtensionsDir(): Promise<string> {
-  const dir = await mkdtemp(join(tmpdir(), 'davis-ext-'))
+  const dir = await mkdtemp(join(tmpdir(), 'code-ext-'))
   dirs.push(dir)
   return dir
 }
@@ -33,7 +33,7 @@ async function writeExtension(root: string, name: string, body: unknown): Promis
 
 const VALID = {
   // 표준 v1 필수. 없으면 파서가 missing_manifest_version 으로 버린다
-  manifestVersion: 1,
+  manifestVersion: 2,
   name: 'code-analysis',
   displayName: '코드 분석',
   version: '0.1.0',
@@ -43,11 +43,11 @@ const VALID = {
 
 describe('설치 경로', () => {
   it('환경변수가 있으면 그쪽이 우선한다', () => {
-    expect(defaultExtensionsDir({ DAVIS_EXTENSIONS_DIR: '/tmp/ext' })).toBe('/tmp/ext')
+    expect(defaultExtensionsDir({ OPEN_CODE_EXTENSIONS_DIR: '/tmp/ext' })).toBe('/tmp/ext')
   })
 
-  it('없으면 ~/.davis-code/desktop-extensions 다', () => {
-    expect(defaultExtensionsDir({})).toMatch(/\.davis-code[\\/]desktop-extensions$/)
+  it('없으면 ~/.open-code/desktop-extensions 다', () => {
+    expect(defaultExtensionsDir({})).toMatch(/\.open-code[\\/]desktop-extensions$/)
   })
 })
 
@@ -65,7 +65,7 @@ describe('훑기', () => {
   })
 
   it('디렉토리가 아예 없으면 빈 결과다', async () => {
-    const scan = await scanExtensions(join(tmpdir(), 'davis-ext-does-not-exist-12345'))
+    const scan = await scanExtensions(join(tmpdir(), 'code-ext-does-not-exist-12345'))
     expect(scan).toEqual({ extensions: [], skipped: [] })
   })
 

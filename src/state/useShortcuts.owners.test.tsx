@@ -127,7 +127,7 @@ describe('Esc — 이미 임자가 있으면 넘긴다', () => {
   // 상자를 남기는 쪽(SlashPopup.tsx)이 고쳐졌는지 **진짜 컴포넌트**로 잠근다.
   it('일치 0행인 슬래시 팝업도 임자다 — 상자가 DOM 에 남는다', async () => {
     ;(globalThis as unknown as { window: { davis: unknown } }).window ??= {} as never
-    ;(window as unknown as { davis: unknown }).davis = { listSkills: () => Promise.resolve({ skills: [] }) }
+    ;(window as unknown as { davis: unknown }).davis = { listCommands: () => Promise.resolve({ ok: true, commands: [] }) }
     render(<SlashPopup query="zzzz" onPick={() => {}} onClose={() => {}} />)
     // 일치가 없으니 보이는 항목은 하나도 없다 — 그래도 상자는 DOM 에 있어야 한다
     await waitFor(() => expect(document.querySelector('[role="listbox"]')).not.toBeNull())
@@ -140,7 +140,7 @@ describe('Esc — 이미 임자가 있으면 넘긴다', () => {
 
   it('일치 0행 팝업은 스트리밍 중단도 넘긴다 — 팝업이 먼저 닫혀야 한다', async () => {
     ;(globalThis as unknown as { window: { davis: unknown } }).window ??= {} as never
-    ;(window as unknown as { davis: unknown }).davis = { listSkills: () => Promise.resolve({ skills: [] }) }
+    ;(window as unknown as { davis: unknown }).davis = { listCommands: () => Promise.resolve({ ok: true, commands: [] }) }
     render(<SlashPopup query="zzzz" onPick={() => {}} onClose={() => {}} />)
     await waitFor(() => expect(document.querySelector('[role="listbox"]')).not.toBeNull())
 
@@ -184,7 +184,7 @@ describe('Esc — 이미 임자가 있으면 넘긴다', () => {
   // 판정 기준은 "Esc 를 듣는가" 가 아니라 "덮고 있는가" 다 (SkillPicker 는 백드롭 클릭만 듣는다).
   it('열린 모달(role=dialog)이 있으면 넘긴다 — Esc 를 안 듣는 모달이라도', () => {
     ;(window as unknown as { davis: unknown }).davis = {
-      listSkills: () => Promise.resolve({ skills: [] }),
+      listCommands: () => Promise.resolve({ ok: true, commands: [] }),
     }
     render(<SkillPicker onPick={() => {}} onClose={() => {}} />)
     mount(STREAMING)
@@ -229,7 +229,7 @@ describe('Esc — 이미 임자가 있으면 넘긴다', () => {
   // 인터럽트 위에 다른 모달이 겹치면 그쪽이 임자다 — 겹친 경우는 종전대로 막힌다
   it('인터럽트 위에 턴과 무관한 모달이 겹쳐 있으면 다시 막힌다', () => {
     ;(window as unknown as { davis: unknown }).davis = {
-      listSkills: () => Promise.resolve({ skills: [] }),
+      listCommands: () => Promise.resolve({ ok: true, commands: [] }),
     }
     render(
       <ApprovalModal

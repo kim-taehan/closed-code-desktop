@@ -111,7 +111,7 @@ describe('설치 뒤 재훑기', () => {
     await mkdir(join(extensionsDir, 'broken'), { recursive: true })
     await writeFile(
       join(extensionsDir, 'broken', 'manifest.json'),
-      JSON.stringify({ manifestVersion: 1, name: 'broken', version: '1.0.0', main: 'main.js' }),
+      JSON.stringify({ manifestVersion: 2, name: 'broken', version: '1.0.0', main: 'main.js' }),
       'utf8',
     )
     await writeFile(join(extensionsDir, 'broken', 'main.js'), 'function (((\n', 'utf8')

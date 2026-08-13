@@ -21,8 +21,15 @@
 // "왜 버렸는지"를 돌려주지 않는다. 확장은 사람이 직접 설치하므로 **조용히 삼키면 왜 안 뜨는지
 // 알 길이 없다.** 사유를 같이 돌려준다. 이 모양의 선례는 `electron/projects/projectFs.ts` 다.
 
-/** 이 앱이 읽을 수 있는 매니페스트 판. 여기 없는 판은 거부한다. */
-export const SUPPORTED_MANIFEST_VERSIONS = [1] as const
+/**
+ * 이 앱이 읽을 수 있는 매니페스트 판. 여기 없는 판은 거부한다.
+ *
+ * **1 을 뺐다 (2026-08-13).** 확장이 부르는 표면이 통째로 바뀌었다 — 곁길로 묻던
+ * `chat.ask` 가 사용자 대화의 턴으로 바뀌었고 이름도 `code.*` → `code.*` 다.
+ * 1판 확장을 그대로 실으면 없는 것을 부르다 죽는다. 호환 겹을 안 만든 이유는
+ * **설치된 1판 확장이 없어서다** (사용자 확인 2026-08-13).
+ */
+export const SUPPORTED_MANIFEST_VERSIONS = [2] as const
 
 /**
  * 앱이 그릴 수 있는 뷰 종류.
@@ -97,7 +104,7 @@ export interface ExtensionManifest {
    * 상한(IntelliJ 의 `until-build`)은 받지 않는다 — 적어두면 앱이 새 버전을 낼 때마다
    * 멀쩡한 확장이 전부 죽는다 (표준 문서 §2 교훈 2).
    */
-  engines?: { davis: string }
+  engines?: { code: string }
   contributes?: ExtensionContributes
 }
 
@@ -199,9 +206,9 @@ export function parseManifest(data: unknown): ManifestParseResult {
 }
 
 /** 하한만 받는다. 모양이 아니면 "선언 없음" 과 같게 본다 — 막는 단계가 아직 없어서다. */
-function toEngines(value: unknown): { davis: string } | null {
-  const davis = asRecord(value)['davis']
-  return typeof davis === 'string' && davis !== '' ? { davis } : null
+function toEngines(value: unknown): { code: string } | null {
+  const code = asRecord(value)['code']
+  return typeof code === 'string' && code !== '' ? { code } : null
 }
 
 /**

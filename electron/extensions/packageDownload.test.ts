@@ -80,7 +80,7 @@ describe('받아서 임시 파일로 떨군다', () => {
 
   // 설치는 이미 끝나 있다 — 못 치웠다고 실패로 뒤집으면 되지도 않은 실패가 보인다
   it('없는 폴더를 치워도 던지지 않는다', async () => {
-    await expect(discardDownload('/nowhere/davis-ext-없음')).resolves.toBeUndefined()
+    await expect(discardDownload('/nowhere/code-ext-없음')).resolves.toBeUndefined()
   })
 })
 

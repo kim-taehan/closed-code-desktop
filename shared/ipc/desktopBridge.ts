@@ -9,6 +9,7 @@ import type {
   TaskNoticePayload,
   ChatSnapshotPayload,
   DesktopMcpOpenFilePayload,
+  ExtensionChatAskPayload,
   DiagnosticsPayload,
   FileListPayload,
   HistoryIdPayload,
@@ -44,7 +45,9 @@ import type {
   SearchPayload,
   SearchResultPayload,
   SessionStatePayload,
-  SkillListPayload,
+  CommandListPayload,
+  OpencodeConfigPayload,
+  OpencodeConfigWritePayload,
   TurnEvent,
 } from './channels'
 import type { McpState } from '../protocol/mcpConfig'
@@ -157,8 +160,14 @@ export interface DesktopBridge extends GitHistoryBridge, ExtensionRegistryBridge
   runShell(payload: { command: string }): Promise<void>
   /** 활성 프로젝트의 파일 목록. 빠른 열기가 쓴다. */
   /** 라이선스·관리자 주소가 갖춰졌는지. 환경변수 폴백까지 본다. */
-  /** 이 프로젝트에서 쓸 수 있는 스킬. Admin 서버에서 온다. */
-  listSkills(): Promise<SkillListPayload>
+  /** 이 프로젝트의 `/` 목록. opencode 가 아는 명령·MCP·스킬이 한 배열로 온다. */
+  listCommands(): Promise<CommandListPayload>
+  /** opencode 자신의 설정 — 프로젝트 파일 원문과 서버가 합친 유효 설정 */
+  readOpencodeConfig(): Promise<OpencodeConfigPayload>
+  /** 그 설정 파일을 쓴다. 깨진 JSON 이면 파일을 건드리지 않고 사유만 돌아온다. */
+  writeOpencodeConfig(payload: { path: string; content: string }): Promise<OpencodeConfigWritePayload>
+  /** opencode instance 를 버려 설정을 다시 읽힌다. 이어서 이 프로젝트가 다시 붙는다. */
+  reloadOpencodeConfig(): Promise<{ ok: boolean; error?: string }>
   /** 개인 MCP 자격. 값은 올려보내기만 하고 응답에는 오지 않는다. */
   requestMcpStatus(): Promise<void>
   setMcpCredentials(payload: {
@@ -176,6 +185,11 @@ export interface DesktopBridge extends GitHistoryBridge, ExtensionRegistryBridge
    * 위의 `*McpCredentials`·`onMcpState` 와 **다른 뜻의 MCP** 다 — `channelNames.ts` 참조.
    */
   onDesktopMcpOpenFile(handler: ProjectHandler<DesktopMcpOpenFilePayload>): () => void
+  /**
+   * 확장이 `chat.ask` 로 물었다 — **화면이 사용자 입력과 같은 큐에 넣어야 한다.**
+   * main 이 직접 보내지 않는 이유는 그 큐가 렌더러에 있기 때문이다 (`useSendQueue`).
+   */
+  onExtensionChatAsk(handler: ProjectHandler<ExtensionChatAskPayload>): () => void
   /** 모델 스위처 상태를 다시 받아온다 (연결돼 있으면 push 로 돌아온다) */
   requestModelOptions(): Promise<void>
   /** 모델 스위처 상태 (llm_config status/models 결과, DC-1322) */

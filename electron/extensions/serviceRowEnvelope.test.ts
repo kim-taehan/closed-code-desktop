@@ -1,7 +1,7 @@
 import { rm } from 'node:fs/promises'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { METHOD_LOAD_EXTENSIONS, METHOD_RUN_COMMAND, okResponse } from './rpc'
-import { METHOD_SET_ROWS } from './davisApi'
+import { METHOD_SET_ROWS } from './extensionApi'
 import { makeExtensionsDir, makeExtensionService, type FakeChild } from '../../tests/extensions/serviceKit'
 
 // 결과 행의 겉봉 = **명령을 건 프로젝트**.
@@ -35,7 +35,7 @@ async function boot() {
   return { service, child, seen }
 }
 
-/** 확장이 `davis.view.setRows` 를 부른 것처럼 자식 쪽에서 요청을 올린다 */
+/** 확장이 `code.view.setRows` 를 부른 것처럼 자식 쪽에서 요청을 올린다 */
 function setRows(child: FakeChild, id: string): void {
   child.emit({ kind: 'request', id, method: METHOD_SET_ROWS, params: { viewId: 'v', rows: [{ a: 1 }] } })
 }

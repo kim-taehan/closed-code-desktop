@@ -5,7 +5,8 @@
 // 사용자가 띄운 한 곳에 붙을 뿐이라(`electron/opencode/endpoint.ts`) 탐색이 통째로 사라졌고,
 // 남은 것은 **주소를 담는 모양**과 WebSocket URL 조립뿐이다.
 //
-// `toWebSocketUrl` 은 아직 davis WS 를 여는 확장 질의 레인(`agentLane/askAgent.ts`)만 쓴다.
+// `toWebSocketUrl` 은 이제 **스모크 테스트만** 쓴다 — 확장 질의 레인이 없어졌다
+// (설계 2026-08-13: 확장은 사용자 대화의 턴으로 묻는다). 앱 코드에는 davis WS 를 여는 곳이 없다.
 // 그 레인이 opencode 로 옮겨가면 이 파일도 같이 없어진다.
 
 export interface RuntimeEndpoint {

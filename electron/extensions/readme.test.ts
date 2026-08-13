@@ -15,7 +15,7 @@ describe('확장 README 읽기', () => {
   let dir = ''
 
   beforeEach(async () => {
-    dir = await mkdtemp(join(tmpdir(), 'davis-readme-'))
+    dir = await mkdtemp(join(tmpdir(), 'ext-readme-'))
   })
 
   afterEach(async () => {
@@ -76,7 +76,7 @@ describe('확장 폴더 밖으로 못 나간다 — 화면이 준 이름을 믿�
   let dir = ''
 
   beforeEach(async () => {
-    dir = await mkdtemp(join(tmpdir(), 'davis-readme-'))
+    dir = await mkdtemp(join(tmpdir(), 'ext-readme-'))
   })
 
   afterEach(async () => {
@@ -95,7 +95,7 @@ describe('확장 폴더 밖으로 못 나간다 — 화면이 준 이름을 믿�
   // registry.ts 가 심링크를 따라가는 것은 개발용 확장을 걸어두라고 만든 길이다.
   // 확장 폴더 자체를 realpath 로 가두면 그 확장은 상세를 영영 못 본다
   it('심링크로 걸어둔 개발용 확장은 그대로 읽힌다', async () => {
-    const source = await mkdtemp(join(tmpdir(), 'davis-devext-'))
+    const source = await mkdtemp(join(tmpdir(), 'ext-dev-'))
     await writeFile(join(source, 'README.md'), '# 개발 중\n', 'utf8')
     await symlink(source, join(dir, 'my-ext'))
 
@@ -109,7 +109,7 @@ describe('확장 폴더 밖으로 못 나간다 — 화면이 준 이름을 믿�
 
   // resolveInside 는 realpath 로 판정한다 — 링크를 따라간 **최종 위치**가 기준이다
   it('심링크로 밖을 가리켜도 막힌다', async () => {
-    const outside = await mkdtemp(join(tmpdir(), 'davis-outside-'))
+    const outside = await mkdtemp(join(tmpdir(), 'ext-outside-'))
     await writeFile(join(outside, 'README.md'), '남의 것', 'utf8')
     await mkdir(join(dir, 'sneaky'), { recursive: true })
     await symlink(join(outside, 'README.md'), join(dir, 'sneaky', 'README.md'))

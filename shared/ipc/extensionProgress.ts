@@ -19,7 +19,7 @@ export interface ExtensionProgressPayload {
    * 「analyzer(…) 에서 실행을 찾는 중…」이 그 자리에 떴다.
    *
    * `setRows` 의 `viewId` 와 같은 자리다. 뷰 id 가 아니라 확장 이름인 것은
-   * `davis.progress` 가 뷰를 받지 않기 때문이다 — 확장 하나에 한 줄이다.
+   * `code.progress` 가 뷰를 받지 않기 때문이다 — 확장 하나에 한 줄이다.
    */
   extension: string
   text: string | null

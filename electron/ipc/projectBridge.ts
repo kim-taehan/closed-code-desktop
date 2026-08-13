@@ -13,7 +13,8 @@ import { ProjectFs } from '../projects/projectFs'
 import { pickAttachments, resolveAttachments } from '../projects/attachmentPicker'
 import { listFiles, searchText } from '../projects/projectSearch'
 import { checkModels, pingOpencode } from '../opencode/probe'
-import { fetchSkills } from '../settings/skillList'
+import { fetchCommands } from '../opencode/commandList'
+import { disposeInstance, readOpencodeConfig, writeOpencodeConfig } from '../settings/opencodeConfig'
 import type { SettingsStore } from '../settings/settingsStore'
 import type { AppSettings } from '../../shared/settings/appSettings'
 import type { ProjectRecord } from '../../shared/projects/projectRecord'
@@ -65,7 +66,10 @@ const HANDLED_CHANNELS = [
   Channel.ATTACH_RESOLVE,
   Channel.PROJECT_LIST_FILES,
   Channel.PROJECT_SEARCH,
-  Channel.SKILL_LIST,
+  Channel.COMMAND_LIST,
+  Channel.OPENCODE_CONFIG_READ,
+  Channel.OPENCODE_CONFIG_WRITE,
+  Channel.OPENCODE_CONFIG_RELOAD,
 ]
 
 export class ProjectBridge {
@@ -128,10 +132,33 @@ export class ProjectBridge {
     ipcMain.handle(Channel.RUNTIME_RESTART, () =>
       this.listener.onRestartRuntime(this.registry.openProjects),
     )
-    ipcMain.handle(Channel.SKILL_LIST, async () => {
-      const result = await fetchSkills(await this.opencodeUrlOf())
+    ipcMain.handle(Channel.COMMAND_LIST, async () => {
+      // 목록은 **디렉토리마다 다르다** — 활성 프로젝트 경로를 반드시 실어 보낸다
+      // (빼면 서버 cwd 의 목록이 온다. commandList.ts 머리말).
+      const result = await fetchCommands(await this.opencodeUrlOf(), this.registry.active?.root ?? '')
       // 못 받아도 빈 목록으로 돌려준다 — 사유만 함께 알린다
-      return { ok: result.error === undefined, skills: result.skills, ...(result.error ? { error: result.error } : {}) }
+      return {
+        ok: result.error === undefined,
+        commands: result.commands,
+        ...(result.error ? { error: result.error } : {}),
+      }
+    })
+    // opencode 자신의 설정 — 활성 프로젝트의 `opencode.json` 하나만 다룬다.
+    ipcMain.handle(Channel.OPENCODE_CONFIG_READ, async () =>
+      readOpencodeConfig(this.registry.active?.root ?? '', await this.opencodeUrlOf()),
+    )
+    ipcMain.handle(Channel.OPENCODE_CONFIG_WRITE, (_event, payload: { path: string; content: string }) =>
+      writeOpencodeConfig(payload.path, payload.content),
+    )
+    // instance 를 버리면 설정을 다시 읽는다. **버린 자리에는 세션도 MCP 등록도 없다** —
+    // 그래서 곧바로 다시 붙인다 (SESSION_RECONNECT 와 같은 경로).
+    ipcMain.handle(Channel.OPENCODE_CONFIG_RELOAD, async () => {
+      const active = this.registry.active
+      if (!active) return { ok: false, error: '열린 프로젝트가 없습니다' }
+      const result = await disposeInstance(active.root, await this.opencodeUrlOf())
+      if (!result.ok) return result
+      await this.listener.onReconnect(active)
+      return result
     })
     ipcMain.handle(Channel.PROJECT_LIST_FILES, () => {
       const root = this.registry.active?.root

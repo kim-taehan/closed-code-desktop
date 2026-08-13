@@ -118,7 +118,7 @@ export interface ExtensionBridgeSurface {
   /** `view.setTree` 로 올라온 트리. 그리기도 **선택 상태도** 앱이 쥔다. */
   onExtensionTree(handler: ProjectHandler<ExtensionTreePayload>): () => void
   /**
-   * 확장이 사람에게 글을 묻는다 (`davis.ui.askText`).
+   * 확장이 사람에게 글을 묻는다 (`code.ui.askText`).
    *
    * **겉봉이 없다.** 창이 하나뿐이라 물음은 늘 지금 보는 화면에 뜬다 —
    * 결과와 달리 나중에 돌아와 볼 것이 아니라 **지금 답해야 확장이 진행된다.**
@@ -134,7 +134,7 @@ export interface ExtensionBridgeSurface {
    */
   onExtensionProgress(handler: ProjectHandler<ExtensionProgressPayload>): () => void
   /**
-   * 격리 문서를 등록하고 iframe 에 넣을 `davis-ext://` URL 을 받는다.
+   * 격리 문서를 등록하고 iframe 에 넣을 `code-ext://` URL 을 받는다.
    *
    * `srcdoc` 을 못 쓰는 이유 — 그 문서는 **앱 CSP 를 물려받아** 확장 화면의 스크립트가
    * 통째로 막힌다 (`electron/extensions/viewHost.ts` 머리말의 실측).

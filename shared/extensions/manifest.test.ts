@@ -6,13 +6,13 @@ import { parseManifest } from './manifest'
 // 표준 정본은 `docs/reference/extension-standard.md` §4.1.
 
 const VALID = {
-  manifestVersion: 1,
+  manifestVersion: 2,
   name: 'sample-ext',
   displayName: '샘플 확장',
   version: '0.1.0',
   main: 'main.js',
   description: '무언가를 모읍니다',
-  engines: { davis: '^0.5.0' },
+  engines: { code: '^0.5.0' },
   contributes: {
     commands: [{ id: 'sampleExt.run', title: '검사' }],
     views: [{ id: 'sampleExt.results', title: '샘플 확장', kind: 'table' }],
@@ -24,13 +24,13 @@ describe('정상 매니페스트', () => {
     const result = parseManifest(VALID)
     expect(result.ok).toBe(true)
     if (!result.ok) return
-    expect(result.manifest.manifestVersion).toBe(1)
+    expect(result.manifest.manifestVersion).toBe(2)
     expect(result.manifest.name).toBe('sample-ext')
     expect(result.manifest.displayName).toBe('샘플 확장')
     expect(result.manifest.version).toBe('0.1.0')
     expect(result.manifest.main).toBe('main.js')
     expect(result.manifest.description).toBe('무언가를 모읍니다')
-    expect(result.manifest.engines).toEqual({ davis: '^0.5.0' })
+    expect(result.manifest.engines).toEqual({ code: '^0.5.0' })
     expect(result.manifest.contributes?.commands).toEqual([
       { id: 'sampleExt.run', title: '검사' },
     ])
@@ -40,7 +40,7 @@ describe('정상 매니페스트', () => {
   })
 
   it('선택 필드가 없어도 통과하고, 없는 채로 둔다', () => {
-    const result = parseManifest({ manifestVersion: 1, name: 'a', version: '1.0.0', main: 'm.js' })
+    const result = parseManifest({ manifestVersion: 2, name: 'a', version: '1.0.0', main: 'm.js' })
     expect(result.ok).toBe(true)
     if (!result.ok) return
     expect(result.manifest.description).toBeUndefined()
@@ -49,7 +49,7 @@ describe('정상 매니페스트', () => {
   })
 
   it('displayName 이 없으면 name 으로 떨어진다', () => {
-    const result = parseManifest({ manifestVersion: 1, name: 'sample-ext', version: '1.0.0', main: 'm.js' })
+    const result = parseManifest({ manifestVersion: 2, name: 'sample-ext', version: '1.0.0', main: 'm.js' })
     expect(result.ok).toBe(true)
     if (!result.ok) return
     expect(result.manifest.displayName).toBe('sample-ext')
@@ -84,7 +84,8 @@ describe('manifestVersion 이 탈출구 노릇을 한다', () => {
   })
 
   it('모르는 판이면 사유를 갈라 알린다 — "빠뜨렸다" 와 "너무 새것이다" 는 다른 문제다', () => {
-    for (const manifestVersion of [2, 99, 0]) {
+    // 2 는 이제 정상판이다 (2026-08-13). 1 은 **옛 판**이라 여기서 거절되는 것이 요점이다
+    for (const manifestVersion of [1, 99, 0]) {
       expect(parseManifest({ ...VALID, manifestVersion })).toEqual({
         ok: false,
         reason: 'unsupported_manifest_version',
@@ -166,7 +167,7 @@ describe('최상위가 객체가 아니면 not_object', () => {
 // 하한만 받는다. 상한을 두면 앱이 새 버전을 낼 때마다 멀쩡한 확장이 죽는다 (교훈 2).
 describe('engines 는 읽어두기만 한다', () => {
   it('모양이 아니면 선언이 없는 것으로 본다 — 아직 막는 단계가 아니다', () => {
-    for (const engines of ['^0.5.0', { davis: 3 }, { other: '^1' }, null, {}]) {
+    for (const engines of ['^0.5.0', { code: 3 }, { other: '^1' }, null, {}]) {
       const result = parseManifest({ ...VALID, engines })
       expect(result.ok).toBe(true)
       if (!result.ok) return
@@ -175,10 +176,10 @@ describe('engines 는 읽어두기만 한다', () => {
   })
 
   it('상한을 적어 보내도 담지 않는다', () => {
-    const result = parseManifest({ ...VALID, engines: { davis: '^0.5.0', davisMax: '0.9.0' } })
+    const result = parseManifest({ ...VALID, engines: { code: '^0.5.0', codeMax: '0.9.0' } })
     expect(result.ok).toBe(true)
     if (!result.ok) return
-    expect(result.manifest.engines).toEqual({ davis: '^0.5.0' })
+    expect(result.manifest.engines).toEqual({ code: '^0.5.0' })
   })
 })
 

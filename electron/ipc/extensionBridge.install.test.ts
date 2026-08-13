@@ -41,7 +41,7 @@ const PACKAGE_URL = 'http://registry.local/packages/sample-ext/0.2.0'
 
 function manifest(patch: Record<string, unknown> = {}): string {
   return JSON.stringify({
-    manifestVersion: 1,
+    manifestVersion: 2,
     name: 'sample-ext',
     displayName: '샘플 확장',
     version: '0.2.0',
@@ -70,7 +70,7 @@ describe('배포처에서 내려받아 설치', () => {
 
   beforeEach(async () => {
     handlers.clear()
-    dir = await mkdtemp(join(tmpdir(), 'davis-extinst-'))
+    dir = await mkdtemp(join(tmpdir(), 'code-extinst-'))
     extensionsDir = join(dir, 'desktop-extensions')
 
     const { ExtensionBridge } = await import('./extensionBridge')
@@ -101,7 +101,7 @@ describe('배포처에서 내려받아 설치', () => {
           return Promise.resolve()
         },
       },
-      views: { register: () => 'davis-ext://view/1' },
+      views: { register: () => 'code-ext://view/1' },
       activeProjectId: () => null,
       extensionsDir,
       settings: new SettingsStore(join(dir, 'settings.json')),

@@ -17,7 +17,7 @@ const OUTLINE: ExtensionEntryPayload = {
   name: 'sample-ext',
   displayName: '샘플 확장',
   version: '0.1.0',
-  dir: '/Users/x/.davis-code/desktop-extensions/sample-ext',
+  dir: '/Users/x/.open-code/desktop-extensions/sample-ext',
   enabled: true,
 }
 

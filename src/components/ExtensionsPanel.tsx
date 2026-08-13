@@ -40,7 +40,7 @@ export function ExtensionsPanel(props: ExtensionsPanelProps) {
       <p className="ext-empty">
         설치된 확장이 없습니다.
         <br />
-        <span className="ext-empty__hint">~/.davis-code/desktop-extensions 에 폴더째 복사합니다.</span>
+        <span className="ext-empty__hint">~/.open-code/desktop-extensions 에 폴더째 복사합니다.</span>
       </p>
     )
   }

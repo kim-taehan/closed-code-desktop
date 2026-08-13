@@ -1,7 +1,7 @@
 import { ProjectFs } from '../projects/projectFs'
 import { parseGlob } from './globFilter'
 
-// `davis.workspace.*` 의 실제 구현. **main 안에서 돈다.**
+// `code.workspace.*` 의 실제 구현. **main 안에서 돈다.**
 //
 // 확장(자식)이 아니라 여기서 파일을 여는 이유가 둘이다:
 // 1. 어떤 프로젝트가 열려 있는지는 main 만 안다. 자식에 사본을 두면 프로젝트를 바꾼 뒤

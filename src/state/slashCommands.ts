@@ -1,15 +1,18 @@
-// `/` 자동완성에 스킬과 함께 뜨는 **빌트인 슬래시 명령어**.
+// `/` 자동완성이 부르는 **데스크톱 자체 명령**.
 //
-// 스킬과 달리 런타임으로 보내지 않고 클라이언트가 직접 처리한다
-// (VS Code 확장의 BUILTIN_SLASH_COMMANDS 와 같은 개념). 예: `/clear` 는 새 대화를 연다.
+// opencode 가 주는 명령·MCP·스킬(`useOpencodeCommands`)과 **한 목록에 섞여** 뜬다 —
+// opencode CLI 의 `/` 가 그렇게 생겼다. 예전 davis 식 2단계(`/command clear`·`/skill pptx`)는
+// 없앴다. 이름도 opencode 쪽에 맞춘다(`/new`·`/models`): 한 목록에 두 이름 규칙이 섞이면
+// 어느 것이 어느 쪽 것인지 사용자가 가릴 수 없다.
 //
-// 인자를 받는 명령을 넣으려면 목록에 `takesArgs: true` 로 추가하면 된다 —
-// 선택 시 `/이름 ` 까지만 넣고 사용자가 뒤에 인자를 이어 친 뒤 전송하면
-// (Composer / ChatComposer 의 가로채기 경로가) 그 인자를 run 으로 넘긴다.
+// 여기 남는 것은 **서버가 모르는 동작**뿐이다 — 창을 열고, 런타임을 다시 띄우고, 대화를
+// 갈아 치우는 것. 프롬프트로 번역되는 것은 전부 opencode 목록에서 온다.
 
-import { parseSlashSubmission } from './slashNamespace'
+import type { CommandSummaryPayload } from '../../shared/ipc/channels'
+import { expandTemplate } from './opencodeCommand'
+
 export interface SlashCommand {
-  /** `/` 뒤에 오는 이름. `/clear` 면 'clear'. */
+  /** `/` 뒤에 오는 이름. `/new` 면 'new'. */
   name: string
   description: string
   /** 인자를 받는가. true 면 선택해도 바로 실행하지 않고 `/이름 ` 을 넣는다. */
@@ -18,11 +21,10 @@ export interface SlashCommand {
   run: (args: string) => void
 }
 
-/** `/` 팝업에서 고른 것 — 카테고리(1단계)이거나 빌트인 명령·스킬(2단계)이다. */
+/** `/` 팝업에서 고른 것 — 데스크톱 명령이거나 opencode 항목이다. */
 export type SlashChoice =
-  | { kind: 'category'; namespace: string }
   | { kind: 'command'; command: SlashCommand }
-  | { kind: 'skill'; name: string }
+  | { kind: 'opencode'; name: string }
 
 // `/open` 은 파일을 열어야 하는데 이 모듈은 열린 파일 상태를 모른다.
 // App 이 시작 시 핸들러를 심어 주고(setOpenFileHandler), 명령은 그걸 부른다.
@@ -33,6 +35,10 @@ export function setOpenFileHandler(handler: (path: string) => void): void {
 
 // `/compact` 는 runtime 이 처리한다 — chat_request 로 "/compact" 텍스트를 보내면 된다.
 // 이 모듈은 전송 큐를 모르므로 ChatComposer 가 핸들러를 심는다 (setOpenFileHandler 와 같은 구조).
+//
+// ⚠️ **이 경로는 opencode 에서 아직 안 통한다** (1.17.18 실측): `/api/session/:id/prompt` 는
+// 슬래시를 전개하지 않고 `{"text":"/compact"}` 를 그대로 실어 LLM 에게 보낸다. 제대로 하려면
+// `POST /api/session/:id/compact` 를 불러야 하고, 그건 transport 에 통로를 내는 별도 작업이다.
 let sendToRuntime: ((text: string) => void) | null = null
 export function setSendToRuntime(handler: (text: string) => void): void {
   sendToRuntime = handler
@@ -45,21 +51,21 @@ export function setOpenLogsHandler(handler: (() => void) | null): void {
   openLogsHandler = handler
 }
 
-// `/model` 은 스위처가 뜰 조건일 때만 목록에 보인다 (fail-closed, DC-1322) —
+// `/models` 는 스위처가 뜰 조건일 때만 목록에 보인다 (fail-closed, DC-1322) —
 // 조건과 선택 상태는 이 모듈이 모르므로 ChatComposer 가 명령째로 심고 뺀다.
 let modelCommand: SlashCommand | null = null
 export function setModelSlashCommand(command: SlashCommand | null): void {
   modelCommand = command
 }
 
-/** 빌트인 + (뜰 조건이면) `/model`. 팝업과 매칭이 같은 목록을 봐야 한다. */
+/** 데스크톱 명령 + (뜰 조건이면) `/models`. 팝업과 매칭이 같은 목록을 봐야 한다. */
 export function allSlashCommands(): SlashCommand[] {
   return modelCommand ? [...BUILTIN_SLASH_COMMANDS, modelCommand] : BUILTIN_SLASH_COMMANDS
 }
 
 export const BUILTIN_SLASH_COMMANDS: SlashCommand[] = [
   {
-    name: 'clear',
+    name: 'new',
     description: '새 대화 — 지금 대화를 접고 처음부터 시작합니다',
     run: () => void window.davis.resetChat(),
   },
@@ -84,7 +90,7 @@ export const BUILTIN_SLASH_COMMANDS: SlashCommand[] = [
       if (args.trim()) void window.davis.renameCurrentChat(args.trim())
     },
   },
-  // 런타임 조작 3종. 설정 창·⚙ 메뉴로 들어가야 닿던 것을 입력창에서 바로 부른다.
+  // 런타임 조작 2종. 설정 창·⚙ 메뉴로 들어가야 닿던 것을 입력창에서 바로 부른다.
   {
     name: 'restart',
     description: '런타임 재시작 — 런타임을 새로 띄우고 열린 프로젝트를 전부 다시 붙입니다',
@@ -97,52 +103,56 @@ export const BUILTIN_SLASH_COMMANDS: SlashCommand[] = [
   },
 ]
 
-/** 이름이 정확히 일치하는 빌트인 명령. 없으면 undefined. */
+/** 이름이 정확히 일치하는 데스크톱 명령. 없으면 undefined. */
 export function findSlashCommand(name: string): SlashCommand | undefined {
   return allSlashCommands().find((command) => command.name === name)
 }
 
-/**
- * 입력창 전체 텍스트가 빌트인 명령이면 그 명령과 인자를 돌려준다.
- *
- * `/clear` 처럼 명령만 있거나 뒤에 인자가 붙어도 맞춘다. 스킬(`/스킬명`)이나
- * 평범한 글은 null — 그대로 런타임으로 보낸다. 스킬 이름과 겹치지 않는 한
- * 빌트인만 가로채므로 스킬 전송을 막지 않는다.
- */
-export function matchSlashCommand(text: string): { command: SlashCommand; args: string } | null {
+/** `/이름 인자` 를 이름과 인자로 가른다. 슬래시로 시작하지 않으면 null. */
+export function parseSlashText(text: string): { name: string; args: string } | null {
   const match = text.trim().match(/^\/(\S+)(?:\s+([\s\S]*))?$/)
   if (!match) return null
-  const command = findSlashCommand(match[1]!)
-  if (!command) return null
-  return { command, args: (match[2] ?? '').trim() }
+  return { name: match[1]!, args: (match[2] ?? '').trim() }
 }
 
 /**
- * 전송 직전 슬래시 텍스트를 실행 대상으로 되돌린다 — **2단계 형식까지 받는다.**
+ * 전송 직전 슬래시 텍스트를 실행 대상으로 되돌린다.
  *
- * 팝업으로 고르면 `pickSlash` 가 canonical 한 단계(`/clear `)로 되돌려 주므로 여기까지
- * 2단계가 오지 않는다. 문제는 **손으로 치거나 이력에서 불러올 때**다. UI 가 카테고리를
- * 고르면 `/command ` 를 넣어 2단계 형식을 가르쳐 놓고서, 사용자가 `/command clear` 를
- * 그대로 쳐서 보내면 예전 matcher 는 `command` 라는 명령을 찾다 실패했고,
- * **그 줄이 통째로 LLM 에게 질문으로 전송됐다.**
- *
- * - `run`: 빌트인 명령이다. 런타임으로 보내지 않고 여기서 실행한다
- * - `rewrite`: 스킬이다. `/skill pptx 표지` → `/pptx 표지` 로 되돌려 런타임에 보낸다
- *   (그대로 보내면 런타임이 `skill` 이라는 스킬을 찾는다)
+ * - `run`: 데스크톱 명령이다. 런타임으로 보내지 않고 여기서 실행한다
+ * - `prompt`: 런타임으로 보낼 글이다. opencode **명령·MCP** 는 여기서 템플릿이 전개되고,
+ *   **스킬**은 손대지 않은 원문이 그대로 나간다 (아래 사유)
  * - `null`: 슬래시가 아니거나 모르는 이름이다. 평범한 글로 취급한다
+ *
+ * **스킬을 전개하지 않는 이유:** 실측(1.17.18)에서 `source: 'skill'` 의 `template` 은
+ * 보낼 프롬프트가 아니라 **스킬 본문 전체**였다(마크다운 문서 한 편). 그걸 사용자 메시지로
+ * 밀어 넣으면 컨텍스트만 먹는다. 지금처럼 `/이름` 을 글로 보내면 모델이 그 이름을 보고
+ * 스킬 도구를 집는다 — **실측으로 확인했다** (2026-08-13, `davis-litellm/glm-5.2`):
+ * `/customize-opencode …` 를 글 그대로 `/api/…/prompt` 로 보내자 첫 행동이
+ * `session.next.tool.called` `{tool:"skill", input:{name:"customize-opencode"}}` 였다.
  */
 export type SlashSubmitPlan =
   | { kind: 'run'; command: SlashCommand; args: string }
-  | { kind: 'rewrite'; text: string }
+  | { kind: 'prompt'; text: string }
 
-export function resolveSlashSubmission(text: string): SlashSubmitPlan | null {
-  const parsed = parseSlashSubmission(text)
+export function resolveSlashSubmission(
+  text: string,
+  opencodeCommands: readonly CommandSummaryPayload[] = [],
+): SlashSubmitPlan | null {
+  const parsed = parseSlashText(text)
   if (!parsed) return null
 
-  if (parsed.type === 'command') {
-    const command = findSlashCommand(parsed.name)
-    return command ? { kind: 'run', command, args: parsed.args } : null
+  const command = findSlashCommand(parsed.name)
+  if (command) return { kind: 'run', command, args: parsed.args }
+
+  const remote = opencodeCommands.find((item) => item.name === parsed.name)
+  if (!remote) return null
+  // 스킬과 **MCP 프롬프트**는 전개하지 않는다. MCP 는 `template` 이 아예 문자열이 아니라
+  // `{}` 로 온다 (실측: `open-code-desktop:open` — 본문은 서버가 `prompts/get` 으로
+  // 풀어 주는 것이고 목록에는 안 실린다). 빈 템플릿을 전개하면 **사용자가 친 인자만 남아**
+  // 엉뚱한 질문이 나가므로, 손대지 않고 그 줄을 그대로 보낸다.
+  if (remote.source !== 'command' || remote.template === '') {
+    return { kind: 'prompt', text: text.trim() }
   }
 
-  return { kind: 'rewrite', text: `/${parsed.name}${parsed.args ? ` ${parsed.args}` : ''}` }
+  return { kind: 'prompt', text: expandTemplate(remote.template, parsed.args) }
 }

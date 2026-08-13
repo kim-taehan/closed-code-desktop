@@ -7,10 +7,10 @@ import {
 } from '../state/extensionHtmlDoc'
 import { t } from '../i18n/messages'
 
-// 확장이 준 화면(`davis.view.setHtml`)을 그린다.
+// 확장이 준 화면(`code.view.setHtml`)을 그린다.
 //
 // **격리 문서는 `extensionHtmlDoc.ts` 가 문자열로 만들고, 여기서는 그것을 main 에 등록해
-// `davis-ext://` URL 로 띄운다.** `srcdoc` 을 쓰지 않는 이유는 그 문서가 앱 CSP 를 물려받아
+// `code-ext://` URL 로 띄운다.** `srcdoc` 을 쓰지 않는 이유는 그 문서가 앱 CSP 를 물려받아
 // 확장 화면의 스크립트가 통째로 죽기 때문이다 (`electron/extensions/viewHost.ts` 머리말).
 //
 // 판정(무엇이 열기 요청인가)은 순수 함수로 빼 뒀다 — 창 객체 없이 시험할 수 있다.

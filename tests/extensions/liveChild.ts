@@ -1,7 +1,7 @@
 import { createRequire } from 'node:module'
 import { join } from 'node:path'
 import { createChildHandler } from '../../electron/extensions/childHandlers'
-import { createDavisApi } from '../../electron/extensions/davisApi'
+import { createExtensionApi } from '../../electron/extensions/extensionApi'
 import {
   createNotice,
   createRequest,
@@ -18,7 +18,7 @@ import type { HostChild, HostStream } from '../../electron/extensions/host'
 //
 // `serviceKit.ts` 의 `FakeChild` 와 다르다: 저쪽은 부모가 무엇을 보냈는지만 모으고
 // 확장을 싣지 않는다. 이쪽은 `hostEntry.ts` 와 **같은 배선**을 써서 진짜로 싣고 실행한다 —
-// require · activate · davis.* 왕복이 전부 실제 코드다.
+// require · activate · code.* 왕복이 전부 실제 코드다.
 // (진짜 utilityProcess 는 vitest 에서 애초에 뜨지 않는다 — `host.test.ts` 머리말 참조.)
 //
 // 원래 확장 왕복 테스트들이 한 벌씩 옮겨 적고 있었고, 거기 "셋째가 생기면 그때 뽑는다"
@@ -50,7 +50,7 @@ export class LiveChild implements HostChild {
       return waiting
     }
     // 실제 자식과 같게 **확장마다** 만든다 — storage 가 확장별로 갈리는 근거다
-    this.handle = createChildHandler((name) => createDavisApi(call, name), {
+    this.handle = createChildHandler((name) => createExtensionApi(call, name), {
       requireModule: (absolutePath) => nodeRequire(absolutePath),
       log: (line) => this.logs.push(line),
     })

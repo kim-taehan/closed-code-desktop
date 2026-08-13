@@ -155,6 +155,35 @@ session/*  ──davis 봉투(kind/action)──▶  OpencodeTransport  ──HT
     주소 끝의 `/` 를 떼는 것은 여전히 하되, 근거는 404 회피가 아니라 **주소를 한 모양으로
     모으는 것**이다 (프록시가 앞에 붙었을 때는 안 재 봤다).
 
+12. **`/` 명령 목록은 `/api/command` 가 아니라 레거시 `/command` 에 다 있다.** 같은 디렉토리에서
+    동시에 재 보면 `/api/command` 는 명령 2개(`init`·`review`)만 주고 **스킬을 통째로
+    빼놓는다.** `/command` 는 스킬 16개까지 한 배열로 주고 `source`(`command|mcp|skill`)로
+    가른다 — opencode CLI 의 `/` 가 보여 주는 것이 이쪽이다. 8번(`POST /mcp`)과 같은 사유로
+    여기만 레거시를 쓴다. 래핑도 없다(배열 그대로). 질의는 **평문 `directory=`** 이고
+    빼면 서버 cwd 의 목록이 온다 (`electron/opencode/commandList.ts`).
+
+13. **명령 실행을 서버에 맡기면 답이 SSE 에 아예 안 온다.** `POST /session/:id/command` 는
+    `/api` 로 만든 세션에서도 받고(200) 템플릿도 서버가 전개해 준다 — `$ARGUMENTS` 자리에
+    인자가 들어간 본문이 `/api/event` 에 `message.updated`·`message.part.updated` 로 뜬다.
+    **거기까지다.** 사내 LLM(`davis-litellm/glm-5.2`)이 붙어 13초에 어시스턴트 메시지를
+    실제로 만들어 낸 turn 에서, 두 스트림을 동시에 떠서 셌다:
+
+    | | 이 세션 이벤트 | 어시스턴트가 실린 것 |
+    |---|---:|---|
+    | `/api/event` | 5건 (`session.created`·`session.updated`×2·`message.updated`·`message.part.updated`) | **0** |
+    | `/event` | **0건** | **0** |
+
+    답변은 **HTTP 응답 본문에만** 있었다. `GET /api/session/:id/message` 로 읽어도 **0건**이다 —
+    v1 이 쓴 것은 v2 읽기 API 에도 안 보인다. 그래서 이 길을 쓰면 스트리밍이 통째로 없고
+    렌더 경로를 따로 만들어야 한다. **전개는 클라이언트가 흉내내고 전송은 `/api/…/prompt` 로
+    한다** (`src/state/opencodeCommand.ts`) — 편의가 아니라, 레거시 세대를 통째로 들이지 않는
+    한 다른 길이 없다.
+
+14. **프롬프트는 슬래시를 전개하지 않는다.** `POST /api/session/:id/prompt` 에 `"/init"` 을
+    보내면 `session.next.prompt.admitted` 에 `{"text":"/init"}` 이 **그대로** 실린다.
+    `/compact` 처럼 "런타임이 알아서 처리한다" 를 전제한 자리는 opencode 에서 안 통한다
+    (그건 `POST /api/session/:id/compact` 를 불러야 한다 — 아직 안 붙였다).
+
 > 버전을 올리면 `curl http://127.0.0.1:4096/doc` 을 다시 떠서 대조할 것.
 
 ## davis 대응이 없는 신규 표면

@@ -1,7 +1,7 @@
 import { useCallback, useRef, type Dispatch, type SetStateAction } from 'react'
 import type { ActiveTab, OpenFile } from './useOpenFiles'
 
-// 확장이 만든 화면(`davis.view.setHtml`)을 **본문 탭**으로 여는 부분.
+// 확장이 만든 화면(`code.view.setHtml`)을 **본문 탭**으로 여는 부분.
 // `useOpenDiffTab` 과 같은 자리·같은 이유로 갈라져 있다 — 탭 목록의 주인은 `useOpenFiles` 다.
 //
 // 왜 본문 탭인가: 사이드바 폭(약 300px)에는 분석 표가 안 들어간다. 실측 산출물 01 의 칸이

@@ -93,7 +93,7 @@ export async function downloadPackage(
   let dir: string
   let path: string
   try {
-    dir = await mkdtemp(join(tmpdir(), 'davis-ext-'))
+    dir = await mkdtemp(join(tmpdir(), 'code-ext-'))
     path = join(dir, PACKAGE_FILENAME)
     await writeFile(path, Buffer.from(body))
   } catch (error) {

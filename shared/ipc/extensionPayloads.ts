@@ -71,7 +71,7 @@ export type ExtensionInstallPayload =
   | { ok: false; cancelled: true }
   | { ok: false; cancelled?: false; reason: string; detail?: string }
 
-/** 확장이 `davis.view.setRows` 로 넘긴 행 하나. 키·값은 확장이 정한다. */
+/** 확장이 `code.view.setRows` 로 넘긴 행 하나. 키·값은 확장이 정한다. */
 export type ExtensionRowPayload = Record<string, unknown>
 
 export interface ExtensionRunCommandPayload {
@@ -143,7 +143,7 @@ export interface ExtensionRowsPayload {
 }
 
 /**
- * 확장이 `davis.view.setHtml` 로 넘긴 화면.
+ * 확장이 `code.view.setHtml` 로 넘긴 화면.
  *
  * **날 것 그대로다.** 여기서도 main 에서도 손대지 않는다 — 격리(iframe·CSP·링크 중계)는
  * 그릴 수 있는 유일한 곳인 renderer 가 씌운다 (`src/state/extensionHtmlDoc.ts`).
@@ -242,7 +242,7 @@ export interface ActiveFileNotice {
 }
 
 /**
- * 확장이 사람에게 글을 묻는다 (`davis.ui.askText`).
+ * 확장이 사람에게 글을 묻는다 (`code.ui.askText`).
  *
  * **취소가 정상 답이다.** 사용자가 창을 닫으면 `null` 이 확장까지 그대로 간다 —
  * 빈 문자열로 눙치면 확장은 "사람이 다 지웠다" 로 읽고 저장된 것을 날린다.

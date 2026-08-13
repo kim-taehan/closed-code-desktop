@@ -1,4 +1,4 @@
-// 확장 화면을 **URL 로** 서빙한다. `davis-ext://view/<토큰>`.
+// 확장 화면을 **URL 로** 서빙한다. `code-ext://view/<토큰>`.
 //
 // 왜 `srcdoc` 이 아니라 이것인가 — 실측으로 밝혀진 이유가 하나뿐이다:
 //
@@ -18,7 +18,7 @@
 // 값이 맞지 않는다.
 
 /** iframe 이 쓰는 스킴. `main.ts` 가 privileged 로 등록하고 `index.html` 이 frame-src 로 허용한다. */
-export const VIEW_SCHEME = 'davis-ext'
+export const VIEW_SCHEME = 'code-ext'
 
 /**
  * 들고 있을 문서 수.
@@ -71,8 +71,13 @@ export class ExtensionViewHost {
   }
 }
 
-/** `davis-ext://view/12` → `12`. 모양이 아니면 null. */
+/**
+ * `code-ext://view/12` → `12`. 모양이 아니면 null.
+ *
+ * **정규식을 손으로 적지 않는다** — 스킴 상수와 갈리면 화면이 조용히 안 뜬다
+ * (등록은 되는데 요청이 안 잡힌다).
+ */
 function tokenOf(url: string): string | null {
-  const matched = /^davis-ext:\/\/view\/([^/?#]+)/.exec(url)
+  const matched = new RegExp(`^${VIEW_SCHEME}://view/([^/?#]+)`).exec(url)
   return matched === null ? null : (matched[1] as string)
 }

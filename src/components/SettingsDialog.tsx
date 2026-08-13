@@ -5,6 +5,7 @@ import { AgentSection, DisplaySection } from './SettingsSections'
 import { NotifySection } from './NotifySection'
 import { ShortcutsSection } from './ShortcutsSection'
 import { ExtensionsSection } from './ExtensionsSection'
+import { OpencodeConfigSection } from './OpencodeConfigSection'
 import { t } from '../i18n/messages'
 import { useLang } from '../state/useLang'
 
@@ -16,7 +17,13 @@ import { useLang } from '../state/useLang'
 // 연결(주소·키·포트)은 여기 없다 — "프로젝트 연결" 팝업이 유일한 자리다
 // (진단·수정·연결 시도가 한 화면이어야 왕복이 없다, 사용자 결정 2026-07-23).
 
-export type SettingsSection = 'display' | 'notify' | 'agent' | 'shortcuts' | 'extensions'
+export type SettingsSection =
+  | 'display'
+  | 'notify'
+  | 'agent'
+  | 'opencode'
+  | 'shortcuts'
+  | 'extensions'
 
 // 라벨은 렌더 시점에 t() 로 뽑는다 — 언어를 바꾸면 즉시 반영돼야 하므로 상수로 굳히지 않는다.
 // `badge` 는 아직 다 여물지 않은 기능임을 분류 옆에 밝히는 표시다. 기능이 서면 뗀다.
@@ -24,6 +31,8 @@ const SECTIONS: { id: SettingsSection; label: string; badge?: string }[] = [
   { id: 'display', label: '화면' },
   { id: 'notify', label: '알림' },
   { id: 'agent', label: '에이전트 연동' },
+  // 이 앱 설정이 아니라 **opencode 서버가 읽는 파일**이다 — 그래서 분류를 따로 뒀다
+  { id: 'opencode', label: '오픈코드 설정' },
   { id: 'shortcuts', label: '단축키' },
   { id: 'extensions', label: '확장', badge: '베타' },
 ]
@@ -89,6 +98,7 @@ export function SettingsDialog(props: SettingsDialogProps) {
             {section === 'agent' && (
               <AgentSection settings={props.settings} onSave={props.onSaveSettings} />
             )}
+            {section === 'opencode' && <OpencodeConfigSection />}
             {section === 'shortcuts' && (
               <ShortcutsSection developerMode={props.settings.developerMode} />
             )}

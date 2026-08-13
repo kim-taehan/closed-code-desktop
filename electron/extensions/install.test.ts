@@ -16,7 +16,7 @@ import { buildZip } from './testZip'
 // 가짜 목록으로 시험하면 배선이 빠져도 초록이 된다.
 
 const MANIFEST = {
-  manifestVersion: 1,
+  manifestVersion: 2,
   name: 'sample-ext',
   displayName: '샘플 확장',
   version: '0.1.0',

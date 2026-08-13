@@ -1,6 +1,6 @@
-import { METHOD_EXPORT_SAVE, METHOD_UI_ASK_TEXT } from './davisApi'
+import { METHOD_EXPORT_SAVE, METHOD_UI_ASK_TEXT } from './extensionApi'
 
-// 부모가 돌려준 값의 **모양 확인**. `davisApi.ts` 에서 갈라냈다 — 저쪽이 300줄 상한에
+// 부모가 돌려준 값의 **모양 확인**. `extensionApi.ts` 에서 갈라냈다 — 저쪽이 300줄 상한에
 // 닿았고, 두고 보니 자리도 여기가 맞다: 저쪽은 **무엇을 부를 수 있나**(계약)이고
 // 이쪽은 **돌아온 것을 믿어도 되나**다.
 //

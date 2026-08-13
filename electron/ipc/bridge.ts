@@ -1,8 +1,8 @@
 import { ipcMain, type BrowserWindow } from 'electron'
+import { ChatAskHub } from '../extensions/chatAskHub'
 import { Channel, type ProjectScoped } from '../../shared/ipc/channels'
 import { registerSessionHandlers, SESSION_CHANNELS } from './sessionHandlers'
 import type { ProjectRecord } from '../../shared/projects/projectRecord'
-import type { AgentLaneConfig } from '../agentLane/askAgent'
 import { ProjectSession, type ProjectSessionConfig } from '../session/projectSession'
 import { diagnose, noEndpointDiagnostics } from '../runtime/diagnostics'
 
@@ -55,28 +55,6 @@ export class SessionBridge {
     return this.active?.runtimeInfo ?? { instanceDir: null, runtimeVersion: null }
   }
 
-  /**
-   * 확장이 코드 어시스턴트에 물을 때 쓸 연결 정보. 열린 프로젝트가 없거나 runtime 을
-   * 아직 못 찾았으면 `null` — 부르는 쪽이 사유와 함께 거절한다.
-   */
-  get agentLane(): AgentLaneConfig | null {
-    return this.active?.agentLane ?? null
-  }
-
-  /**
-   * **그 프로젝트의** 코드 어시스턴트 연결. 세션이 아직 없으면 `null`.
-   *
-   * `agentLane`(활성 기준)만 두면 안 되는 이유가 실측에서 나왔다 — 활성 프로젝트가
-   * **두 벌**이다. 확장 저장소는 `ProjectRegistry.active` 를 쓰고 이 브리지는 자기
-   * `activeId` 를 쓰는데, 세션이 지연 연결이라 둘이 어긋난다. 그러면 **Spring 프로젝트의
-   * 목록을 프론트엔드 워크스페이스에 물어보게 되고**, 어시스턴트는 "그런 파일 없다" 고
-   * 답한다. 실측에서 그 답으로 API 122개 중 42개가 지워졌다.
-   */
-  laneFor(projectId: string | null): AgentLaneConfig | null {
-    if (projectId === null) return this.agentLane
-    return this.sessions.get(projectId)?.agentLane ?? null
-  }
-
   private get active(): ProjectSession | null {
     return this.activeId === null ? null : (this.sessions.get(this.activeId) ?? null)
   }
@@ -86,6 +64,35 @@ export class SessionBridge {
    *
    * 이미 있는 세션은 **다시 시작하지 않는다** — 돌고 있던 턴이 끊긴다.
    */
+  /**
+   * 확장의 `chat.ask` 장부 (설계 2026-08-13).
+   *
+   * 브리지가 쥐는 이유는 둘을 다 갖고 있어서다 — **창**(요청을 화면 큐로 밀어 넣는 길)과
+   * **세션 생성**(그 턴을 되찾을 포트를 꽂는 자리).
+   */
+  private readonly chatAsk = new ChatAskHub((projectId, payload) => {
+    if (this.window.isDestroyed()) return false
+    this.push(Channel.EXTENSION_CHAT_ASK, projectId, payload)
+    return true
+  })
+
+  /** 확장이 물었다. 답이 올 때까지 기다리는 promise 를 돌려준다. */
+  ask(projectId: string | null, query: string) {
+    return this.chatAsk.ask(projectId, query)
+  }
+
+  /**
+   * 그 프로젝트의 도는 턴을 끊는다 — 확장 화면의 「중단」이 여기로 온다.
+   *
+   * **끊는 사람은 사용자다.** 확장이 스스로 부르는 길은 없다 (설계 2026-08-13):
+   * 화면에 보이는 턴을 확장이 뒤에서 죽이면 안 된다. 확장이 기다리던 약속은
+   * `ChatSession.cancel` 이 취소로 풀어 준다.
+   */
+  cancelTurn(projectId: string | null): void {
+    const target = projectId === null ? this.active : (this.sessions.get(projectId) ?? null)
+    target?.cancel()
+  }
+
   async activate(project: ProjectRecord): Promise<void> {
     this.activeId = project.id
     if (this.sessions.has(project.id) || this.starting.has(project.id)) {
@@ -116,6 +123,7 @@ export class SessionBridge {
         onMcpState: (state) => this.push(Channel.MCP_STATE, project.id, state),
         onModelState: (state) => this.push(Channel.MODEL_STATE, project.id, state),
         onNotification: (n) => this.push(Channel.NOTIFICATION, project.id, n),
+        binder: this.chatAsk.bookFor(project.id),
       },
     )
     this.sessions.set(project.id, session)

@@ -59,6 +59,14 @@ export interface ChatSendPayload {
    * 말할 이유가 없다.
    */
   autoContext?: string[]
+  /**
+   * 확장이 `chat.ask` 로 보낸 요청이라는 표시 (설계 2026-08-13).
+   *
+   * **프레임에는 실리지 않는다** — runtime 이 알 필요가 없다. main 이 이 값을 보고
+   * "다음에 열리는 턴이 그 확장의 턴" 이라고 장부에 적어 둔다 (`extensions/chatAsk.ts`).
+   * 확장 요청도 사용자 입력과 **같은 큐**를 타기 때문에 그 짝을 맞출 열쇠가 필요하다.
+   */
+  extensionRequestId?: string
 }
 
 /**

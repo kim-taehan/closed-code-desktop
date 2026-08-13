@@ -42,7 +42,7 @@ describe('확장 화면 서빙', () => {
     // protocol.handle 안에서 던지면 프레임이 통째로 안 뜨고 사유도 안 남는다.
     const host = new ExtensionViewHost()
 
-    expect(host.handle('davis-ext://딴데').status).toBe(404)
+    expect(host.handle('code-ext://딴데').status).toBe(404)
     expect(host.handle('http://example.com/view/1').status).toBe(404)
   })
 

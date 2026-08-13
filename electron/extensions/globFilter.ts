@@ -1,4 +1,4 @@
-// `davis.workspace.listFiles(glob)` 이 받는 glob 의 **전부**를 여기서 정의한다.
+// `code.workspace.listFiles(glob)` 이 받는 glob 의 **전부**를 여기서 정의한다.
 //
 // 새 의존성(minimatch·fast-glob)을 넣지 않는다 — 에어갭 제약이기도 하고,
 // 확장이 실제로 쓰는 모양이 "재귀로 훑고 확장자로 거른다" 하나뿐이라

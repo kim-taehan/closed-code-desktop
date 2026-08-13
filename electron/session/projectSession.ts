@@ -21,7 +21,6 @@ import type { NotificationController } from './notifications'
 import type { ProjectSessionListener } from './projectSessionListener'
 import type { ApprovalFollowUp } from './chatFrames'
 import { logStore } from '../logs/logStore'
-import { laneConfigOf, type AgentLaneConfig } from '../agentLane/askAgent'
 
 // 한 프로젝트의 세션 수명 전부 — 탐색 → 연결 → 핸드셰이크 → 채팅.
 // renderer 로 직접 보내지 않고 콜백으로만 낸다 — 어디로 보낼지는 SessionBridge 가 정한다
@@ -69,12 +68,6 @@ export class ProjectSession {
     return this.endpoint
   }
 
-  /** 확장 질의 레인이 **자기 소켓**을 열 때 쓸 값. 소켓 자체는 안 빌려준다 — 확장 질의가
-   *  사용자 대화의 `chatId` 를 덮어쓰지 않게 (`agentLane/askAgent.ts`). 못 찾았으면 null. */
-  get agentLane(): AgentLaneConfig | null {
-    return this.endpoint ? laneConfigOf(this.endpoint, this.config) : null
-  }
-
   /**
    * opencode 서버는 **찾지 않는다 — 주소를 안다.**
    *
@@ -99,6 +92,8 @@ export class ProjectSession {
       listener: this.listener,
       onHandshakeState: (state) => this.emitState(state),
       onConnectionState: (state) => this.emitState(this.lastHandshake, state),
+      // 확장이 이 프로젝트의 채팅으로 물으면 그 턴을 되찾을 자리 (설계 2026-08-13)
+      ...(this.listener.binder ? { binder: this.listener.binder } : {}),
     })
     this.connection = wired.connection
     this.heartbeat = wired.heartbeat

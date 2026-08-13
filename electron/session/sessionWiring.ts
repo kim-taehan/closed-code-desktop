@@ -4,6 +4,7 @@ import { OpencodeConnection } from '../opencode/connection'
 import { Heartbeat } from '../ws/heartbeat'
 import { Handshake } from './handshake'
 import { ChatSession } from './chatSession'
+import type { TurnBinder } from './turnBinder'
 import { PermissionModeController } from './permissionMode'
 import { WorkingDirController } from './workingDir'
 import { ChatHistoryController } from './chatHistory'
@@ -35,6 +36,8 @@ export interface WireSessionArgs {
   onConnectionState: (state: SessionStatePayload['connection']) => void
   /** 없으면 런타임 생사 감지를 하지 않는다 (기존 동작) */
   liveness?: LivenessSink
+  /** 확장이 채팅으로 물은 턴을 그 요청과 묶어 주는 자리 (`turnBinder.ts`). 없으면 안 묶는다. */
+  binder?: TurnBinder
 }
 
 export interface WiredSession {
@@ -61,7 +64,7 @@ export function wireSession(args: WireSessionArgs): WiredSession {
   // 이라 프레임으로 올라오지도 않는다. 켜 두면 90초마다 무조건 오발해 연결을 계속 재활용한다.
   // opencode 쪽 생사 신호는 SSE 스트림의 종료이며, 재연결은 SseStream 이 백오프로 스스로 한다.
   const heartbeat = new Heartbeat(connection, { watchdogMs: 0 })
-  const chat = new ChatSession(connection)
+  const chat = new ChatSession(connection, args.binder ? { binder: args.binder } : {})
   const permission = new PermissionModeController(connection)
   const workingDir = new WorkingDirController(connection)
   const history = new ChatHistoryController(connection)

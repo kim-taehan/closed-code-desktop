@@ -58,7 +58,7 @@ describe('배포처 채널', () => {
 
   beforeEach(async () => {
     handlers.clear()
-    dir = await mkdtemp(join(tmpdir(), 'davis-extreg-'))
+    dir = await mkdtemp(join(tmpdir(), 'code-extreg-'))
 
     const { ExtensionBridge } = await import('./extensionBridge')
     const { SettingsStore } = await import('../settings/settingsStore')
@@ -78,7 +78,7 @@ describe('배포처 채널', () => {
     reload: () => Promise.resolve(),
         restart: () => Promise.resolve(),
       },
-      views: { register: () => 'davis-ext://view/1' },
+      views: { register: () => 'code-ext://view/1' },
       activeProjectId: () => null,
       extensionsDir: join(dir, 'desktop-extensions'),
       settings: new SettingsStore(join(dir, 'settings.json')),

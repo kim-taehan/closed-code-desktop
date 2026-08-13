@@ -75,7 +75,7 @@ export async function makeExtensionsDir(): Promise<string> {
   await mkdir(good, { recursive: true })
   await writeFile(
     join(good, 'manifest.json'),
-    JSON.stringify({ manifestVersion: 1, name: 'good', version: '1.0.0', main: 'main.js' }),
+    JSON.stringify({ manifestVersion: 2, name: 'good', version: '1.0.0', main: 'main.js' }),
     'utf8',
   )
 

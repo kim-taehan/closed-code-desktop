@@ -1,90 +1,75 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { allSlashCommands, type SlashChoice, type SlashCommand } from '../state/slashCommands'
-import {
-  filterCategories,
-  filterItems,
-  parseSlashInput,
-  type SlashCategory,
-} from '../state/slashNamespace'
-import type { SkillSummaryPayload } from '../../shared/ipc/channels'
+import { filterItems } from '../state/slashFilter'
+import { useOpencodeCommands } from '../state/useOpencodeCommands'
+import type { CommandSummaryPayload } from '../../shared/ipc/channels'
 
-// `/` 자동완성 — **카테고리 → 항목 2단계** (DC-980).
+// `/` 자동완성 — **한 단계 평면 목록** (opencode CLI 와 같은 모양).
 //
-// 예전에는 명령과 스킬이 한 목록에 섞여 쏟아졌다. 항목이 늘수록 못 찾는다.
+// 예전에는 davis 식으로 `카테고리 → 항목` 2단계였다(`/command clear`·`/skill pptx`).
+// opencode 는 명령·MCP 프롬프트·스킬을 **한 목록**으로 주고 CLI 도 그대로 한 번에 보여
+// 준다. 종류는 줄 옆 태그로만 갈린다.
 //
-//   `/`               → 카테고리 (커맨드 · 스킬)
-//   `/command `       → 그 카테고리의 항목만
-//   `/command clear ` → 항목까지 정해짐 → 팝업을 닫고 사용자가 인자를 친다
+//   `/`      → 데스크톱 명령 + opencode 가 아는 것 전부
+//   `/re`    → 이름·설명 어디든 걸리면 남는다
+//   `/re `   → 공백부터는 인자 구간이다. 팝업은 Composer 가 닫는다 (skillAtCaret)
 //
-// 단계 판별·필터는 slashNamespace 가 순수 함수로 한다. 여기는 그리기와 키 처리만.
-// 스킬 목록은 `+ → 스킬` 과 같은 것을 쓴다 — 두 곳이 다른 목록을 보이면 안 된다.
+// 목록은 `useOpencodeCommands` 가 가져온다 — `+ → 스킬` 과 **같은 출처**여야 한다.
 
-const MAX_SHOWN = 8
+// 상자는 CSS 로 이미 스크롤된다(`.dc-mentions` max-height 260px). 이 숫자는 그 위에 얹은
+// 뚜껑이라, 2단계 시절(카테고리마다 8줄)의 8을 그대로 두면 **데스크톱 명령 6개가 자리를
+// 먹고 opencode 스킬은 거의 안 보인다** (실서버 기준 항목이 스물 넘는다). 넉넉히 열어 두고
+// 좁히는 것은 쿼리에 맡긴다.
+const MAX_SHOWN = 24
 
 type Row =
-  | { kind: 'category'; category: SlashCategory }
   | { kind: 'command'; command: SlashCommand }
-  | { kind: 'skill'; skill: SkillSummaryPayload }
+  | { kind: 'opencode'; item: CommandSummaryPayload }
 
 export interface SlashPopupProps {
-  /** `/` 를 뗀 지금 맥락. `''` · `'com'` · `'command cl'` */
+  /** `/` 를 뗀 지금 치고 있는 이름. `''` · `'re'` */
   query: string
   onPick: (choice: SlashChoice) => void
   onClose: () => void
 }
 
 export function SlashPopup({ query, onPick, onClose }: SlashPopupProps) {
-  const [skills, setSkills] = useState<SkillSummaryPayload[]>([])
+  const { commands } = useOpencodeCommands()
   const [cursor, setCursor] = useState(0)
-
-  useEffect(() => {
-    void window.davis.listSkills().then((result) => setSkills(result.skills))
-  }, [])
-
-  const parsed = useMemo(() => parseSlashInput(`/${query}`), [query])
+  const cursorRef = useRef<HTMLButtonElement>(null)
 
   const rows = useMemo<Row[]>(() => {
-    if (!parsed || parsed.kind === 'prompt') return []
-
-    if (parsed.kind === 'category') {
-      return filterCategories(parsed.query)
-        .map((category) => ({ kind: 'category' as const, category }))
-        .slice(0, MAX_SHOWN)
-    }
-
-    if (parsed.type === 'command') {
-      return filterItems(
-        allSlashCommands().map((command) => ({
-          display: command.name,
-          description: command.description,
-          command,
-        })),
-        parsed.query,
-      )
-        .map((entry) => ({ kind: 'command' as const, command: entry.command }))
-        .slice(0, MAX_SHOWN)
-    }
-
-    return filterItems(
-      skills.map((skill) => ({ display: skill.name, description: skill.description, skill })),
-      parsed.query,
-    )
-      .map((entry) => ({ kind: 'skill' as const, skill: entry.skill }))
+    // 데스크톱 명령이 앞이다 — 서버가 모르는 동작이라 이름이 겹쳐도 이쪽이 임자다
+    // (resolveSlashSubmission 의 찾는 순서와 같아야 한다).
+    const entries = [
+      ...allSlashCommands().map((command) => ({
+        display: command.name,
+        description: command.description,
+        row: { kind: 'command' as const, command },
+      })),
+      ...commands.map((item) => ({
+        display: item.name,
+        description: item.description,
+        row: { kind: 'opencode' as const, item },
+      })),
+    ]
+    return filterItems(entries, query)
+      .map((entry) => entry.row)
       .slice(0, MAX_SHOWN)
-  }, [parsed, skills])
+  }, [commands, query])
 
   useEffect(() => setCursor(0), [query])
 
+  // 목록이 상자보다 길다 — 화살표로 내려간 항목이 화면 밖에 있으면 **고르는 중인 것이
+  // 안 보인다.** jsdom 에는 scrollIntoView 가 없어 옵셔널로 부른다 (테스트가 죽지 않게).
+  useEffect(() => cursorRef.current?.scrollIntoView?.({ block: 'nearest' }), [cursor])
+
   const pick = (row: Row) => {
-    if (row.kind === 'category') {
-      onPick({ kind: 'category', namespace: row.category.namespace })
-      return
-    }
     if (row.kind === 'command') {
       onPick({ kind: 'command', command: row.command })
       return
     }
-    onPick({ kind: 'skill', name: row.skill.name })
+    onPick({ kind: 'opencode', name: row.item.name })
   }
 
   useEffect(() => {
@@ -115,36 +100,24 @@ export function SlashPopup({ query, onPick, onClose }: SlashPopupProps) {
     return () => window.removeEventListener('keydown', onKeyDown, true)
   }, [rows, cursor, onPick, onClose])
 
-  // 고르는 중인가. 프롬프트 단계(항목까지 정해져 인자를 치는 중)와 슬래시 맥락이 아닌 것은
-  // 팝업이 **진짜로 닫힌** 상태다 — rows 가 비는 사유가 둘이라 여기서 가른다 (:47 참조).
-  const choosing = parsed !== null && parsed.kind !== 'prompt'
-
   if (rows.length === 0) {
-    if (!choosing) return null
-
-    // 고르는 중인데 일치가 0행이면 **상자를 DOM 에 남긴다** (보이지는 않는다).
+    // 일치가 0행이어도 **상자를 DOM 에 남긴다** (보이지는 않는다).
     //
     // 사라지면 Esc 의 임자 판정(`useShortcuts.ts` 의 `[role=listbox]`)이 팝업을 못 본다.
-    // 그러면 `/zzzz` 처럼 일치 없는 슬래시를 치고 Esc 를 누를 때 위 캡처 리스너(:107)로
-    // 팝업은 닫히면서 **같은 Esc 가 응답 중단까지 발동한다** — 오타를 지우려던 손동작이
-    // 진행 중인 턴을 죽인다. `/` 뒤에 오타를 내고 Esc 로 지우는 것은 흔한 손동작이라
-    // 트리거가 좁지 않다.
-    //
-    // 판정 기준은 "행이 있는가"가 아니라 "고르는 중인가"다.
+    // 그러면 `/zzzz` 처럼 일치 없는 슬래시를 치고 Esc 를 누를 때 위 캡처 리스너로 팝업은
+    // 닫히면서 **같은 Esc 가 응답 중단까지 발동한다** — 오타를 지우려던 손동작이 진행 중인
+    // 턴을 죽인다. `/` 뒤에 오타를 내고 Esc 로 지우는 것은 흔한 손동작이라 트리거가 좁지 않다.
     return <div className="dc-mentions" role="listbox" aria-label="명령·스킬" hidden />
   }
 
-  // 지금 어느 단계인지 알려준다 — 2단계에서는 "무엇 안에서 고르는 중"인지가 안 보이면 헷갈린다
-  const header = parsed?.kind === 'item' ? parsed.namespace : '카테고리'
-
   return (
     <div className="dc-mentions" role="listbox" aria-label="명령·스킬">
-      <div className="dc-mentions__head">{header}</div>
       {rows.map((row, index) => {
-        const name = labelOf(row)
+        const name = row.kind === 'command' ? row.command.name : row.item.name
         return (
           <button
             key={`${row.kind}:${name}`}
+            ref={index === cursor ? cursorRef : undefined}
             type="button"
             role="option"
             aria-selected={index === cursor}
@@ -158,15 +131,11 @@ export function SlashPopup({ query, onPick, onClose }: SlashPopupProps) {
           >
             <span className="dc-skill__head">
               <span className="dc-mentions__name">{name}</span>
-              {row.kind === 'category' && <span className="dc-skill__tag">카테고리</span>}
-              {row.kind === 'skill' && row.skill.builtin && (
-                <span className="dc-skill__tag dc-skill__tag--builtin">내장</span>
-              )}
-              {row.kind === 'skill' && row.skill.context === 'fork' && (
-                <span className="dc-skill__tag">fork</span>
-              )}
+              {row.kind === 'opencode' && <Tags item={row.item} />}
             </span>
-            <span className="dc-mentions__path">{descriptionOf(row)}</span>
+            <span className="dc-mentions__path">
+              {row.kind === 'command' ? row.command.description : row.item.description}
+            </span>
           </button>
         )
       })}
@@ -174,14 +143,21 @@ export function SlashPopup({ query, onPick, onClose }: SlashPopupProps) {
   )
 }
 
-function labelOf(row: Row): string {
-  if (row.kind === 'category') return row.category.namespace
-  if (row.kind === 'command') return row.command.name
-  return row.skill.name
-}
-
-function descriptionOf(row: Row): string {
-  if (row.kind === 'category') return row.category.description
-  if (row.kind === 'command') return row.command.description
-  return row.skill.description
+/**
+ * opencode 가 항목에 달아 준 것들. **명령은 태그가 없다** — 데스크톱 명령과 같은 줄로
+ * 보이는 것이 opencode CLI 의 모양이고, 사용자에게도 그 둘의 구분은 필요 없다.
+ *
+ * `subtask`·`agent`·`model` 은 **보여만 준다** — 지금은 그대로 따라가지 않는다
+ * (`opencodeCommand.ts` 의 "못 따라가는 것").
+ */
+function Tags({ item }: { item: CommandSummaryPayload }) {
+  return (
+    <>
+      {item.source === 'skill' && <span className="dc-skill__tag">스킬</span>}
+      {item.source === 'mcp' && <span className="dc-skill__tag">MCP</span>}
+      {item.subtask && <span className="dc-skill__tag">subtask</span>}
+      {item.agent && <span className="dc-skill__tag">@{item.agent}</span>}
+      {item.model && <span className="dc-skill__tag">{item.model}</span>}
+    </>
+  )
 }

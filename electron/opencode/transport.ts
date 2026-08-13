@@ -5,6 +5,7 @@ import { HandlerSet, type CloseInfo, type Transport, type Unsubscribe } from '..
 import { OpencodeClient, type PermissionReply } from './client'
 import { SessionModel, toModelRef } from './models'
 import { applyPermissionMode } from './agents'
+import { withPromptContext } from './promptContext'
 import { SseStream } from './sse'
 import { translate, type TranslateContext } from './translate'
 import type { OpencodeEvent } from './events'
@@ -206,7 +207,8 @@ export class OpencodeTransport implements Transport {
       })
       return
     }
-    const query = typeof data['query'] === 'string' ? data['query'] : ''
+    // 붙인 문서·보는 파일은 글로 번역해 함께 보낸다 — 안 하면 사라진다 (`promptContext.ts`)
+    const query = withPromptContext(typeof data['query'] === 'string' ? data['query'] : '', data)
     this.streamId = randomUUID()
     this.emit({ kind: Kind.CHAT, action: Action.STREAM_START, data: {}, streamId: this.streamId })
 

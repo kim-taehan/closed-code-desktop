@@ -13,7 +13,6 @@ import { LogBridge } from './ipc/logBridge'
 import { GitBridge } from './ipc/gitBridge'
 import { ExtensionBridge } from './ipc/extensionBridge'
 import { captureConsole } from './logs/logStore'
-import { type HostPortsResult } from './extensions/hostPorts'
 import type { ExtensionService } from './extensions/service'
 import { startExtensionHost } from './extensions/appHost'
 import type { ExtensionAskText } from './extensions/serviceDispatch'
@@ -41,8 +40,6 @@ let logs: LogBridge | null = null
 let drawer: PtyDrawerBridge | null = null
 let git: GitBridge | null = null
 let extensions: ExtensionService | null = null
-/** 확장이 앱에 닿는 포트들. `cancel` 을 확장 브리지도 써서 서비스 밖에 둔다 */
-let extensionPorts: HostPortsResult | null = null
 // 브리지는 창에 매인다(webContents.send). 호스트(앱 수명)와 수명이 달라 정리 시점도 다르다.
 let extensionIpc: ExtensionBridge | null = null
 // 확장은 앱 수명(창보다 먼저 뜬다)이라 레지스트리 인스턴스를 들고 있을 수 없다. 여기로 조회한다.
@@ -164,8 +161,9 @@ async function createWindow(): Promise<void> {
       service: extensions,
       views: extensionViews,
       activeProjectId: () => registry.active?.id ?? null,
-      // 중단은 **어시스턴트 소켓을 쥔 쪽**만 할 수 있다 (`hostPorts` 의 CancelBook)
-      ...(extensionPorts ? { cancel: extensionPorts.cancel } : {}),
+      // 확장 화면의 「중단」 — 이제 끊을 것은 **사용자 대화의 턴**이다 (설계 2026-08-13).
+      // 곁길 소켓이 없어져 끊을 다른 것이 없다.
+      cancel: (projectId: string | null) => bridge?.cancelTurn(projectId),
       settings,
     })
     extensionIpc.register()
@@ -212,7 +210,11 @@ function launchExtensionHost(): void {
     // vitest(node 환경, electron 이 가짜)에서도 그대로 돈다.
     fork: (modulePath, args, options) => utilityProcess.fork(modulePath, args, options),
     registry: () => projectRegistry,
-    laneFor: (projectId) => bridge?.laneFor(projectId) ?? null,
+    // 확장이 물으면 **그 프로젝트의 채팅에 턴을 만들어** 묻는다 (설계 2026-08-13).
+    // 창이 없으면 브리지도 없다 — 그 경우 거절이 돌아간다.
+    askViaChat: (projectId, prompt) =>
+      bridge?.ask(projectId, prompt) ??
+      Promise.resolve({ status: "rejected" as const, reason: "창이 없습니다" }),
     // 보고 있는 파일은 **브리지**가 쥔다. 브리지는 창과 함께 생기고 이 호스트는 앱과 함께
     // 뜨므로, 값이 아니라 함수로 넘긴다 — 여기서 굳히면 늘 「없음」이다.
     activeFile: () => extensionIpc?.currentActiveFile() ?? null,
@@ -227,7 +229,6 @@ function launchExtensionHost(): void {
     log: (line) => console.log(line),
   })
   extensions = started.service
-  extensionPorts = started.ports
 }
 
 void app.whenReady().then(async () => {

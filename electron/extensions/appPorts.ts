@@ -1,6 +1,6 @@
 import { hostPorts, type HostPortsResult } from './hostPorts'
 import type { ProjectRegistry } from '../projects/projectRegistry'
-import type { AgentLaneConfig } from '../agentLane/askAgent'
+import type { AskResult } from './chatAsk'
 import type { ExtensionAskText } from './serviceDispatch'
 
 // 확장 포트를 **앱의 실제 상태에 붙이는** 자리.
@@ -14,8 +14,8 @@ import type { ExtensionAskText } from './serviceDispatch'
 export interface AppPortDeps {
   userDataDir: string
   registry: () => ProjectRegistry | null
-  /** 그 프로젝트의 세션이 쥔 어시스턴트 연결 (`SessionBridge.laneFor`) */
-  laneFor: (projectId: string | null) => AgentLaneConfig | null
+  /** 그 프로젝트의 **채팅으로** 묻는다 (`SessionBridge.ask`, 설계 2026-08-13) */
+  askViaChat: (projectId: string | null, prompt: string) => Promise<AskResult>
   /**
    * 지금 편집기에서 보고 있는 파일 (`ExtensionBridge.currentActiveFile`).
    *
@@ -42,7 +42,7 @@ export function appExtensionPorts(deps: AppPortDeps): HostPortsResult {
     ...hostPorts({
       userDataDir: deps.userDataDir,
       registry: deps.registry,
-      lane: deps.laneFor,
+      askViaChat: deps.askViaChat,
       activeProjectId,
     }),
     activeFile: deps.activeFile,
