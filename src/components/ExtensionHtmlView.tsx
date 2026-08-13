@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   extensionHtmlDoc,
+  isCommandRequest,
   isOpenRequest,
   readPalette,
   type ExtensionHtmlPalette,
@@ -19,12 +20,20 @@ export interface ExtensionHtmlViewProps {
   html: string
   /** 확장 화면이 `data-open` 으로 요청한 파일 열기. 규약을 안 쓰면 영영 안 불린다. */
   onOpen: (path: string, line?: number) => void
+  /**
+   * 확장 화면이 `data-command` 로 요청한 명령. 규약을 안 쓰면 영영 안 불린다.
+   *
+   * **주인 확인은 여기서 안 한다.** 이 컴포넌트는 자기 탭이 누구 것인지 모르고,
+   * 안다 해도 화면에서 거르는 것은 방어가 아니다 — 확인은 명령표를 쥔 자식이 한다
+   * (`electron/extensions/childHandlers.ts`). 여기는 부르는 쪽에 그대로 올린다.
+   */
+  onCommand?: (commandId: string) => void
 }
 
 /** 등록 결과. 실패를 `null` 로 뭉뚱그리지 않는다 — 준비 중과 실패가 같아 보이면 안 된다. */
 type Source = { state: 'loading' } | { state: 'ready'; url: string } | { state: 'failed'; reason: string }
 
-export function ExtensionHtmlView({ html, onOpen }: ExtensionHtmlViewProps) {
+export function ExtensionHtmlView({ html, onOpen, onCommand }: ExtensionHtmlViewProps) {
   const frame = useRef<HTMLIFrameElement>(null)
   const [palette, setPalette] = useState<ExtensionHtmlPalette>(() =>
     readPalette(typeof document === 'undefined' ? null : document.documentElement),
@@ -60,17 +69,21 @@ export function ExtensionHtmlView({ html, onOpen }: ExtensionHtmlViewProps) {
     }
   }, [html, palette])
 
-  // 열기 요청을 받는다. **보낸 것이 이 iframe 인지 먼저 확인한다** — 문서가 opaque origin
-  // 이라 보내는 쪽이 targetOrigin 을 특정할 수 없고(`'*'`), 그 검사가 이쪽에만 있다.
+  // 다리가 보낸 것을 받는다 (열기·명령). **보낸 것이 이 iframe 인지 먼저 확인한다** —
+  // 문서가 opaque origin 이라 보내는 쪽이 targetOrigin 을 특정할 수 없고(`'*'`),
+  // 그 검사가 이쪽에만 있다.
   useEffect(() => {
     const handle = (event: MessageEvent): void => {
       if (event.source !== frame.current?.contentWindow) return
-      if (!isOpenRequest(event.data)) return
-      onOpen(event.data.path, event.data.line)
+      if (isOpenRequest(event.data)) {
+        onOpen(event.data.path, event.data.line)
+        return
+      }
+      if (isCommandRequest(event.data)) onCommand?.(event.data.commandId)
     }
     window.addEventListener('message', handle)
     return () => window.removeEventListener('message', handle)
-  }, [onOpen])
+  }, [onOpen, onCommand])
 
   if (source.state === 'failed') {
     return <p className="ext-empty">{t('확장 화면을 띄우지 못했습니다')}: {source.reason}</p>

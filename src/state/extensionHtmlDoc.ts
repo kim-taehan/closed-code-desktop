@@ -29,13 +29,27 @@
 // 아는 쪽으로 한 발이라도 가면 그것이 결합이다 (`shared/extensions/manifest.ts` 머리말).
 
 /** 확장 화면이 "이 파일을 열어달라" 고 부모에게 보낼 때 쓰는 표식. */
-export const EXTENSION_OPEN_MESSAGE = 'davis:extension-view-open'
+export const EXTENSION_OPEN_MESSAGE = 'code:extension-view-open'
+
+/**
+ * 확장 화면이 "내 명령을 돌려달라" 고 부모에게 보낼 때 쓰는 표식.
+ *
+ * **`EXTENSION_OPEN_MESSAGE` 를 재활용하지 않는다.** 「파일을 열어라」와 「명령을 돌려라」는
+ * 다른 사실이고, 섞으면 받는 쪽이 문자열 모양으로 경로인지 명령 id 인지 추측하게 된다
+ * (`rpc.ts` 의 `METHOD_REDRAW`/`METHOD_ACTIVE_FILE` 을 가른 것과 같은 이유).
+ */
+export const EXTENSION_COMMAND_MESSAGE = 'code:extension-view-command'
 
 /** 부모가 받는 열기 요청. 모양이 아니면 버린다 (`isOpenRequest`). */
 export interface ExtensionOpenRequest {
   path: string
   /** 1-based. 없으면 파일만 연다 — 행 규약(`extensionRowTarget.ts`)과 같다. */
   line?: number
+}
+
+/** 부모가 받는 명령 요청. 실을 수 있는 것은 **명령 id 하나뿐이다** (`isCommandRequest`). */
+export interface ExtensionCommandRequest {
+  commandId: string
 }
 
 /**
@@ -112,30 +126,56 @@ export function isOpenRequest(data: unknown): data is ExtensionOpenRequest & { t
 }
 
 /**
+ * 부모가 받은 메시지가 명령 요청인가. `isOpenRequest` 와 같은 관례 — 모양만 본다.
+ *
+ * **명령 id 말고는 아무것도 받지 않는다.** 인자를 실을 수 있게 하면 확장 화면이 확장에
+ * 임의의 값을 보내는 일반 통로가 되고, 그것이 `extensionPayloads.ts` 가 경계했던 자리다.
+ * 화면에서 고른 것은 지금처럼 `selection` 으로 간다.
+ */
+export function isCommandRequest(data: unknown): data is ExtensionCommandRequest & { type: string } {
+  if (data === null || typeof data !== 'object') return false
+  const record = data as Record<string, unknown>
+  if (record['type'] !== EXTENSION_COMMAND_MESSAGE) return false
+  return typeof record['commandId'] === 'string' && record['commandId'] !== ''
+}
+
+/**
  * 부모에게 클릭을 전하는 다리. **호스트가 넣는 유일한 스크립트다.**
  *
- * 규약은 `data-open="상대경로"` 하나이고 `data-line` 은 선택이다 — 표 뷰의 행 클릭 규약
- * (`extensionRowTarget.ts` 의 `file`·`line`)과 같은 모양으로 맞췄다. 확장이 규약을 안 쓰면
- * 아무 일도 일어나지 않는다(오류가 아니다).
+ * 규약은 둘이다. 확장이 둘 다 안 쓰면 아무 일도 일어나지 않는다(오류가 아니다).
+ *
+ * - `data-open="상대경로"` (+ 선택 `data-line`) — 파일을 연다. 표 뷰의 행 클릭 규약
+ *   (`extensionRowTarget.ts` 의 `file`·`line`)과 같은 모양으로 맞췄다
+ * - `data-command="명령 id"` — **그 화면 주인 확장의** 명령을 돌린다 (2026-08-13 추가)
+ *
+ * 한 마디가 둘 다 달고 있으면 **`data-open` 이 이긴다** — 파일 열기가 되돌리기 쉬운 쪽이다.
  *
  * `targetOrigin` 이 `'*'` 인 이유: 이 문서는 opaque origin 이라 부모 주소를 특정할 수 없다.
  * **대신 받는 쪽이 `event.source` 로 이 iframe 인지 확인한다** (`ExtensionHtmlView`).
  *
- * 확장이 자기 스크립트에서 같은 메시지를 흉내 낼 수는 있다. 그래도 되는 것이 하나뿐이라
- * (프로젝트 안 파일 열기) 얻을 것이 없고, 확장은 어차피 `fs` 를 직접 쓸 수 있다.
+ * 확장이 자기 스크립트에서 같은 메시지를 흉내 낼 수는 있다. 그래도 얻을 것이 없다 —
+ * 파일 열기는 프로젝트 안이고, 명령은 **자기 확장 것만** 돈다(주인 확인은 자식이 한다,
+ * `childHandlers.ts`). 확장은 어차피 `fs` 를 직접 쓸 수 있다.
  */
 const BRIDGE = `
 document.addEventListener('click', function (event) {
   var node = event.target;
   if (!node || typeof node.closest !== 'function') return;
-  var hit = node.closest('[data-open]');
-  if (!hit) return;
-  var path = hit.getAttribute('data-open');
-  if (!path) return;
-  var line = parseInt(hit.getAttribute('data-line'), 10);
-  var message = { type: '${EXTENSION_OPEN_MESSAGE}', path: path };
-  if (line > 0) message.line = line;
-  parent.postMessage(message, '*');
+
+  var opening = node.closest('[data-open]');
+  var path = opening ? opening.getAttribute('data-open') : null;
+  if (path) {
+    var line = parseInt(opening.getAttribute('data-line'), 10);
+    var message = { type: '${EXTENSION_OPEN_MESSAGE}', path: path };
+    if (line > 0) message.line = line;
+    parent.postMessage(message, '*');
+    return;
+  }
+
+  var running = node.closest('[data-command]');
+  var commandId = running ? running.getAttribute('data-command') : null;
+  if (!commandId) return;
+  parent.postMessage({ type: '${EXTENSION_COMMAND_MESSAGE}', commandId: commandId }, '*');
 });
 `
 
@@ -167,7 +207,7 @@ table { border-collapse: collapse; width: 100%; }
 th, td { padding: 5px 8px; text-align: left; border-bottom: 1px solid ${palette.border}; }
 th { position: sticky; top: 0; background: ${palette.bg}; color: ${palette.muted}; font-weight: 600; }
 tbody tr:hover { background: ${palette.surface}; }
-[data-open] { cursor: pointer; }
+[data-open], [data-command] { cursor: pointer; }
 code { background: ${palette.surface}; padding: 1px 4px; border-radius: 4px; }
 .muted { color: ${palette.muted}; }
 `

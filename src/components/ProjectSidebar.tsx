@@ -45,7 +45,7 @@ export interface ProjectSidebarProps {
    * 사이드바가 직접 그리지 않는다 — 폭에 분석 표가 안 들어간다.
    * 명령은 왼쪽에서 걸고 결과는 오른쪽에서 본다.
    */
-  onOpenHtml: (key: string, label: string, html: string) => void
+  onOpenHtml: (key: string, label: string, html: string, focus?: boolean, extension?: string) => void
   onTestConnection: () => void
   /** 설정이 비어 대화가 안 되는 경우의 사유. 있으면 상태 대신 이걸 보여준다. */
   setupReason?: string

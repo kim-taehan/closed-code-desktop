@@ -1,5 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
-import { htmlTabKey } from '../state/useOpenHtmlTab'
+import { useState } from 'react'
 import { t } from '../i18n/messages'
 import type { ExtensionPanelTarget } from '../state/extensionPanels'
 import type { ExtensionRowsByView } from '../state/extensionRows'
@@ -16,6 +15,7 @@ import { ExtensionActionBar } from './ExtensionActionBar'
 import { ExtensionTabActions } from './ExtensionTabActions'
 import { commandSlots, viewCommands } from '../state/extensionCommandSlots'
 import { tabCountOf } from '../state/extensionTabCounts'
+import { useExtensionResultTab } from '../state/useExtensionResultTab'
 import type { TreeNode } from '../state/extensionTree'
 import type { ExtensionProgressPayload } from '../../shared/ipc/channels'
 import { linesOf, type ExtensionProgressLog } from '../state/extensionProgressLog'
@@ -93,7 +93,7 @@ export interface ExtensionViewPanelProps {
    * 사이드바가 직접 그리지 않고 넘기는 이유: 폭(약 300px)에 분석 표가 안 들어간다.
    * 실측 산출물 01 은 칸이 12개인데 셋만 겨우 들어가 경로·요약이 통째로 빠진다.
    */
-  onOpenHtml: (key: string, label: string, html: string, focus?: boolean) => void
+  onOpenHtml: (key: string, label: string, html: string, focus?: boolean, extension?: string) => void
   /** 내보내기 결과처럼 화면에 흔적이 안 남는 일을 알린다 */
   onNotice: (text: string) => void
 }
@@ -121,24 +121,15 @@ export function ExtensionViewPanel(props: ExtensionViewPanelProps) {
   // 지금 보는 탭에 붙은 준비 행동. 탭을 옮기면 함께 바뀐다 — 그것이 이 자리의 전부다
   const tabCommands = viewCommands(target.extension.contributes?.commands ?? [], viewId)
 
-  // 결과 화면은 **탭과 무관하게** 오른쪽에 띄운다. 명령을 돌린 탭(API)에 머무는 것이
-  // 보통이라, 보고 있는 탭이 결과 탭일 때만 열면 다 쓰고도 아무 변화가 없어 보인다.
-  const htmlView = target.views.find((one) => one.kind === 'html')
-  const htmlOfHtmlView = htmlView === undefined ? undefined : htmlByView[htmlView.id]
-  const showOnRight = useCallback(
-    (focus = false) => {
-      if (htmlView === undefined || htmlOfHtmlView === undefined) return
-      onOpenHtml(htmlTabKey(target.extension.name, htmlView.id), htmlView.title, htmlOfHtmlView, focus)
-    },
-    [htmlView, htmlOfHtmlView, onOpenHtml, target.extension.name],
-  )
-
-  // 결과가 올라오면 **바로** 오른쪽에 띄운다. 한 번 더 누르게 하면, 명령을 돌린 뒤
-  // 사이드바에 아무 변화가 없어 "안 먹었다" 로 보인다 (이 레포의 단골 실패).
-  // **앞으로 끌어오지는 않는다** — 진행 갱신이 몇 초마다 오므로 그동안 다른 파일을 볼 수 없다.
-  useEffect(() => {
-    showOnRight()
-  }, [showOnRight])
+  // 결과 화면을 오른쪽에 띄우는 규칙은 `useExtensionResultTab` 이 진다 (탭과 무관하게 뜨는 것,
+  // 올라오면 바로 여는 것, 앞으로는 안 끌어오는 것). 갈라낸 이유는 이 파일의 300줄 상한이다.
+  const result = useExtensionResultTab({
+    views: target.views,
+    htmlByView,
+    extension: target.extension.name,
+    onOpenHtml,
+  })
+  const showOnRight = result.show
 
   /**
    * 명령을 걸고, 끝나면 **결과 화면으로 데려간다.**
@@ -277,7 +268,7 @@ export function ExtensionViewPanel(props: ExtensionViewPanelProps) {
         // 앱에 되열기 버튼이 있기는 했지만 html 뷰 본문 안이고, 그 뷰는 위에서 탭에서
         // 빼므로(`tabViews`) 닿을 수가 없다. 여기서는 확장을 다시 돌리지 않는다 —
         // 마지막으로 받아 둔 HTML 을 그대로 다시 띄운다.
-        onShowResult={htmlOfHtmlView === undefined ? null : () => showOnRight(true)}
+        onShowResult={result.ready ? () => showOnRight(true) : null}
         // 주 행동에는 고른 것을 싣고, `⋯` 안의 마무리 명령에도 같이 싣는다 —
         // 무엇을 실을지는 확장이 판단할 몫이고 앱이 가려 줄 근거가 없다.
         onRun={(commandId) => {

@@ -52,7 +52,8 @@ describe('loadExtensions — 정상 경로', () => {
     expect(result.loaded).toEqual(['demo'])
     expect(result.failed).toEqual([])
     expect(activate).toHaveBeenCalledWith(code)
-    expect(result.commands.get('demo.scan')).toBe(scan)
+    // 처리기와 **주인**을 함께 든다 — 주인이 있어야 남의 명령을 거부할 수 있다
+    expect(result.commands.get('demo.scan')).toEqual({ extension: 'demo', handler: scan })
   })
 
   it('async activate 를 기다린다', async () => {
@@ -270,7 +271,7 @@ describe('loadExtensions — 명령 id 충돌', () => {
       }),
     })
 
-    expect(result.commands.get('shared.run')).toBe(firstHandler)
+    expect(result.commands.get('shared.run')).toEqual({ extension: 'first', handler: firstHandler })
     // 둘 다 실린 것은 맞다 — 충돌한 명령 하나만 버린다
     expect(result.loaded).toEqual(['first', 'second'])
     expect(log).toHaveBeenCalledWith(expect.stringContaining('shared.run'))

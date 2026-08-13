@@ -11,6 +11,7 @@ import type { ToastApi } from '../state/useToasts'
 import type { MouseGestureApi } from '../state/useMouseGesture'
 import type { OpenFilesApi } from '../state/useOpenFiles'
 import { SCM_TAB, type ScmViewHandle } from '../state/useScmView'
+import { useExtensionViewCommand } from '../state/useExtensionViewCommand'
 import type { SessionSlice } from '../state/sessionSlice'
 
 // 본문 한 갈래를 그린다 — 로그 탭 / 소스 관리 탭 / 파일·diff 탭 / 대화. 동시에 하나만 렌더된다.
@@ -40,6 +41,10 @@ export interface MainViewProps {
 
 export function MainView(props: MainViewProps) {
   const { logs, openFiles, gesture, slice, scrollRef } = props
+
+  // **분기보다 먼저 부른다.** 아래는 이른 반환이 여럿이라, 훅을 그 뒤에 두면
+  // 어느 갈래를 그리느냐에 따라 훅 순서가 달라진다.
+  const runExtensionCommand = useExtensionViewCommand(props.toasts.show)
 
   if (logs && openFiles.active === 'logs') {
     return (
@@ -93,6 +98,7 @@ export function MainView(props: MainViewProps) {
           onFlush={openFiles.flush}
           onSelection={openFiles.setSelection}
           onOpenPath={openFiles.open}
+          onRunCommand={runExtensionCommand}
         />
       </div>
     )

@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
+  EXTENSION_COMMAND_MESSAGE,
   EXTENSION_OPEN_MESSAGE,
   extensionHtmlDoc,
+  isCommandRequest,
   isOpenRequest,
   readPalette,
 } from './extensionHtmlDoc'
@@ -26,6 +28,17 @@ describe('확장 HTML 격리 문서', () => {
 
     expect(doc).toContain(EXTENSION_OPEN_MESSAGE)
     expect(doc).toContain('data-open')
+  })
+
+  it('명령 다리도 함께 심는다 — 이것이 없으면 탭 안의 단추가 안 눌린다', () => {
+    const doc = DOC('<p>hi</p>')
+
+    expect(doc).toContain(EXTENSION_COMMAND_MESSAGE)
+    expect(doc).toContain('data-command')
+  })
+
+  it('두 규약이 **다른 표식**을 쓴다 — 섞으면 받는 쪽이 경로인지 명령인지 추측하게 된다', () => {
+    expect(EXTENSION_COMMAND_MESSAGE).not.toBe(EXTENSION_OPEN_MESSAGE)
   })
 
   it('nonce 를 쓰지 않는다 — 쓰면 확장 스크립트가 통째로 죽는다', () => {
@@ -92,5 +105,35 @@ describe('테마 색 읽기', () => {
 
     expect(palette.bg).toBe('#0d1117')
     expect(palette.text).toBe('#e6edf3')
+  })
+})
+
+describe('명령 요청 판정', () => {
+  const ok = { type: EXTENSION_COMMAND_MESSAGE, commandId: 'screenScenario.find' }
+
+  it('규약대로 온 것만 받는다', () => {
+    expect(isCommandRequest(ok)).toBe(true)
+  })
+
+  it('남이 흉내 낸 모양은 버린다', () => {
+    expect(isCommandRequest(null)).toBe(false)
+    expect(isCommandRequest('돌려줘')).toBe(false)
+    expect(isCommandRequest({ commandId: 'a' })).toBe(false)
+    expect(isCommandRequest({ type: '다른것', commandId: 'a' })).toBe(false)
+    expect(isCommandRequest({ ...ok, commandId: '' })).toBe(false)
+    expect(isCommandRequest({ ...ok, commandId: 3 })).toBe(false)
+  })
+
+  it('열기 요청과 서로를 통과시키지 않는다', () => {
+    expect(isCommandRequest({ type: EXTENSION_OPEN_MESSAGE, path: 'a' })).toBe(false)
+    expect(isOpenRequest(ok)).toBe(false)
+  })
+
+  it('명령 id 말고는 아무것도 받지 않는다 — 인자를 실으면 일반 통로가 된다', () => {
+    // 모양 판정은 통과하되, 실린 여분은 **타입에 없다.** 이 시험은 계약을 적어 두는 자리다:
+    // 여기에 인자를 더하려면 `extensionPayloads.ts` 의 경계 판단부터 다시 봐야 한다.
+    const extra = { ...ok, args: { rm: '-rf' } } as Record<string, unknown>
+    expect(isCommandRequest(extra)).toBe(true)
+    expect(Object.keys(ok)).toEqual(['type', 'commandId'])
   })
 })

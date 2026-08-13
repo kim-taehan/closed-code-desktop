@@ -51,6 +51,18 @@ export interface ExtensionLoadFailed {
 export type CommandHandler = (selection?: unknown) => unknown
 
 /**
+ * 명령표의 값. **처리기와 주인을 함께 든다.**
+ *
+ * 주인을 같이 두는 이유: 이 표는 확장 전부가 나눠 쓰는 한 장이라 id 만으로는 누구 것인지
+ * 알 수 없다. 확장 화면에서 온 명령(`data-command`)은 「누구의 화면인가」가 함께 오므로,
+ * 자식이 여기 적힌 주인과 대조해 남의 명령을 거부한다 (`childHandlers.ts`).
+ */
+export interface RegisteredCommand {
+  extension: string
+  handler: CommandHandler
+}
+
+/**
  * 다시 그리기 처리기. 인자가 없다 — 확장은 `storage` 가 이미 활성 프로젝트로 풀리므로
  * 어느 프로젝트인지 따로 받을 것이 없다 (`hostPorts.ts` 의 `activeWhenUnknown`).
  */
@@ -84,8 +96,8 @@ export interface ActiveFileRef {
 export type ExtensionApiFor = (extensionName: string, extensionLabel: string) => ExtensionApi
 
 export interface ExtensionLoadResult {
-  /** 명령 id → 처리기. 확장 여러 개가 같은 id 를 선언하면 먼저 실린 쪽이 남는다. */
-  commands: Map<string, CommandHandler>
+  /** 명령 id → 처리기와 주인. 확장 여러 개가 같은 id 를 선언하면 먼저 실린 쪽이 남는다. */
+  commands: Map<string, RegisteredCommand>
   /** `activate` 가 `redraw` 를 돌려준 확장들. 선언 순서대로 돈다 */
   redraws: RedrawHandler[]
   /** `activate` 가 `onActiveFile` 을 돌려준 확장들. 선언 순서대로 돈다 */
@@ -116,7 +128,7 @@ export async function loadExtensions(
   apiFor: ExtensionApiFor,
   deps: LoadDeps,
 ): Promise<ExtensionLoadResult> {
-  const commands = new Map<string, CommandHandler>()
+  const commands = new Map<string, RegisteredCommand>()
   const redraws: RedrawHandler[] = []
   const activeFiles: ActiveFileHandler[] = []
   const loaded: string[] = []
@@ -174,7 +186,7 @@ export async function loadExtensions(
 
 /** activate 가 돌려준 `{ commands: { id: fn } }` 를 명령표에 담는다. 없어도 된다. */
 function addCommands(
-  commands: Map<string, CommandHandler>,
+  commands: Map<string, RegisteredCommand>,
   registration: unknown,
   source: ExtensionSource,
   log?: (line: string) => void,
@@ -187,7 +199,7 @@ function addCommands(
       log?.(`[확장] 명령 id 충돌로 건너뜀: ${id} (${source.manifest.name})`)
       continue
     }
-    commands.set(id, handler as CommandHandler)
+    commands.set(id, { extension: source.manifest.name, handler: handler as CommandHandler })
   }
 }
 

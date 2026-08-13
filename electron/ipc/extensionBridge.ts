@@ -57,7 +57,12 @@ export interface ExtensionSource {
     skipped: { dir: string; reason: string; detail?: string }[]
   }>
   /** 두 번째 인자는 **명령을 건 프로젝트**다 — 그 실행에서 나온 행의 겉봉이 된다. */
-  runCommand(commandId: string, projectId: string | null, selection?: unknown): Promise<void>
+  runCommand(
+    commandId: string,
+    projectId: string | null,
+    selection?: unknown,
+    extension?: string,
+  ): Promise<void>
   /**
    * 저장된 것을 지금 프로젝트 기준으로 다시 그리게 한다. **화면이 붙은 뒤 화면이 부른다** —
    * 확장의 활성화 시점 그리기는 화면보다 먼저 끝날 수 있고, 밀어 넣기는 재생되지 않는다.
@@ -158,7 +163,13 @@ export class ExtensionBridge {
     // 겉봉은 **여기서** 굳는다. 명령이 끝날 때 활성 프로젝트를 다시 조회하면, 오래 걸리는
     // 명령이 도는 중에 탭을 옮겼을 때 결과가 엉뚱한 탭에 그려진다.
     ipcMain.handle(Channel.EXTENSION_RUN_COMMAND, (_event, payload: ExtensionRunCommandPayload) =>
-      this.options.service.runCommand(payload.commandId, this.options.activeProjectId(), payload.selection),
+      this.options.service.runCommand(
+        payload.commandId,
+        this.options.activeProjectId(),
+        payload.selection,
+        // 확장 화면에서 온 명령에만 실린다. 자식이 이것으로 주인을 확인한다
+        payload.extension,
+      ),
     )
 
     // **화면이 요청한다.** 확장의 활성화 시점 그리기는 화면이 붙기 전에 끝날 수 있고,

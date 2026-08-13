@@ -8,7 +8,7 @@ import {
 } from './rpc'
 import {
   loadExtensions,
-  type CommandHandler,
+  type RegisteredCommand,
   type ExtensionApiFor,
   type ExtensionSource,
   type LoadDeps,
@@ -31,7 +31,7 @@ import type { ActiveFileRef } from './extensionLoader'
  * 삼키면 부모의 await 가 영원히 걸린다.
  */
 export function createChildHandler(apiFor: ExtensionApiFor, deps: LoadDeps): (request: RpcRequest) => Promise<unknown> {
-  let commands = new Map<string, CommandHandler>()
+  let commands = new Map<string, RegisteredCommand>()
   let redraws: RedrawHandler[] = []
   let activeFiles: ActiveFileHandler[] = []
 
@@ -50,11 +50,23 @@ export function createChildHandler(apiFor: ExtensionApiFor, deps: LoadDeps): (re
       const commandId = asRecord(request.params)['commandId']
       if (typeof commandId !== 'string') throw new Error('commandId 가 문자열이 아닙니다')
 
-      const handler = commands.get(commandId)
-      if (!handler) throw new Error(`등록되지 않은 명령입니다: ${commandId}`)
+      const registered = commands.get(commandId)
+      if (!registered) throw new Error(`등록되지 않은 명령입니다: ${commandId}`)
+
+      // **주인 확인.** 확장 화면에서 온 명령에만 `extension` 이 실린다 — 그 화면을 낸
+      // 확장이다. 명령표는 확장 전부가 나눠 쓰는 한 장이라, 대조하지 않으면 확장 A 의
+      // 화면이 확장 B 의 명령을 돌릴 수 있다.
+      //
+      // **안 실려 오면 확인하지 않는다.** 사이드바 단추가 그 경로이고 거기는 앱이 그린
+      // 화면이라 확장이 id 를 지어낼 자리가 없다. 옛 경로를 이번에 바꾸지 않는다.
+      const owner = asRecord(request.params)['extension']
+      if (typeof owner === 'string' && owner !== registered.extension) {
+        throw new Error(`남의 확장 명령입니다: ${commandId} (${registered.extension})`)
+      }
+
       // 확장이 async 로 써도 끝까지 기다린다 — 안 기다리면 부모가 완료를 오해한다.
       // `selection` 은 사용자가 화면에서 고른 것이고, 없으면 undefined 다.
-      return await handler(asRecord(request.params)['selection'])
+      return await registered.handler(asRecord(request.params)['selection'])
     }
 
     if (request.method === METHOD_REDRAW) {

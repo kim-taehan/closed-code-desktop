@@ -41,7 +41,7 @@ export function htmlTabKey(extensionName: string, viewId: string): string {
 export function useOpenHtmlTab(
   setFiles: Dispatch<SetStateAction<OpenFile[]>>,
   setActive: Dispatch<SetStateAction<ActiveTab>>,
-): (key: string, label: string, html: string, focus?: boolean) => void {
+): (key: string, label: string, html: string, focus?: boolean, extension?: string) => void {
   /**
    * 이 창에서 **한 번이라도 연** 확장 화면 키.
    *
@@ -55,11 +55,14 @@ export function useOpenHtmlTab(
   const opened = useRef(new Set<string>())
 
   return useCallback(
-    (key, label, html, focus) => {
+    (key, label, html, focus, extension) => {
+      // `extension` 은 **맨 뒤에 붙였다.** 앞에 끼우면 이 함수를 부르는 곳과 시험이 전부
+      // 자리를 밀어야 하는데, 그 이동은 이번 변경(`data-command`)과 아무 상관이 없다.
+      const owner = extension !== undefined ? { extension } : {}
       setFiles((current) =>
         current.some((file) => file.path === key)
-          ? current.map((file) => (file.path === key ? { ...file, html, label } : file))
-          : [...current, { path: key, text: '', label, html }],
+          ? current.map((file) => (file.path === key ? { ...file, html, label, ...owner } : file))
+          : [...current, { path: key, text: '', label, html, ...owner }],
       )
       // 눌러서 연 것은 **늘** 앞으로 온다. 밀려온 갱신은 처음 한 번만
       if (focus !== true && opened.current.has(key)) return

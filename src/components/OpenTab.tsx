@@ -17,13 +17,36 @@ export interface OpenTabProps {
   onSelection?: (path: string, range: EditorSelection | null) => void
   /** 확장 화면이 `data-open` 으로 요청한 파일 열기. 확장 화면 탭에서만 쓰인다. */
   onOpenPath?: (path: string, line?: number) => void
+  /**
+   * 확장 화면이 `data-command` 로 요청한 명령. **주인 확장을 함께 넘긴다.**
+   *
+   * 주인을 모르면 아무 데도 안 보낸다 — 탭에 `extension` 이 없다는 것은 그 화면을 누가
+   * 냈는지 모른다는 뜻이고, 그때 명령을 그냥 흘리면 **어느 확장이든 돌 수 있는 통로**가 된다.
+   */
+  onRunCommand?: (extension: string, commandId: string) => void
 }
 
-export function OpenTab({ file, onEdit, onFlush, onSelection, onOpenPath }: OpenTabProps) {
+export function OpenTab({
+  file,
+  onEdit,
+  onFlush,
+  onSelection,
+  onOpenPath,
+  onRunCommand,
+}: OpenTabProps) {
   // 확장 화면이 가장 먼저다 — 파일도 diff 도 아니고, **호스트는 내용을 모른다.**
   // 격리(iframe·CSP·링크 중계)는 `ExtensionHtmlView` 가 통째로 진다.
   if (file.html !== undefined) {
-    return <ExtensionHtmlView html={file.html} onOpen={onOpenPath ?? (() => {})} />
+    const owner = file.extension
+    return (
+      <ExtensionHtmlView
+        html={file.html}
+        onOpen={onOpenPath ?? (() => {})}
+        {...(owner !== undefined && onRunCommand
+          ? { onCommand: (commandId: string) => onRunCommand(owner, commandId) }
+          : {})}
+      />
+    )
   }
 
   if (file.rows === undefined)

@@ -160,9 +160,14 @@ export class ExtensionService {
   // 아래 셋은 `serviceInvoke.ts` 에 위임한다. **여기서 하는 일은 `settled()` 하나** —
   // 싣기가 끝나기 전에 걸면 자식에 명령표가 없어 빈손으로 거부된다.
 
-  async runCommand(commandId: string, projectId: string | null, selection?: unknown): Promise<void> {
+  async runCommand(
+    commandId: string,
+    projectId: string | null,
+    selection?: unknown,
+    extension?: string,
+  ): Promise<void> {
     await this.settled()
-    await this.invoke.runCommand(commandId, projectId, selection)
+    await this.invoke.runCommand(commandId, projectId, selection, extension)
   }
 
   async redraw(projectId: string | null): Promise<void> {
