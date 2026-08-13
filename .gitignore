@@ -25,14 +25,18 @@ _workspace/
 tools/extension-registry/store/
 dist-extensions/
 
-# 확장 자체는 이 레포에 담지 않는다.
-# 앱은 확장을 ~/.davis-code/desktop-extensions 에서 읽고
-# (DAVIS_EXTENSIONS_DIR 로 덮어씀, electron/extensions/registry.ts:51),
-# 여기 있는 소스는 빌드에도 실행에도 쓰이지 않는다.
+# 확장 소스(`/extensions/`)를 **담는다** (2026-08-13 에 뒤집었다).
 #
-# 앞의 `/` 는 **레포 루트 고정**이다. 빼면 `electron/extensions/`·`shared/extensions/`
-# 처럼 이름이 같은 소스 디렉토리까지 통째로 무시된다.
-/extensions/
+# 원래는 무시했고 사유가 이랬다: "앱은 확장을 홈 디렉토리에서 읽고
+# (OPEN_CODE_EXTENSIONS_DIR 로 덮어씀, electron/extensions/registry.ts),
+# 여기 있는 소스는 빌드에도 실행에도 쓰이지 않는다."
+#
+# 그것은 **남의 확장**을 두던 시절의 규칙이다. 우리가 만들어 계속 고칠 확장이 생겼고
+# (확장 4호 「화면 시나리오」), 그 소스는 앱과 같이 버전 관리한다. 무시된 채로 두면
+# 날리는 순간 끝이고, `npm run ext:pack extensions/<이름>` 도 레포 밖 파일에 기댄다.
+#
+# 여전히 사실인 것: 앱은 이 폴더에서 확장을 읽지 않는다. 실행에 쓰이려면 패키징해서
+# 설치해야 한다. 빌드 산출물은 위의 `dist-extensions/` 로 나가 무시된다.
 
 # 파이썬 산출물 (확장 시험 중 생김)
 __pycache__/
