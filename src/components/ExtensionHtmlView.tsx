@@ -27,7 +27,7 @@ export interface ExtensionHtmlViewProps {
    * 안다 해도 화면에서 거르는 것은 방어가 아니다 — 확인은 명령표를 쥔 자식이 한다
    * (`electron/extensions/childHandlers.ts`). 여기는 부르는 쪽에 그대로 올린다.
    */
-  onCommand?: (commandId: string) => void
+  onCommand?: (commandId: string, target?: string) => void
 }
 
 /** 등록 결과. 실패를 `null` 로 뭉뚱그리지 않는다 — 준비 중과 실패가 같아 보이면 안 된다. */
@@ -79,7 +79,7 @@ export function ExtensionHtmlView({ html, onOpen, onCommand }: ExtensionHtmlView
         onOpen(event.data.path, event.data.line)
         return
       }
-      if (isCommandRequest(event.data)) onCommand?.(event.data.commandId)
+      if (isCommandRequest(event.data)) onCommand?.(event.data.commandId, event.data.target)
     }
     window.addEventListener('message', handle)
     return () => window.removeEventListener('message', handle)

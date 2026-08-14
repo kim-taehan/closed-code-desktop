@@ -23,7 +23,7 @@ export interface OpenTabProps {
    * 주인을 모르면 아무 데도 안 보낸다 — 탭에 `extension` 이 없다는 것은 그 화면을 누가
    * 냈는지 모른다는 뜻이고, 그때 명령을 그냥 흘리면 **어느 확장이든 돌 수 있는 통로**가 된다.
    */
-  onRunCommand?: (extension: string, commandId: string) => void
+  onRunCommand?: (extension: string, commandId: string, target?: string) => void
 }
 
 export function OpenTab({
@@ -43,7 +43,7 @@ export function OpenTab({
         html={file.html}
         onOpen={onOpenPath ?? (() => {})}
         {...(owner !== undefined && onRunCommand
-          ? { onCommand: (commandId: string) => onRunCommand(owner, commandId) }
+          ? { onCommand: (commandId: string, target?: string) => onRunCommand(owner, commandId, target) }
           : {})}
       />
     )

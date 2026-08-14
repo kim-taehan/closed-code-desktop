@@ -5,13 +5,52 @@
   "version": "0.1.0",
   "main": "main.js",
   "description": "화면마다 테스트 시나리오를 만들어 표로 봅니다",
-  "engines": { "code": "^0.1.0" },
+  "engines": {
+    "code": "^0.1.0"
+  },
   "contributes": {
     "commands": [
-      { "id": "screenScenario.open", "title": "화면 시나리오 열기" },
-      { "id": "screenScenario.find", "title": "화면 찾기", "placement": "header" },
-      { "id": "screenScenario.add", "title": "화면 더하기", "placement": "menu" }
+      {
+        "id": "screenScenario.open",
+        "title": "화면 시나리오 열기"
+      },
+      {
+        "id": "screenScenario.find",
+        "title": "화면 찾기",
+        "placement": "header"
+      },
+      {
+        "id": "screenScenario.add",
+        "title": "화면 더하기",
+        "placement": "menu"
+      },
+      {
+        "id": "screenScenario.writeMissing",
+        "title": "없는 것 만들기",
+        "placement": "menu"
+      },
+      {
+        "id": "screenScenario.write",
+        "title": "시나리오 만들기",
+        "placement": "menu"
+      },
+      {
+        "id": "screenScenario.fix",
+        "title": "확정으로",
+        "placement": "menu"
+      },
+      {
+        "id": "screenScenario.unfix",
+        "title": "초안으로",
+        "placement": "menu"
+      }
     ],
-    "views": [{ "id": "screenScenario.board", "title": "화면 시나리오", "kind": "html" }]
+    "views": [
+      {
+        "id": "screenScenario.board",
+        "title": "화면 시나리오",
+        "kind": "html"
+      }
+    ]
   }
 }

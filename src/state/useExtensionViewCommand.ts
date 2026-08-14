@@ -13,11 +13,12 @@ import { useCallback } from 'react'
 export function useExtensionViewCommand(
   /** 실패를 알린다 (`useToasts.show`). 화면에 흔적이 안 남는 실패라 알려야 한다. */
   notify: (text: string, tone?: 'info' | 'error') => void,
-): (extension: string, commandId: string) => void {
+): (extension: string, commandId: string, target?: string) => void {
   return useCallback(
-    (extension, commandId) => {
+    (extension, commandId, target) => {
       void window.davis
-        .runExtensionCommand({ commandId, extension })
+        // 대상은 **기존 `selection` 계약**으로 간다 — 화면에서 고른 것을 나르는 그 자리다
+        .runExtensionCommand({ commandId, extension, ...(target !== undefined ? { selection: [target] } : {}) })
         // 거절을 다시 던지지 않는다 — 알리는 일은 여기서 끝났다
         // (`useExtensionPanel.runCommand` 와 같은 규칙).
         .catch((error: unknown) => {

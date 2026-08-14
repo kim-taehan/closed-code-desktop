@@ -35,6 +35,8 @@ describe('확장 HTML 격리 문서', () => {
 
     expect(doc).toContain(EXTENSION_COMMAND_MESSAGE)
     expect(doc).toContain('data-command')
+    // 대상까지 실어야 「이 화면을 만들어라」가 성립한다 (2026-08-14)
+    expect(doc).toContain('data-arg')
   })
 
   it('두 규약이 **다른 표식**을 쓴다 — 섞으면 받는 쪽이 경로인지 명령인지 추측하게 된다', () => {
@@ -129,11 +131,11 @@ describe('명령 요청 판정', () => {
     expect(isOpenRequest(ok)).toBe(false)
   })
 
-  it('명령 id 말고는 아무것도 받지 않는다 — 인자를 실으면 일반 통로가 된다', () => {
-    // 모양 판정은 통과하되, 실린 여분은 **타입에 없다.** 이 시험은 계약을 적어 두는 자리다:
-    // 여기에 인자를 더하려면 `extensionPayloads.ts` 의 경계 판단부터 다시 봐야 한다.
-    const extra = { ...ok, args: { rm: '-rf' } } as Record<string, unknown>
-    expect(isCommandRequest(extra)).toBe(true)
-    expect(Object.keys(ok)).toEqual(['type', 'commandId'])
+  it('대상은 **문자열 하나**만 받는다', () => {
+    expect(isCommandRequest({ ...ok, target: 'src/A.tsx' })).toBe(true)
+    // 객체·배열을 받기 시작하면 확장 화면이 확장에 무엇이든 보내는 일반 통로가 된다
+    expect(isCommandRequest({ ...ok, target: { rm: '-rf' } })).toBe(false)
+    expect(isCommandRequest({ ...ok, target: ['a', 'b'] })).toBe(false)
+    expect(isCommandRequest({ ...ok, target: 3 })).toBe(false)
   })
 })

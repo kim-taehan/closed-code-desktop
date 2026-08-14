@@ -65,3 +65,44 @@ function toScreen(item) {
 }
 
 module.exports = { parseScreens, jsonBlock, toScreen }
+
+/**
+ * 시나리오 답에서 케이스를 꺼낸다. 규칙은 `parseScreens` 와 같다 — 못 읽으면 오류다.
+ *
+ * **단계 번호는 우리가 매긴다.** 모델이 넣어 준 번호는 건너뛰거나 겹치는데,
+ * 표에서 그것이 그대로 보이면 사람이 빠진 단계를 찾는다.
+ */
+function parseCases(answer) {
+  const block = jsonBlock(typeof answer === 'string' ? answer : '')
+  if (block === null) return { ok: false, reason: 'JSON 을 찾지 못했습니다' }
+
+  let parsed
+  try {
+    parsed = JSON.parse(block)
+  } catch (error) {
+    return { ok: false, reason: `JSON 을 읽지 못했습니다: ${error.message}` }
+  }
+
+  const list = parsed && typeof parsed === 'object' ? parsed.cases : null
+  if (!Array.isArray(list)) return { ok: false, reason: '`cases` 배열이 없습니다' }
+
+  const cases = list.map(toCase).filter(Boolean).map((one, at) => ({ ...one, step: at + 1 }))
+  if (cases.length === 0 && list.length > 0) return { ok: false, reason: '항목에 `action` 이 없습니다' }
+  return { ok: true, cases }
+}
+
+/** 케이스 하나. **`action` 이 없으면 버린다** — 무엇을 하는지가 없으면 단계가 아니다. */
+function toCase(item) {
+  if (item === null || typeof item !== 'object') return null
+  const action = typeof item.action === 'string' ? item.action.trim() : ''
+  if (action === '') return null
+  return {
+    step: 0,
+    action,
+    input: typeof item.input === 'string' ? item.input.trim() : '',
+    expect: typeof item.expect === 'string' ? item.expect.trim() : '',
+  }
+}
+
+module.exports.parseCases = parseCases
+module.exports.toCase = toCase

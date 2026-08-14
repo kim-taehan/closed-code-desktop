@@ -27,6 +27,7 @@ function boardHtml(screens, selectedId) {
     <div class="sc-actions">
       <button type="button" data-command="screenScenario.find">화면 찾기</button>
       <button type="button" data-command="screenScenario.add">화면 더하기</button>
+      <button type="button" data-command="screenScenario.writeMissing">없는 것 만들기</button>
     </div>
     <div class="sc-rows">${screens.map((one) => rowHtml(one, selected)).join('')}</div>
   </div>
@@ -73,14 +74,39 @@ function detailHtml(screen) {
 <p class="sc-meta"><a data-open="${esc(screen.id)}">${esc(screen.id)}</a> · 케이스 ${screen.cases.length}</p>`
 
   if (screen.cases.length === 0) {
-    return `${head}<p class="muted sc-empty">시나리오가 아직 없습니다.</p>`
+    return `${head}
+<p class="muted sc-empty">시나리오가 아직 없습니다.</p>
+${actions(screen)}`
   }
 
   return `${head}
 <table>
   <tr><th></th><th>조작</th><th>입력</th><th>기대 결과</th></tr>
   ${screen.cases.map(caseRow).join('')}
-</table>`
+</table>
+${actions(screen)}`
+}
+
+/**
+ * 그 화면에 거는 명령들. **대상은 `data-arg` 로 함께 간다** — 화면 안에서 고른 것은
+ * 문서에 머물러 확장이 모르기 때문이다 (`extensionHtmlDoc.ts` 의 `data-arg`).
+ *
+ * 「다시 만들기」는 **확정을 초안으로 내린다**는 것을 눌리기 전에 말한다 (설계 §3.4).
+ */
+function actions(screen) {
+  const write = screen.cases.length === 0 ? '시나리오 만들기' : '다시 만들기'
+  const warn = screen.state === FIXED ? ' title="다시 만들면 확정이 초안으로 내려갑니다"' : ''
+  const state =
+    screen.state === FIXED
+      ? `<button type="button" data-command="screenScenario.unfix" data-arg="${esc(screen.id)}">초안으로</button>`
+      : screen.cases.length === 0
+        ? ''
+        : `<button type="button" data-command="screenScenario.fix" data-arg="${esc(screen.id)}">확정으로</button>`
+
+  return `<div class="sc-actions sc-actions--main">
+  <button type="button" data-command="screenScenario.write" data-arg="${esc(screen.id)}"${warn}>${write}</button>
+  ${state}
+</div>`
 }
 
 function caseRow(one, at) {
@@ -132,6 +158,7 @@ const STYLE = `<style>
     border: 1px solid currentColor; opacity: 0.85;
   }
   .sc-main { overflow: auto; min-width: 0; padding: 12px 14px; }
+  .sc-actions--main { border: none; padding: 12px 0 0; }
   .sc-title { margin: 0 0 2px; font-size: 15px; }
   .sc-meta {
     margin: 0 0 12px; font-size: 11px;

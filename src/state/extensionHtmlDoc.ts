@@ -47,9 +47,20 @@ export interface ExtensionOpenRequest {
   line?: number
 }
 
-/** 부모가 받는 명령 요청. 실을 수 있는 것은 **명령 id 하나뿐이다** (`isCommandRequest`). */
+/**
+ * 부모가 받는 명령 요청.
+ *
+ * 실을 수 있는 것은 **명령 id 와 대상 하나**다. 대상은 호스트의 기존 계약인
+ * `selection`(사용자가 고른 것)으로 그대로 흘러간다 — 새 통로를 내지 않는다.
+ *
+ * 왜 대상이 필요한가 (2026-08-14 실측): 확장 화면 안에서 고른 것은 **문서 안에 머문다**.
+ * 그래서 「이 화면의 시나리오를 만들어라」 같은 명령이 대상 없이 성립하지 않았다.
+ * 처음에는 id 하나만 통과시켰는데, 그러면 확장이 만들 수 있는 것이 「전부에 대해」뿐이다.
+ */
 export interface ExtensionCommandRequest {
   commandId: string
+  /** 그 명령이 겨누는 것 하나 (없을 수 있다). 문자열 말고는 안 받는다. */
+  target?: string
 }
 
 /**
@@ -128,15 +139,17 @@ export function isOpenRequest(data: unknown): data is ExtensionOpenRequest & { t
 /**
  * 부모가 받은 메시지가 명령 요청인가. `isOpenRequest` 와 같은 관례 — 모양만 본다.
  *
- * **명령 id 말고는 아무것도 받지 않는다.** 인자를 실을 수 있게 하면 확장 화면이 확장에
- * 임의의 값을 보내는 일반 통로가 되고, 그것이 `extensionPayloads.ts` 가 경계했던 자리다.
- * 화면에서 고른 것은 지금처럼 `selection` 으로 간다.
+ * **받는 것은 명령 id 와 대상 문자열 하나뿐이다.** 임의의 객체를 실을 수 있게 하면 확장
+ * 화면이 확장에 무엇이든 보내는 일반 통로가 되고, 그것이 `extensionPayloads.ts` 가
+ * 경계했던 자리다. 대상은 새 통로가 아니라 **기존 `selection` 계약**으로 흘러간다.
  */
 export function isCommandRequest(data: unknown): data is ExtensionCommandRequest & { type: string } {
   if (data === null || typeof data !== 'object') return false
   const record = data as Record<string, unknown>
   if (record['type'] !== EXTENSION_COMMAND_MESSAGE) return false
-  return typeof record['commandId'] === 'string' && record['commandId'] !== ''
+  if (typeof record['commandId'] !== 'string' || record['commandId'] === '') return false
+  const target = record['target']
+  return target === undefined || typeof target === 'string'
 }
 
 /**
@@ -146,7 +159,8 @@ export function isCommandRequest(data: unknown): data is ExtensionCommandRequest
  *
  * - `data-open="상대경로"` (+ 선택 `data-line`) — 파일을 연다. 표 뷰의 행 클릭 규약
  *   (`extensionRowTarget.ts` 의 `file`·`line`)과 같은 모양으로 맞췄다
- * - `data-command="명령 id"` — **그 화면 주인 확장의** 명령을 돌린다 (2026-08-13 추가)
+ * - `data-command="명령 id"` — **그 화면 주인 확장의** 명령을 돌린다 (2026-08-13 추가).
+ *   같은 마디의 `data-arg` 는 **그 명령이 겨누는 것 하나**로 함께 간다 (2026-08-14 추가)
  *
  * 한 마디가 둘 다 달고 있으면 **`data-open` 이 이긴다** — 파일 열기가 되돌리기 쉬운 쪽이다.
  *
@@ -175,7 +189,10 @@ document.addEventListener('click', function (event) {
   var running = node.closest('[data-command]');
   var commandId = running ? running.getAttribute('data-command') : null;
   if (!commandId) return;
-  parent.postMessage({ type: '${EXTENSION_COMMAND_MESSAGE}', commandId: commandId }, '*');
+  var run = { type: '${EXTENSION_COMMAND_MESSAGE}', commandId: commandId };
+  var arg = running.getAttribute('data-arg');
+  if (arg) run.target = arg;
+  parent.postMessage(run, '*');
 });
 `
 

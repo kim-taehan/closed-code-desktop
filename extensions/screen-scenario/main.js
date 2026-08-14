@@ -1,8 +1,8 @@
 const store = require('./core/store')
 const { boardHtml } = require('./core/render/list')
-const { parseScreens } = require('./core/parse')
+const { parseScreens, parseCases } = require('./core/parse')
 const { mergeScreens } = require('./core/merge')
-const { findPrompt, refindPrompt } = require('./core/prompt')
+const { findPrompt, refindPrompt, writePrompt } = require('./core/prompt')
 
 // 확장 4호 「화면 시나리오」 — 설계:
 // `docs/superpowers/specs/2026-08-13-screen-scenario-extension-design.md`
@@ -122,16 +122,104 @@ function activate(code) {
     })
   }
 
+  /**
+   * 화면 하나의 시나리오를 쓴다. **한 번에 한 턴이다.**
+   *
+   * @returns 계속해도 되는가 — 사용자가 끊었으면 `false` 이고, 부르는 쪽은 거기서 멈춘다.
+   *   확장이 남은 것을 계속 보내면, 끊은 사람이 대화창에서 같은 질문을 또 보게 된다.
+   */
+  async function writeOne(screen, at, total) {
+    code.progress(`${screen.name} 시나리오를 쓰는 중입니다…`, at, total)
+    const answer = await code.chat.ask(writePrompt(screen))
+
+    if (answer.status === 'cancelled') {
+      // **거기까지 만든 것은 남는다** — 앞 화면들은 이미 저장했다 (설계 §3.3)
+      code.progress('멈췄습니다. 여기까지 만든 것은 남아 있습니다', undefined, undefined, { kind: 'note' })
+      return false
+    }
+    if (answer.status !== 'done') {
+      code.progress(`${screen.name}: ${answer.reason}`, undefined, undefined, { kind: 'fail' })
+      return true
+    }
+
+    const read = parseCases(answer.text)
+    if (!read.ok) {
+      code.progress(`${screen.name}: 시나리오를 못 읽었습니다 (${read.reason}) — 대화창의 답을 보세요`, undefined, undefined, {
+        kind: 'fail',
+      })
+      return true
+    }
+
+    // **한 화면씩 저장한다.** 전부 끝나고 한 번에 쓰면 도중에 끊긴 것이 통째로 사라진다.
+    const screens = await store.load(code)
+    await store.save(
+      code,
+      screens.map((one) =>
+        one.id === screen.id ? { ...one, cases: read.cases, state: store.DRAFT } : one,
+      ),
+    )
+    await draw()
+    code.progress(`${screen.name} — 케이스 ${read.cases.length}`, at + 1, total, { kind: 'done' })
+    return true
+  }
+
+  /** 고른 화면 하나 (`data-arg` 로 온다). 없으면 아무것도 안 한다. */
+  async function write(target) {
+    const screens = await store.load(code)
+    const screen = screens.find((one) => one.id === target)
+    if (screen === undefined) return
+    await writeOne(screen, 0, 1)
+  }
+
+  /**
+   * 아직 없는 것만 만든다. **이미 있는 것은 건드리지 않는다** — 「전체」가 사람이 확정해 둔
+   * 시나리오까지 갈아치우면 한 번의 오조작으로 전부 날아간다. 다시 만들려면 하나씩 누른다.
+   */
+  async function writeMissing() {
+    const screens = await store.load(code)
+    const todo = screens.filter((one) => one.cases.length === 0)
+    if (todo.length === 0) {
+      code.progress('시나리오가 없는 화면이 없습니다', undefined, undefined, { kind: 'note' })
+      return
+    }
+    for (let at = 0; at < todo.length; at += 1) {
+      // 큐를 확장이 쥔다 — `chat.ask` 는 사용자 큐를 타지만 **여러 화면을 한꺼번에 밀면**
+      // 대화창이 질문으로 가득 찬다. 앞이 끝나야 다음을 보낸다.
+      const go = await writeOne(todo[at], at, todo.length)
+      if (!go) return
+    }
+  }
+
+  /** 상태를 사람이 올리고 내린다. 확정은 「내가 읽어 봤다」는 뜻이라 사람만 건다. */
+  async function setState(target, next) {
+    const screens = await store.load(code)
+    await store.save(
+      code,
+      screens.map((one) => (one.id === target ? { ...one, state: next } : one)),
+    )
+    await draw()
+  }
+
   return {
     commands: {
       // 주 행동 — 사이드바 아래 고정 바에 뜬다. 누르면 본문 탭이 앞으로 온다
       'screenScenario.open': () => draw(),
       'screenScenario.find': () => find(),
       'screenScenario.add': () => add(),
+      // 아래 셋은 **화면 안에서** 걸린다. 겨누는 대상은 `data-arg` → `selection[0]` 로 온다
+      'screenScenario.write': (selection) => write(first(selection)),
+      'screenScenario.writeMissing': () => writeMissing(),
+      'screenScenario.fix': (selection) => setState(first(selection), store.FIXED),
+      'screenScenario.unfix': (selection) => setState(first(selection), store.DRAFT),
     },
     // 화면이 붙은 뒤 앱이 부른다 (`METHOD_REDRAW`). 프로젝트를 옮겨도 여기로 다시 온다
     redraw: () => draw(),
   }
+}
+
+/** `selection` 은 배열로 온다 (호스트 계약). 우리 화면은 늘 하나만 싣는다. */
+function first(selection) {
+  return Array.isArray(selection) && typeof selection[0] === 'string' ? selection[0] : ''
 }
 
 module.exports = { activate }
