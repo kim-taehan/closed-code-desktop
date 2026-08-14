@@ -43,7 +43,11 @@ function memoryStorage(seed?: unknown[]) {
 }
 
 /** 답을 **순서대로** 돌려준다. 모자라면 마지막 것을 되쓴다. */
-function startService(answers: AskResult[], seed?: unknown[]) {
+function startService(
+  answers: AskResult[],
+  seed?: unknown[],
+  saveFile?: (name: string, text: string) => Promise<string | null>,
+) {
   const storage = memoryStorage(seed)
   const notes: string[] = []
   let at = 0
@@ -59,6 +63,7 @@ function startService(answers: AskResult[], seed?: unknown[]) {
     workspace: new ExtensionWorkspace(() => ({ active: project, openProjects: [project] })),
     storage,
     ask,
+    ...(saveFile ? { exportFile: saveFile } : {}),
   })
   service.onProgress((payload) => {
     if (payload.text !== null && payload.text !== undefined) notes.push(payload.text)
@@ -187,6 +192,59 @@ describe('상태는 사람이 올리고 내린다', () => {
     await service.runCommand('screenScenario.write', 'p1', ['src/A.tsx'])
 
     expect(saved(storage)[0]).toMatchObject({ state: 'draft' })
+    service.dispose()
+  })
+})
+
+describe('MD 내보내기', () => {
+  it('저장한 문서에 화면과 케이스가 그대로 담긴다', async () => {
+    const seed = [
+      screen('src/A.tsx', {
+        name: '주문 목록',
+        state: 'fixed',
+        cases: [{ step: 1, action: '조회', input: 'role=viewer', expect: '목록' }],
+      }),
+      screen('src/B.tsx', { name: '빈 화면' }),
+    ]
+    const saveFile = vi.fn((_name: string, _text: string) => Promise.resolve('/어딘가/화면-시나리오.md'))
+    const { service } = startService([done(CASES)], seed, saveFile)
+
+    await service.runCommand('screenScenario.export', 'p1')
+
+    const [name, text] = saveFile.mock.calls[0] ?? []
+    expect(name).toBe('화면-시나리오.md')
+    expect(text).toContain('## 주문 목록')
+    expect(text).toContain('| 1 | 조회 | role=viewer | 목록 |')
+    // **빈 화면도 적는다** — 빼면 문서만 보는 사람은 그 화면이 없는 줄 안다
+    expect(text).toContain('## 빈 화면')
+    expect(text).toContain('시나리오가 아직 없습니다')
+    service.dispose()
+  })
+
+  it('창을 닫으면 조용히 끝난다 — 취소는 실패가 아니다', async () => {
+    const saveFile = vi.fn((_name: string, _text: string) => Promise.resolve(null))
+    const { service, notes } = startService([done(CASES)], [screen('src/A.tsx')], saveFile)
+
+    await service.runCommand('screenScenario.export', 'p1')
+
+    expect(saveFile).toHaveBeenCalledTimes(1)
+    expect(notes.join(' ')).not.toContain('저장했습니다')
+    service.dispose()
+  })
+
+  it('표를 깨뜨리는 글자를 막는다 — 세로줄과 줄바꿈', async () => {
+    // 에이전트가 실제로 쓰는 문장이다: "A | B 중 하나", 여러 줄 기대결과
+    const seed = [
+      screen('src/A.tsx', { cases: [{ step: 1, action: 'A | B', input: '', expect: '첫 줄\n둘째 줄' }] }),
+    ]
+    const saveFile = vi.fn((_name: string, _text: string) => Promise.resolve('/어딘가.md'))
+    const { service } = startService([done(CASES)], seed, saveFile)
+
+    await service.runCommand('screenScenario.export', 'p1')
+
+    const text = String(saveFile.mock.calls[0]?.[1] ?? '')
+    expect(text).toContain('A \\| B')
+    expect(text).toContain('첫 줄<br>둘째 줄')
     service.dispose()
   })
 })

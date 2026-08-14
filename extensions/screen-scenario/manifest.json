@@ -43,6 +43,11 @@
         "id": "screenScenario.unfix",
         "title": "초안으로",
         "placement": "menu"
+      },
+      {
+        "id": "screenScenario.export",
+        "title": "MD 로 저장",
+        "placement": "menu"
       }
     ],
     "views": [

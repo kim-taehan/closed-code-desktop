@@ -28,6 +28,7 @@ function boardHtml(screens, selectedId) {
       <button type="button" data-command="screenScenario.find">화면 찾기</button>
       <button type="button" data-command="screenScenario.add">화면 더하기</button>
       <button type="button" data-command="screenScenario.writeMissing">없는 것 만들기</button>
+      <button type="button" data-command="screenScenario.export">MD 로 저장</button>
     </div>
     <div class="sc-rows">${screens.map((one) => rowHtml(one, selected)).join('')}</div>
   </div>

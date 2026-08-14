@@ -3,6 +3,7 @@ const { boardHtml } = require('./core/render/list')
 const { parseScreens, parseCases } = require('./core/parse')
 const { mergeScreens } = require('./core/merge')
 const { findPrompt, refindPrompt, writePrompt } = require('./core/prompt')
+const { scenariosMarkdown } = require('./core/render/markdown')
 
 // 확장 4호 「화면 시나리오」 — 설계:
 // `docs/superpowers/specs/2026-08-13-screen-scenario-extension-design.md`
@@ -190,6 +191,19 @@ function activate(code) {
     }
   }
 
+  /**
+   * 지금 목록 전부를 마크다운 한 장으로 내보낸다.
+   *
+   * **취소는 실패가 아니다** — 사용자가 저장 창을 닫으면 `null` 이 오고, 그때 오류를 띄우면
+   * 「안 했다」가 「못 했다」로 보인다 (`code.export.save` 계약).
+   */
+  async function exportMarkdown() {
+    const screens = await store.load(code)
+    const saved = await code.export.save('화면-시나리오.md', scenariosMarkdown(screens, today()))
+    if (saved === null) return
+    code.progress(`저장했습니다: ${saved}`, undefined, undefined, { kind: 'done' })
+  }
+
   /** 상태를 사람이 올리고 내린다. 확정은 「내가 읽어 봤다」는 뜻이라 사람만 건다. */
   async function setState(target, next) {
     const screens = await store.load(code)
@@ -211,10 +225,16 @@ function activate(code) {
       'screenScenario.writeMissing': () => writeMissing(),
       'screenScenario.fix': (selection) => setState(first(selection), store.FIXED),
       'screenScenario.unfix': (selection) => setState(first(selection), store.DRAFT),
+      'screenScenario.export': () => exportMarkdown(),
     },
     // 화면이 붙은 뒤 앱이 부른다 (`METHOD_REDRAW`). 프로젝트를 옮겨도 여기로 다시 온다
     redraw: () => draw(),
   }
+}
+
+/** 문서 머리에 적을 날짜. 시험은 이 값을 안 본다 (매일 달라진다). */
+function today() {
+  return new Date().toISOString().slice(0, 10)
 }
 
 /** `selection` 은 배열로 온다 (호스트 계약). 우리 화면은 늘 하나만 싣는다. */
