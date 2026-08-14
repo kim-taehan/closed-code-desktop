@@ -31,11 +31,10 @@ function make(options: { enabled?: boolean; status?: string } = {}): {
 } {
   const fetchImpl = fakeFetch(options.status ?? 'connected')
   const mcp = new DesktopMcp({
-    settings: () =>
-      Promise.resolve({
-        desktopMcp: options.enabled ?? true,
-        opencodeUrl: 'http://127.0.0.1:4096',
-      }),
+    settings: () => Promise.resolve({ desktopMcp: options.enabled ?? true }),
+    // 주소는 이제 **프로젝트마다** 온다 (`opencode/serverPool.ts`). 여기서는 하나로 둔다 —
+    // 프로젝트별로 갈리는지는 풀(`serverPool.test.ts`)이 겨눈다
+    serverUrl: () => 'http://127.0.0.1:4096',
     ports,
     fetchImpl,
   })
@@ -113,7 +112,8 @@ describe('DesktopMcp', () => {
   it('되살아나도 포트와 토큰은 그대로다 — 등록해 둔 주소가 안 죽는다', async () => {
     const fetchImpl = fakeFetch()
     const mcp = new DesktopMcp({
-      settings: () => Promise.resolve({ desktopMcp: true, opencodeUrl: 'http://127.0.0.1:4096' }),
+      settings: () => Promise.resolve({ desktopMcp: true }),
+      serverUrl: () => 'http://127.0.0.1:4096',
       ports,
       fetchImpl,
     })
@@ -140,6 +140,44 @@ describe('DesktopMcp', () => {
     expect(tokenOf(1)).toBe(tokenOf(0))
   })
 
+  // **등록은 그 프로젝트의 서버에 간다.** 서버가 프로젝트마다 갈리면서(`serverPool.ts`)
+  // 격리가 여기에도 한 겹 생겼다 — `?directory=` 로 한 겹, 서버 자체로 또 한 겹.
+  // 앱 전역 주소 하나로 되돌아가면 A 의 도구가 B 세션에 보이는 자리로 돌아간다.
+  it('프로젝트마다 자기 서버에 등록한다', async () => {
+    const fetchImpl = fakeFetch()
+    const mcp = new DesktopMcp({
+      settings: () => Promise.resolve({ desktopMcp: true }),
+      serverUrl: (projectId) =>
+        projectId === 'A' ? 'http://127.0.0.1:55640' : 'http://127.0.0.1:55641',
+      ports,
+      fetchImpl,
+    })
+    running = mcp
+
+    await mcp.onProjectReady(projectA)
+    await mcp.onProjectReady({ id: 'B', root: '/tmp/projB' })
+
+    const calls = (fetchImpl as unknown as { mock: { calls: [string, RequestInit][] } }).mock.calls
+    expect(calls[0]![0]).toContain('127.0.0.1:55640')
+    expect(calls[1]![0]).toContain('127.0.0.1:55641')
+  })
+
+  // 신호가 오는 사이에 탭이 닫혀 서버까지 거둔 경우. 등록할 곳이 없다.
+  it('그 프로젝트의 서버가 없으면 등록하지 않는다', async () => {
+    const fetchImpl = fakeFetch()
+    const mcp = new DesktopMcp({
+      settings: () => Promise.resolve({ desktopMcp: true }),
+      serverUrl: () => null,
+      ports,
+      fetchImpl,
+    })
+    running = mcp
+
+    await mcp.onProjectReady(projectA)
+
+    expect((fetchImpl as unknown as { mock: { calls: unknown[] } }).mock.calls.length).toBe(0)
+  })
+
   it('꺼져 있으면 등록하지 않는다', async () => {
     const { mcp, calls } = make({ enabled: false })
     running = mcp
@@ -152,7 +190,8 @@ describe('DesktopMcp', () => {
     let enabled = false
     const fetchImpl = fakeFetch()
     const mcp = new DesktopMcp({
-      settings: () => Promise.resolve({ desktopMcp: enabled, opencodeUrl: 'http://127.0.0.1:4096' }),
+      settings: () => Promise.resolve({ desktopMcp: enabled }),
+      serverUrl: () => 'http://127.0.0.1:4096',
       ports,
       fetchImpl,
     })
@@ -180,7 +219,8 @@ describe('DesktopMcp', () => {
   it('실패 사유를 로그에 싣는다', async () => {
     const lines: string[] = []
     const mcp = new DesktopMcp({
-      settings: () => Promise.resolve({ desktopMcp: true, opencodeUrl: 'http://127.0.0.1:4096' }),
+      settings: () => Promise.resolve({ desktopMcp: true }),
+      serverUrl: () => 'http://127.0.0.1:4096',
       ports,
       fetchImpl: fakeFetch('failed', 'SSE error: Unable to connect.'),
       log: (line) => lines.push(line),
@@ -202,7 +242,8 @@ describe('DesktopMcp', () => {
     const lines: string[] = []
     const fetchImpl = vi.fn().mockRejectedValue(new Error('HTTP 401')) as unknown as typeof fetch
     const mcp = new DesktopMcp({
-      settings: () => Promise.resolve({ desktopMcp: true, opencodeUrl: 'http://127.0.0.1:4096' }),
+      settings: () => Promise.resolve({ desktopMcp: true }),
+      serverUrl: () => 'http://127.0.0.1:4096',
       ports,
       fetchImpl,
       log: (line) => lines.push(line),

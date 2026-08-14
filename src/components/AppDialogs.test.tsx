@@ -96,18 +96,20 @@ describe('진단 팝업이 뜨는 조건', () => {
 })
 
 describe('무엇을 들고 뜨는가', () => {
-  it('프로젝트가 있으면 경로와 수정 폼을 함께 준다', () => {
+  // 왼쪽 열의 이름이 「연결 설정」에서 「연결」로 바뀌었다 — 고칠 값이 없어졌기 때문이다
+  // (`ConnectionFixForm` 머리말). 열 자체는 프로젝트가 있을 때만 뜬다.
+  // 버튼 글자로 찾지 않는다 — 진단이 도는 동안에는 「진단 중…」이라 상태에 따라 갈린다
+  it('프로젝트가 있으면 경로와 연결 열을 함께 준다', () => {
     setup()
     expect(screen.getByText('/tmp/p1')).toBeTruthy()
-    // 수정 폼이 있으면 주소 칸이 나온다 — 왕복 없이 이 자리에서 고친다
-    expect(screen.getByLabelText('opencode 서버')).toBeTruthy()
+    expect(document.querySelector('.dc-settings__apply')).toBeTruthy()
   })
 
-  // 프로젝트 없이 연 진단 — 고칠 대상이 없으니 폼도 없다
-  it('프로젝트가 없으면 폼 없이 진단만 준다', () => {
+  // 프로젝트 없이 연 진단 — 서버가 프로젝트마다 하나라 보여 줄 주소도 없다
+  it('프로젝트가 없으면 연결 열 없이 진단만 준다', () => {
     setup({ project: null })
     expect(screen.getByRole('dialog', { name: '프로젝트 연결' })).toBeTruthy()
-    expect(screen.queryByLabelText('opencode 서버')).toBeNull()
+    expect(document.querySelector('.dc-settings__apply')).toBeNull()
   })
 })
 

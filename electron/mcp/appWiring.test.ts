@@ -13,8 +13,9 @@ import { desktopMcpPorts, type DesktopMcpDeps } from './appWiring'
 
 vi.mock('electron', () => ({ ipcMain: { on: () => {}, removeListener: () => {} } }))
 
-const settings: DesktopMcpDeps['settings'] = () =>
-  Promise.resolve({ desktopMcp: false, opencodeUrl: '' } as never)
+const settings: DesktopMcpDeps['settings'] = () => Promise.resolve({ desktopMcp: false } as never)
+/** 여기서 겨누는 것은 포트 넷의 세대다 — 서버 주소는 쓰이지 않는다 */
+const serverUrl: DesktopMcpDeps['serverUrl'] = () => null
 
 function registryOf(projects: { id: string; root: string }[], activeId: string | null) {
   return {
@@ -28,6 +29,7 @@ describe('desktopMcpPorts — 창보다 오래 사는 배선', () => {
     let registry = registryOf([{ id: 'A', root: '/old/A' }], 'A')
     const ports = desktopMcpPorts({
       settings,
+      serverUrl,
       registry: () => registry,
       window: () => null,
       activeFile: () => null,
@@ -52,6 +54,7 @@ describe('desktopMcpPorts — 창보다 오래 사는 배선', () => {
     let registry = registryOf([{ id: 'A', root: '/old/A' }], 'A')
     const ports = desktopMcpPorts({
       settings,
+      serverUrl,
       registry: () => registry,
       window: () => null,
       // 새 창의 렌더러가 알려 준 값 — 언제나 "지금" 것이다
@@ -76,6 +79,7 @@ describe('desktopMcpPorts — 창보다 오래 사는 배선', () => {
     let window = make('old', false)
     const ports = desktopMcpPorts({
       settings,
+      serverUrl,
       registry: () => null,
       window: () => window,
       activeFile: () => null,
@@ -98,6 +102,7 @@ describe('desktopMcpPorts — 창보다 오래 사는 배선', () => {
   it('활성 파일은 모양을 확인해서 넘긴다', () => {
     const ports = desktopMcpPorts({
       settings,
+      serverUrl,
       registry: () => null,
       window: () => null,
       activeFile: () => ({ nope: 1 }),

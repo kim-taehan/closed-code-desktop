@@ -1,18 +1,21 @@
 import { ipcMain, type BrowserWindow } from 'electron'
 import { ChatAskHub } from '../extensions/chatAskHub'
-import { Channel, type ProjectScoped } from '../../shared/ipc/channels'
+import { Channel, type ProjectScoped, type SessionStatePayload } from '../../shared/ipc/channels'
 import { registerSessionHandlers, SESSION_CHANNELS } from './sessionHandlers'
 import type { ProjectRecord } from '../../shared/projects/projectRecord'
-import { ProjectSession, type ProjectSessionConfig } from '../session/projectSession'
+import { ProjectSession } from '../session/projectSession'
+import type { OpencodeServerPool } from '../opencode/serverPool'
 import { diagnose, noEndpointDiagnostics } from '../runtime/diagnostics'
 
 // IPC 배선과 라우팅만 책임진다. 프로토콜 판단도, 세션 수명 관리도 하지 않는다.
 //
 // 세션은 **프로젝트마다 하나**다 (설계 §2). 지연 연결이라 탭을 처음 활성화할 때 만들고,
 // 한 번 만든 세션은 앱이 살아 있는 동안 유지한다 — 비활성 탭에서도 턴이 계속 돌아야 한다.
-
-/** 세션이 프로젝트별로 갈리므로 라이선스·기동 방법만 앱 단위로 받는다 */
-export type BridgeConfig = Omit<ProjectSessionConfig, 'workspacePath' | 'projectName'>
+//
+// **서버도 프로젝트마다 하나다** (`opencode/serverPool.ts`). 앱 단위로 받던 주소 설정
+// (`BridgeConfig.opencodeUrl`)이 없어진 자리에 풀이 들어왔다 — 세션을 만들기 전에
+// 풀에게 그 프로젝트의 주소를 묻고, 없으면 풀이 그때 띄운다. 여기가 **띄우기와 세션이
+// 만나는 유일한 자리**라서, 탭을 닫을 때 서버까지 거두는 판단도 이 클래스가 쥔다.
 
 /**
  * 세션이 opencode 에 **실제로 붙었다/떨어졌다**를 앱 단위 관심사에 알린다.
@@ -37,8 +40,8 @@ export class SessionBridge {
 
   constructor(
     private readonly window: BrowserWindow,
-    // 갱신 가능 — Admin 주소·포트가 설정탭에서 바뀌면 앱 재시작 없이 여기 반영한다
-    private config: BridgeConfig,
+    /** 프로젝트별 opencode 서버. 세션보다 먼저 뜨고 세션보다 늦게 죽는다 */
+    private readonly pool: OpencodeServerPool,
     private readonly hooks: SessionBridgeHooks = {},
   ) {}
 
@@ -100,9 +103,47 @@ export class SessionBridge {
       return
     }
 
+    // **자리를 먼저 잡는다.** 아래 launch 는 서버가 뜰 때까지(수 초) 기다리는데, 그동안
+    // 같은 프로젝트로 activate 가 또 들어오면 위 검사를 통과해 세션이 둘 생긴다 —
+    // 서버 주소를 묻는 await 가 생기면서 새로 열린 창이다.
+    const started: Promise<void> = this.launch(project).finally(() => {
+      if (this.starting.get(project.id) === started) this.starting.delete(project.id)
+    })
+    this.starting.set(project.id, started)
+    await started
+  }
+
+  /**
+   * 그 프로젝트의 서버 주소를 얻고(없으면 띄우고) 세션을 만든다.
+   *
+   * **서버를 못 띄우면 세션도 없다.** 실행 파일을 못 찾았거나 서버가 주소를 안 알린
+   * 경우인데, 둘 다 화면에는 "연결 안 됨" 으로만 보이는 종류라 사유를 그대로 실어 보낸다
+   * (`binary.ts` 는 찾아본 자리를 통째로 준다).
+   */
+  private async launch(project: ProjectRecord): Promise<void> {
+    let opencodeUrl: string
+    try {
+      opencodeUrl = await this.pool.urlFor(project.id, project.root)
+    } catch (error) {
+      this.push(Channel.SESSION_STATE, project.id, {
+        handshake: {
+          stage: 'failed',
+          failure: {
+            stage: 'awaiting_connected',
+            reason: error instanceof Error ? error.message : String(error),
+          },
+        },
+      } satisfies SessionStatePayload)
+      this.hooks.onSessionLost?.(project.id)
+      return
+    }
+    // 서버를 기다리는 사이에 탭이 닫혔다 — 세션을 만들면 아무도 안 접는 연결이 된다.
+    // (서버는 `closeProject` 가 이미 거뒀거나, 풀이 뜨는 즉시 거둔다)
+    if (!this.starting.has(project.id)) return
+
     const session = new ProjectSession(
       {
-        ...this.config,
+        opencodeUrl,
         workspacePath: project.root,
         projectName: project.name,
       },
@@ -127,13 +168,7 @@ export class SessionBridge {
       },
     )
     this.sessions.set(project.id, session)
-
-    // 자기 자신일 때만 지운다 — 접혔다 다시 시작한 뒤라면 지금 것은 새 start 다
-    const started: Promise<void> = session.start().finally(() => {
-      if (this.starting.get(project.id) === started) this.starting.delete(project.id)
-    })
-    this.starting.set(project.id, started)
-    await started
+    await session.start()
   }
 
   /** 절전 복귀 — 열려 있다고 믿는 소켓을 전부 다시 붙인다 (ProjectSession.wakeFromSleep) */
@@ -142,22 +177,20 @@ export class SessionBridge {
   }
 
   async reconnect(project: ProjectRecord): Promise<void> {
-    // runtime 은 살려 둔다 — 죽이면 거기 붙어 있던 다른 프로젝트까지 끊긴다
+    // 서버는 살려 둔다 — 세션만 다시 붙이면 되는 자리이고, 서버를 죽였다 살리면
+    // 그만큼(수 초) 더 기다리는데다 그 사이 MCP 등록도 통째로 날아간다
     await this.closeProject(project.id, { keepRuntime: true })
     await this.activate(project)
   }
 
   /**
-   * runtime 설정(Admin 주소·포트·채널)을 갱신하고 다시 띄운다. config 는 세션 생성 때
-   * 한 번만 읽히므로, 설정탭 저장값을 재시작 없이 반영하려면 갱신 후 재조립해야 한다.
-   * (adminApiUrl 이 비어 있다가 채워지면 그제서야 installer 가 생겨 런타임을 받는다)
+   * **우리가 띄운 서버까지 접고** 전부 다시 띄운다. Doctor 사다리의 마지막 칸이다.
+   *
+   * 재연결(`reconnect`)과 다른 점이 바로 여기다 — 저쪽은 세션만 다시 붙이고 서버는 그대로
+   * 둔다. 서버 자체가 이상할 때(설정을 다시 읽어야 한다·응답이 없다) 손댈 곳이 이것뿐이라
+   * 남겨 둔다. davis 시절 이 이름은 "우리가 설치한 runtime 재시작" 이었고, opencode 로
+   * 오면서 한동안 **아무것도 못 죽이는 껍데기**였다 (서버가 남의 프로세스였다).
    */
-  async applyRuntimeConfig(patch: Partial<BridgeConfig>, projects: ProjectRecord[]): Promise<void> {
-    this.config = { ...this.config, ...patch }
-    await this.restartRuntime(projects)
-  }
-
-  /** 우리가 띄운 runtime 을 접고 모두 다시 붙인다 (Admin 주소·포트 변경은 재시작해야 적용). */
   async restartRuntime(projects: ProjectRecord[]): Promise<void> {
     const previous = this.activeId
     for (const session of this.sessions.values()) await session.dispose()
@@ -165,6 +198,8 @@ export class SessionBridge {
     // 진행 중이던 start 도 무효 — 남기면 아래 activate 가 그걸 기다리다 세션을 안 만든다
     this.starting.clear()
     this.activeId = null
+    // 세션을 다 접은 뒤에 죽인다. 먼저 죽이면 아직 붙어 있는 SSE 가 재연결 백오프를 돈다.
+    await this.pool.stopAll()
 
     // 열려 있던 프로젝트를 모두 되살린다. 활성은 원래대로 돌려놓는다.
     for (const project of projects) await this.activate(project)
@@ -172,25 +207,41 @@ export class SessionBridge {
     if (active) this.activeId = active.id
   }
 
-  /** 탭을 닫으면 그 세션도 접는다. 열어 둔 채로 두면 연결만 쌓인다. */
+  /**
+   * 탭을 닫으면 그 세션도 접고 **그 프로젝트의 서버도 거둔다.** 열어 둔 채로 두면
+   * 연결만 쌓이고, 이제는 프로세스도 함께 쌓인다.
+   *
+   * `keepRuntime` 은 재연결이 쓴다 — 그때는 서버를 살려 둔다 (`reconnect` 주석).
+   * 이 이름은 davis 시절 "우리가 설치한 runtime" 에서 왔고, 지금 가리키는 것은
+   * **이 프로젝트의 opencode 서버**다. 남의 프로세스에 붙기만 하던 동안에는 아무 뜻도
+   * 없던 인자였다.
+   */
   async closeProject(id: string, options: { keepRuntime?: boolean } = {}): Promise<void> {
     // 시작 중이던 것은 여기서 무효가 된다. 남겨 두면 다음 activate 가 **죽은 start 를 기다리고**
     // 새 세션을 아예 만들지 않는다 — 라이선스를 고쳐도 옛 키로 붙은 채 안 바뀌던 원인.
     this.starting.delete(id)
     const session = this.sessions.get(id)
-    if (!session) return
     this.sessions.delete(id)
     if (this.activeId === id) this.activeId = null
-    this.hooks.onSessionLost?.(id)
-    await session.dispose(options)
+    // 세션이 없어도 서버는 있을 수 있다 (주소는 받았는데 붙지 못한 경우) — 먼저 접고 거둔다
+    if (session) {
+      this.hooks.onSessionLost?.(id)
+      await session.dispose(options)
+    }
+    if (options.keepRuntime !== true) await this.pool.stop(id)
   }
 
+  /**
+   * 창이 사라졌거나 앱이 끝난다. **우리가 띄운 서버를 전부 회수한다** —
+   * 사용자가 손으로 띄운 것은 표에 없으므로 손대지 않는다 (`serverPool.ts` 머리말).
+   */
   async dispose(): Promise<void> {
     const sessions = [...this.sessions.values()]
     this.sessions.clear()
     this.starting.clear()
     this.activeId = null
     await Promise.all(sessions.map((session) => session.dispose()))
+    await this.pool.stopAll()
     for (const channel of HANDLED_CHANNELS) ipcMain.removeHandler(channel)
   }
 

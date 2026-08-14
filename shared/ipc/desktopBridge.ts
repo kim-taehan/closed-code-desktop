@@ -15,7 +15,6 @@ import type {
   HistoryIdPayload,
   HistoryRenamePayload,
   HistoryStatePayload,
-  ServerProbePayload,
   ModelCheckResultPayload,
   PermissionModePayload,
   WorkingDirPayload,
@@ -141,12 +140,13 @@ export interface DesktopBridge extends GitHistoryBridge, ExtensionRegistryBridge
   getSettings(): Promise<AppSettings>
   /** 저장된(정규화된) 값을 돌려준다 — 화면이 그 값으로 다시 그린다 */
   setSettings(settings: AppSettings): Promise<AppSettings>
-  checkModels(payload: ServerProbePayload): Promise<ModelCheckResultPayload>
-  /** desktop 이 Admin 서버에 직접 닿는지 확인한다 (진단 2단계) */
-  pingServer(payload?: ServerProbePayload): Promise<ServerPingResultPayload>
-  /** 지금 프로젝트만 다시 붙는다 (라이선스 변경에 필요) */
+  /** 활성 프로젝트의 서버에 쓸 모델이 붙어 있는지 (진단 3단계) */
+  checkModels(): Promise<ModelCheckResultPayload>
+  /** desktop 이 **그 프로젝트의** opencode 서버에 직접 닿는지 확인한다 (진단 2단계) */
+  pingServer(): Promise<ServerPingResultPayload>
+  /** 지금 프로젝트만 다시 붙는다. 서버는 살려 둔다 */
   reconnectProject(): Promise<void>
-  /** 열려 있는 프로젝트를 전부 접었다 다시 붙는다 (서버 주소 변경에 필요) */
+  /** 우리가 띄운 서버를 접고 다시 띄운 뒤 열려 있는 프로젝트를 전부 되살린다 */
   restartRuntime(): Promise<void>
   /** 붙일 것을 고른다. 이미지면 내용을, 그 밖이면 경로를 담아 온다. 취소하면 빈 배열. */
   pickAttachments(): Promise<PickedAttachment[]>

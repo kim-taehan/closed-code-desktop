@@ -15,22 +15,31 @@
 | **가짜 opencode 서버** (`tests/fake-opencode/`) | ✅ 세션 격리·생사 신호 테스트가 이걸로 돈다 |
 | **`electron/mcp/` 데스크톱 MCP 서버** | ✅ 앱이 **MCP 서버**가 되어 프로젝트가 붙을 때마다 opencode 에 자동 등록된다 (`AppSettings.desktopMcp`) |
 | **`electron/pty/` 셸 드로어 (⌘↓/⌘↑)** | ✅ opencode 의 `/api/pty` 에 붙는다. **네이티브 모듈 없음** |
-| `electron/runtime/` 프로세스 수명관리 | ⬜ 미전환 — 서버는 사용자가 직접 띄운다 |
+| `electron/runtime/` 프로세스 수명관리 | ✅ **프로젝트마다 우리가 띄운다** (`opencode/serverPool.ts`) |
 | 채팅 이력 · 턴 리뷰(diff) · 모델 스위처 | ⬜ 미착수 — 프레임은 나가지만 opencode 대응이 없어 조용히 버려진다 |
 | MCP **클라이언트** 설정 (`McpDialog`·`session/mcpConfig.ts`) | ⬜ 미착수 — 위의 `electron/mcp/` 와 **다른 것이다** (아래 「두 가지 MCP」) |
 | 확장 질의 레인 (`agentLane`) | ⬜ 미전환 — 아직 davis WS 소켓을 연다 |
 
 어댑터는 **실제 opencode 서버로 한 턴을 끝까지 돌려 검증**했다 (`electron/opencode/live.test.ts`).
 
-### 서버는 우리가 띄우지 않는다
+### 서버는 **프로젝트마다 우리가 띄운다**
 
-davis 시절엔 앱이 런타임을 내려받아 띄우고 포트 8000~8099 를 훑어 찾았다. opencode 는
-**사용자가 띄운 한 곳에 붙을 뿐**이다 (`opencodeUrl`, 기본 `http://127.0.0.1:4096`).
-서버가 없으면 `connect()` 가 거부하고 그 이유가 그대로 화면에 뜬다.
+davis 시절엔 앱이 런타임을 내려받아 띄우고 포트 8000~8099 를 훑어 찾았다. 한동안 opencode 는
+**사용자가 띄운 한 곳에 붙을 뿐**이었고(설정 `opencodeUrl`, 기본 `:4096`), **그 설정은 지웠다.**
+근거는 제품 요구다 — **폐쇄망 현장 개발자는 터미널에서 `opencode serve` 를 칠 수 없다.**
+
+- 탭을 열면 그 프로젝트 루트를 cwd 로 `opencode serve` 를 띄운다 (`opencode/serverPool.ts`).
+- **`--port` 를 주지 않는다.** opencode 가 빈 포트를 잡고 stdout 에
+  `opencode server listening on http://127.0.0.1:PORT` 를 찍는다 — **그 한 줄이 주소를 아는 유일한 길**이다.
+- 탭을 닫으면 그 서버만, 앱을 끄면 **우리가 띄운 것만** 죽는다 (`pkill` 류의 넓은 종료 금지).
+- 실행 파일은 PATH → 알려진 자리 순으로 찾는다. **macOS GUI 앱은 셸 PATH 를 못 받는다**
+  (`opencode/binary.ts`). 못 찾으면 찾아본 자리를 통째로 화면에 싣는다. 되돌아갈 길은 `OPENCODE_BIN`.
+
+⚠️ **격리는 절반이다.** 서버가 갈리면 MCP 등록(instance 수명)과 설정 캐시는 갈리지만
+**세션 저장소는 서버끼리 공유된다**(실측). 대화가 안 새게 막는 것은 여전히 어댑터의 sessionID 필터뿐이다.
 
 ```bash
-opencode serve --port 4096 --hostname 127.0.0.1   # 먼저 띄운다
-npm run dev
+npm run dev   # 서버는 앱이 띄운다
 ```
 
 ## 접근 — 부패방지 계층(anti-corruption layer)

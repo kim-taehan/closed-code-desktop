@@ -6,8 +6,10 @@ import { delimiter, join } from 'node:path'
 //
 // **이 파일이 생기면서 "이 앱은 CLI 를 띄우지 않는다" 가 끝났다.** 원래 이 앱은 사용자가
 // 손으로 띄운 서버 한 곳에 붙기만 했다 (`endpoint.ts`·`mcp/register.ts` 머리말이 그 근거를
-// 적어 두었다). 설정 `opencodeUrl` 이 비면 **프로젝트마다 우리가 띄운다** — 그래야 MCP 등록이
-// 프로젝트별로 갈린다 (MCP 등록은 instance 수명이라 서버가 갈리면 서로 안 보인다, 실측).
+// 적어 두었다 — 전부 고쳐 썼다). **프로젝트마다 우리가 띄운다. 붙기만 하는 길은 없다** —
+// 폐쇄망 현장에서는 사용자가 `opencode serve` 를 칠 방법이 없기 때문이다
+// (`serverPool.ts` 머리말). 서버가 갈리면 MCP 등록도 갈린다 (등록은 instance 수명이라
+// 서버가 다르면 서로 안 보인다, 실측).
 //
 // ⚠️ **macOS 에서 GUI 로 띄운 앱은 셸 PATH 를 못 받는다.** Finder·Dock 에서 실행하면
 // `process.env.PATH` 가 `/usr/bin:/bin:/usr/sbin:/sbin` 뿐이라, 터미널에서 `opencode` 가
@@ -87,7 +89,8 @@ export function findOpencodeBinary(
 export function notFoundMessage(lookup: BinaryLookup): string {
   return [
     'opencode 실행 파일을 찾지 못했습니다.',
-    '설정에서 `opencodeUrl` 에 이미 띄운 서버 주소를 넣거나, `OPENCODE_BIN` 으로 경로를 지정하세요.',
+    // 되돌아갈 길은 이제 하나뿐이다 — 설정의 서버 주소 칸이 없어졌다 (`serverPool.ts`).
+    '`OPENCODE_BIN` 환경변수로 실행 파일 경로를 지정하거나, opencode 를 설치하세요.',
     '찾아본 자리:',
     ...lookup.searched.map((entry) => `  · ${entry}`),
   ].join('\n')

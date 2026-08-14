@@ -30,8 +30,14 @@ export interface ProjectSessionConfig {
   workspacePath: string
   /** 표시용 프로젝트 이름. workspace_sync 로 나가 runtime 이 프로젝트를 식별한다. */
   projectName?: string
-  /** 붙을 opencode 헤드리스 서버. 기본 `http://127.0.0.1:4096`. */
-  opencodeUrl?: string
+  /**
+   * 붙을 opencode 헤드리스 서버. **필수다.**
+   *
+   * 기본값(`127.0.0.1:4096`)이 있었다 — 서버가 앱 전체에 하나였을 때다. 지금은
+   * **프로젝트마다 하나를 우리가 띄우고**(`opencode/serverPool.ts`) 그 주소를 받아 오므로,
+   * 기본값으로 물러나는 것은 곧 남의 프로젝트 서버에 붙는 것이다.
+   */
+  opencodeUrl: string
 }
 
 export class ProjectSession {
@@ -69,11 +75,13 @@ export class ProjectSession {
   }
 
   /**
-   * opencode 서버는 **찾지 않는다 — 주소를 안다.**
+   * opencode 서버는 **찾지 않는다 — 주소를 받아 온다.**
    *
    * davis 시절엔 포트 8000~8099 를 훑어 인스턴스 파일로 런타임을 찾았지만(`electron/runtime/`),
-   * opencode 는 사용자가 띄운 한 곳(`--port`)에 붙을 뿐이다. 서버가 안 떠 있으면
-   * connect() 가 거부하고 그 이유가 그대로 화면에 뜬다.
+   * 여기서는 이미 정해진 주소로 붙는다. 그 주소가 어디서 오는지가 한 번 바뀌었다:
+   * **사용자가 띄운 한 곳** → **`SessionBridge` 가 이 프로젝트용으로 띄운 서버**
+   * (`opencode/serverPool.ts`). 세션은 그 차이를 몰라도 된다 — 못 띄웠으면 여기까지
+   * 오지도 않고, 떠 있는데 못 붙으면 connect() 가 거부하며 이유가 그대로 화면에 뜬다.
    */
   async start(): Promise<void> {
     const endpoint = opencodeEndpoint(this.config.opencodeUrl)
@@ -252,10 +260,13 @@ export class ProjectSession {
     this.history?.rename(chatId, title)
   }
 
-  // 세션을 접는다. keepRuntime 은 재연결에 쓴다 — 우리가 띄운 runtime 을 여기서 죽이면
-  // 그 runtime 에 붙어 있던 다른 프로젝트 연결까지 끊긴다 (라이선스만 바꿔 다시 붙는 경우).
+  // 세션을 접는다. keepRuntime 은 재연결에 쓴다 — davis 때는 우리가 띄운 runtime 을 여기서
+  // 죽이면 거기 붙어 있던 다른 프로젝트 연결까지 끊겼다.
   async dispose(options: { keepRuntime?: boolean } = {}): Promise<void> {
-    // opencode 서버는 사용자가 띄운 것이라 우리가 끄지 않는다 (keepRuntime 은 계약 유지용).
+    // **서버를 끄는 것은 여기가 아니다.** 이제 그 서버는 우리가 띄운 것이지만
+    // (`opencode/serverPool.ts`), 세션 하나가 프로세스 수명을 쥐면 같은 프로젝트를
+    // 재연결할 때마다 서버가 죽었다 살아난다. 판단은 `SessionBridge.closeProject` 에 있고
+    // 이 인자는 거기서 쓴다 — 여기서는 계약만 지킨다.
     void options
     this.handshake?.dispose()
     this.permission?.stop()

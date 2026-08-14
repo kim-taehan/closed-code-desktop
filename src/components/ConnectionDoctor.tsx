@@ -12,29 +12,31 @@ import {
 import { awaitHealthy, probeModels, probeRuntime, probeServer } from '../state/connectionProbe'
 import { ConnectionFixForm } from './ConnectionFixForm'
 import { DoctorSteps, IssueList, mergeIssues } from './DoctorSteps'
-import type { AppSettings } from '../../shared/settings/appSettings'
 
 // 연결 진단·복구(Doctor) — 오토힐링 파이프라인의 드라이버.
 //
 // 열면 곧바로 순차 진단(opencode 서버 ping → 모델 조회 → 연결 상태)을 돌리고,
-// 세션만 문제면 재연결로 자동 치유를 시도한다. **재시작·재설치는 없다** —
-// opencode 서버는 사용자가 띄운 남의 프로세스라 우리가 죽였다 살릴 수 없다.
+// 세션만 문제면 재연결로 자동 치유를 시도한다. **여기서 부르는 조치는 재연결 하나뿐이다**
+// (`RUN`) — 서버를 접었다 다시 띄우는 길(`restartRuntime`)은 생겼지만, 사다리에 얹으려면
+// 그 판정을 doctorPipeline 이 낼 수 있어야 한다. 아직 없다.
 // 전이 판단은 전부 doctorPipeline(순수 머신)이 하고, 여기는 부작용 실행과 그리기만 한다.
-// 자동으로 못 고친 것(주소·키 문제)은 **이 자리에서** 수정 폼(ConnectionFixForm)으로 고친다 —
-// 설정 창으로 보내면 왕복이 생기고, 어떤 상태에서든 연결까지 가는 길이 끊기면 안 된다.
 //
-// 화면은 좌우 두 열이다: **왼쪽 = 내가 바꾸는 것(연결 설정), 오른쪽 = 앱이 확인한 것(자가 진단)**.
+// 화면은 좌우 두 열이다: **왼쪽 = 이 프로젝트의 연결, 오른쪽 = 앱이 확인한 것(자가 진단)**.
+// 왼쪽이 한때 "내가 바꾸는 것" 이었다 — 서버 주소를 사용자가 넣던 시절이다.
 // 진행 로그는 없앴다 — 단계 목록이 같은 내용을 더 읽기 쉽게 보여주는데다,
 // 팝업을 열기만 해도(자동 진단) 누른 적 없는 로그가 쌓여 있는 것처럼 보였다.
 
 export interface ConnectionDoctorProps {
   status: ProjectStatus
   failure?: string
-  /** 인라인 수정 폼 재료 (설정·저장). 없으면 폼 없이 안내만 한다. */
-  fix?: {
-    settings: AppSettings
-    onSaveSettings: (settings: AppSettings) => Promise<void>
-  }
+  /**
+   * 왼쪽 열(연결)을 보일지. **프로젝트가 열려 있을 때만** 보인다 — 서버가 프로젝트마다
+   * 하나라 열린 프로젝트가 없으면 보여 줄 주소도, 다시 붙을 곳도 없다.
+   *
+   * 예전에는 여기로 설정과 저장 함수가 왔다 (`{ settings, onSaveSettings }`). 그 열이
+   * 주소를 **고치는** 곳이었기 때문인데, 고칠 주소가 없어졌다 (`ConnectionFixForm` 머리말).
+   */
+  fix?: boolean
   /**
    * 진단이 초록(healthy/healed)으로 끝났다 — **자동 게이트가 스스로 닫는 신호**다
    * (`src/state/useDoctorGate.ts`). 배지를 눌러 연 팝업은 이걸로 안 닫힌다 — 그쪽은
@@ -159,15 +161,14 @@ export function ConnectionDoctor({ status, failure, fix, onHealthy }: Connection
 
   return (
     <div className={`dc-doctor${fix ? '' : ' dc-doctor--single'}`}>
-      {/* 왼쪽 — 내가 바꾸는 것. 연결 설정은 이 팝업이 유일한 자리다 ((구)설정 → 연결 탭 흡수).
-          **처음부터 항상 보인다** — 최초 프로젝트는 주소·키가 비어 있어 진단을 기다릴 이유가 없다. */}
+      {/* 왼쪽 — 이 프로젝트의 연결. **처음부터 항상 보인다** — 무엇에 붙어 있는지와
+          다시 붙는 손잡이는 진단 결과를 기다릴 이유가 없다. */}
       {fix && (
         <section className="dc-doctor__col">
-          <h3 className="dc-doctor__coltitle">연결 설정</h3>
-          <p className="dc-doctor__note">값을 바꾸고 연결 시도를 누르면 저장·재연결·재진단까지 한 번에 됩니다.</p>
+          <h3 className="dc-doctor__coltitle">연결</h3>
+          <p className="dc-doctor__note">연결 시도를 누르면 재연결·재진단까지 한 번에 됩니다.</p>
           <ConnectionFixForm
-            settings={fix.settings}
-            onSaveSettings={fix.onSaveSettings}
+            endpoint={lastDiag?.endpoint ?? null}
             running={running}
             onApply={() => {
               setNote(null)

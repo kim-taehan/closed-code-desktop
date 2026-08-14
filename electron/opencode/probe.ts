@@ -58,7 +58,7 @@ function describe(error: unknown): string {
 /** opencode 서버가 떠 있나 — 그리고 어댑터가 맞춰진 버전인가 */
 export async function pingOpencode(baseUrl: string, fetchImpl: typeof fetch = fetch): Promise<ProbeResult> {
   const trimmed = baseUrl.trim().replace(/\/+$/, '')
-  if (trimmed === '') return { ok: false, detail: 'opencode 서버 주소가 비어 있습니다' }
+  if (trimmed === '') return { ok: false, detail: '이 프로젝트의 opencode 서버가 아직 뜨지 않았습니다' }
   try {
     const body = (await getJson(`${trimmed}/global/health`, fetchImpl)) as {
       healthy?: boolean
@@ -122,7 +122,7 @@ export async function checkModels(
   fetchImpl: typeof fetch = fetch,
 ): Promise<ProbeResult> {
   const trimmed = baseUrl.trim().replace(/\/+$/, '')
-  if (trimmed === '') return { ok: false, detail: 'opencode 서버 주소가 비어 있습니다' }
+  if (trimmed === '') return { ok: false, detail: '이 프로젝트의 opencode 서버가 아직 뜨지 않았습니다' }
   try {
     const body = (await getJson(`${trimmed}/config/providers`, fetchImpl)) as
       | ConfiguredProvider[]

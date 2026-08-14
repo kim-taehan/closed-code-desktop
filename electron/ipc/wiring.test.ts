@@ -87,7 +87,10 @@ describe('IPC 배선', () => {
     const registry = new ProjectRegistry({ store: new ProjectStore(join(dir, 'projects.json')) })
     const settings = new SettingsStore(join(dir, 'settings.json'))
 
-    const session = new SessionBridge(window, {})
+    // 서버 풀. 이 시험이 보는 것은 채널 등록/해제뿐이라 아무것도 띄우지 않는 것을 끼운다
+    const { OpencodeServerPool } = await import('../opencode/serverPool')
+    const pool = new OpencodeServerPool({ start: () => Promise.reject(new Error('띄우지 않는다')) })
+    const session = new SessionBridge(window, pool)
     const projects = new ProjectBridge(
       window,
       registry,
@@ -96,7 +99,7 @@ describe('IPC 배선', () => {
         onClose: () => {},
         onReconnect: async () => {},
         onRestartRuntime: () => Promise.resolve(),
-        onRuntimeConfigChange: () => Promise.resolve(),
+        activeServerUrl: () => null,
       },
       settings,
     )
@@ -129,7 +132,7 @@ describe('IPC 배선', () => {
     const drawer = new PtyDrawerBridge({
       window,
       activeProject: () => null,
-      opencodeUrl: () => Promise.resolve('http://127.0.0.1:4096'),
+      opencodeUrl: () => 'http://127.0.0.1:4096',
     })
 
     session.register()

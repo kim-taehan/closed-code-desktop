@@ -57,8 +57,14 @@ export interface PtyDrawerOptions {
   window: BrowserWindow
   /** 지금 앞에 나와 있는 프로젝트. 없으면 드로어를 열 수 없다. */
   activeProject: () => { id: string; root: string } | null
-  /** 붙어 있는 opencode 서버 주소. 설정에서 바뀔 수 있어 매번 읽는다. */
-  opencodeUrl: () => Promise<string>
+  /**
+   * **활성 프로젝트의** opencode 서버 주소. 아직 안 떴으면 null.
+   *
+   * 예전에는 설정에서 읽는 앱 전역 주소 하나였다(`() => Promise<string>`). 서버가
+   * 프로젝트마다 갈리면서 드로어도 **그 프로젝트의 서버**에 pty 를 만든다 —
+   * 다른 서버에 만들면 셸이 엉뚱한 프로젝트에서 뜬다.
+   */
+  opencodeUrl: () => string | null
   password?: string
 }
 
@@ -212,9 +218,17 @@ export class PtyDrawerBridge {
     state.socket.close()
   }
 
+  /**
+   * 그 프로젝트의 서버에 붙는 클라이언트. **서버가 아직 없으면 거절한다** —
+   * 빈 주소로 만들면 `http:///pty` 를 때리고 사유가 fetch 오류로 뭉개진다.
+   * (거절로 내는 이유는 부르는 쪽들이 이미 실패를 그렇게 다루기 때문이다 — 드로어를
+   * 여는 자리는 사유를 화면에 올리고, 크기 조절·정리는 조용히 넘긴다.)
+   */
   private async clientFor(): Promise<PtyClient> {
+    const baseUrl = this.options.opencodeUrl()
+    if (baseUrl === null) throw new Error('이 프로젝트의 opencode 서버가 아직 뜨지 않았습니다')
     return new PtyClient({
-      baseUrl: await this.options.opencodeUrl(),
+      baseUrl,
       ...(this.options.password !== undefined ? { password: this.options.password } : {}),
     })
   }

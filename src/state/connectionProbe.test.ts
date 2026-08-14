@@ -32,14 +32,16 @@ describe('probeServer — server 단계', () => {
   it('pingServer 로 간다', async () => {
     davis.pingServer.mockResolvedValue({ ok: true, detail: '4096 응답' })
     expect(await probeServer()).toEqual({ ok: true, detail: '4096 응답' })
-    expect(davis.pingServer).toHaveBeenCalledWith({})
+    expect(davis.pingServer).toHaveBeenCalledWith()
   })
 
-  // 폼에 친 주소로 미리 확인하는 길 — 저장 전에 시험해 볼 수 있어야 한다
-  it('주소를 주면 그대로 넘긴다', async () => {
+  // 폼에 친 주소로 미리 확인하던 길이 있었다 (`probeServer({ opencodeUrl })`).
+  // **주소를 고르는 화면이 없어졌다** — 서버는 프로젝트마다 앱이 띄우고, main 이
+  // 활성 프로젝트의 것을 고른다. 여기서 실어 보낼 것이 남으면 그 시절 흔적이다.
+  it('주소를 실어 보내지 않는다', async () => {
     davis.pingServer.mockResolvedValue({ ok: true, detail: '' })
-    await probeServer({ opencodeUrl: 'http://other:9999' })
-    expect(davis.pingServer).toHaveBeenCalledWith({ opencodeUrl: 'http://other:9999' })
+    await probeServer()
+    expect(davis.pingServer.mock.calls[0]).toEqual([])
   })
 })
 

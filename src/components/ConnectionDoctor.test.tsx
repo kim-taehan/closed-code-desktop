@@ -2,7 +2,6 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ConnectionDoctor } from './ConnectionDoctor'
-import { DEFAULT_OPENCODE_URL, DEFAULT_SETTINGS } from '../../shared/settings/appSettings'
 
 // 드라이버 — 순수 머신(`doctorPipeline`)에 **부작용을 실제로 먹이는** 자리.
 //
@@ -34,19 +33,10 @@ beforeEach(() => {
 
 function renderDoctor(props: Partial<Parameters<typeof ConnectionDoctor>[0]> = {}) {
   const onHealthy = vi.fn()
-  const onSaveSettings = vi.fn().mockResolvedValue(undefined)
-  render(
-    <ConnectionDoctor
-      status="ready"
-      onHealthy={onHealthy}
-      fix={{
-        settings: { ...DEFAULT_SETTINGS, opencodeUrl: DEFAULT_OPENCODE_URL },
-        onSaveSettings,
-      }}
-      {...props}
-    />,
-  )
-  return { onHealthy, onSaveSettings }
+  // `fix` 는 왼쪽(연결) 열을 여는 스위치다. 예전에는 설정과 저장 함수가 왔다 —
+  // 그 열이 주소를 고치는 곳이었을 때다 (`ConnectionFixForm` 머리말).
+  render(<ConnectionDoctor status="ready" onHealthy={onHealthy} fix {...props} />)
+  return { onHealthy }
 }
 
 /** 단계 줄의 표식(·/…/✓/✗/–) — 5상이 화면에 나오는 모양 */

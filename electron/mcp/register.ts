@@ -5,8 +5,13 @@ import type { McpAddress } from './server'
 // **주입 대체 지점.**
 //
 // 공여(develop-desktop)는 CLI 를 띄우면서 `--mcp-config '<JSON>'` 인자로 자기 주소를 줬다
-// (`electron/pty/args.ts:33`). 이 앱은 CLI 를 띄우지 않는다 — opencode 서버는 사용자가
-// 띄운 것이고 우리는 붙을 뿐이다. 그래서 그 자리를 **HTTP 런타임 등록**이 대신한다.
+// (`electron/pty/args.ts:33`). 이 앱은 그 자리를 **HTTP 런타임 등록**으로 대신한다.
+//
+// 이 문단은 오랫동안 *"이 앱은 CLI 를 띄우지 않는다 — 서버는 사용자가 띄운 것이고 우리는
+// 붙을 뿐이다"* 를 근거로 적고 있었다. **지금은 우리가 띄운다** (`opencode/serverPool.ts`,
+// 프로젝트마다 하나). 그래도 등록 방식은 안 바뀐다 — 우리가 띄우는 것은 `serve` 이지
+// 대화용 CLI 가 아니라서 MCP 설정을 실을 인자가 없고, 무엇보다 **등록 대상이 서버 수명
+// 안에서 바뀐다**(탭마다 재등록). 인자로 굳히면 그걸 못 따라간다.
 //
 // 사용자의 `~/.config/opencode/opencode.json` 은 **건드리지 않는다.** 실측: `POST /mcp`
 // 뒤에도 그 파일에 `mcp` 키가 생기지 않는다. 등록이 opencode instance 수명이라 앱을 끄면

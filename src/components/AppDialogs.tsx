@@ -80,13 +80,9 @@ export function AppDialogs(props: AppDialogsProps) {
           {...(props.failure ? { failure: props.failure } : {})}
           onHealthy={gate.close}
           {...(props.project
-            ? {
-                // 진단이 못 고친 주소·키 문제는 이 팝업 안에서 바로 고친다 (왕복 제거)
-                fix: {
-                  settings: props.appSettings.value,
-                  onSaveSettings: props.appSettings.save,
-                },
-              }
+            ? // 프로젝트가 있을 때만 연결 열을 연다 — 서버가 프로젝트마다 하나라
+              // 열린 것이 없으면 보여 줄 주소도 다시 붙을 곳도 없다
+              { fix: true }
             : {})}
           onClose={() => {
             // 어느 쪽으로 열렸든 닫는 손짓은 하나다 — 둘 다 내려야 한 번에 닫힌다

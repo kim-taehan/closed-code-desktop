@@ -1,11 +1,9 @@
 // 연결 진단 페이로드.
 // channels.ts 가 300줄을 넘어 갈라냈다 — 채널 정의와 진단 타입은 함께 자랄 이유가 없다.
 
-export interface ServerProbePayload {
-  /** 확인할 opencode 서버 주소. 비우면 저장된 값을 쓴다 —
-   *  입력창에서 주소를 바꾸고 확인하면 **그 바뀐 값**으로 봐야 한다. */
-  opencodeUrl?: string
-}
+// `ServerProbePayload { opencodeUrl? }` 가 여기 있었다. **프로브는 이제 아무것도 안 받는다** —
+// 화면이 주소를 바꿔 저장 전에 확인하던 흐름이 통째로 없어졌고(설정 항목이 사라졌다,
+// `shared/settings/appSettings.ts` 머리말), 볼 대상은 **활성 프로젝트의 서버** 하나로 정해진다.
 
 export interface ModelCheckResultPayload {
   ok: boolean

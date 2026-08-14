@@ -4,8 +4,19 @@
 // 환경변수를 아래에 두는 이유는 개발 중 쓰는 방식이라 깨지면 안 되고,
 // 동시에 사용자가 화면에서 지정하면 그게 이겨야 하기 때문이다.
 
-/** opencode 서버 기본 주소. `opencode serve` 의 기본 포트다. */
-export const DEFAULT_OPENCODE_URL = 'http://127.0.0.1:4096'
+// ## 없어진 항목: `opencodeUrl` (2026-08-14)
+//
+// 붙을 opencode 서버 주소를 사용자가 넣던 칸이 있었다. **지웠다** — 이제 서버를
+// **프로젝트마다 우리가 띄우고**(`electron/opencode/serverPool.ts`) 주소는 그 프로세스가
+// 알려 준다. 근거는 제품 요구다: 폐쇄망 현장 개발자는 터미널에서 `opencode serve` 를
+// 칠 수 없고, 그러니 "이미 띄운 서버 주소" 라는 것이 아예 성립하지 않는다.
+//
+// **개발용 오버라이드로 격하하지도 않았다.** 남겨 두면 제품이 안 밟는 분기가 설정 파일에
+// 남아, 다음 사람이 "이 앱은 붙기도 하는구나" 로 읽는다. 실행 파일 위치만 바꿔야 하는
+// 사람에게는 `OPENCODE_BIN` 이 남아 있다 (`electron/opencode/binary.ts`).
+//
+// 이 항목을 읽던 자리(설정 폼의 주소 칸 · 프로브 IPC 의 `opencodeUrl` 페이로드 ·
+// `ProjectBridge.onRuntimeConfigChange`)도 함께 걷어냈다.
 
 /**
  * 데스크톱 MCP 서버 자동 등록의 기본값. **이 상수 한 곳에서만 읽는다** —
@@ -42,8 +53,6 @@ export const DEFAULT_DESKTOP_MCP = true
 export type Language = 'ko' | 'en' | 'zh'
 
 export interface AppSettings {
-  /** 붙을 opencode 헤드리스 서버. 비우면 기본값(127.0.0.1:4096)을 쓴다. */
-  opencodeUrl: string
   /** 화면 문구 언어. 저장 즉시 리렌더된다. */
   language: Language
   /** 창이 비활성일 때 작업(턴)이 끝나면 OS 알림을 띄울지. */
@@ -75,7 +84,6 @@ export interface AppSettings {
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
-  opencodeUrl: DEFAULT_OPENCODE_URL,
   language: 'ko',
   taskDoneNotify: true,
   desktopMcp: DEFAULT_DESKTOP_MCP,
@@ -92,11 +100,9 @@ export function normalizeSettings(parsed: unknown): AppSettings {
   if (parsed === null || typeof parsed !== 'object') return { ...DEFAULT_SETTINGS }
   const source = parsed as Record<string, unknown>
 
-  const opencode = source['opencodeUrl']
+  // 예전 설정 파일에 남아 있는 `opencodeUrl` 은 **말없이 버린다** — 위 머리말대로 그 값을
+  // 읽는 곳이 이제 없다. 남겨서 되돌려 주면 화면이 저장할 때 다시 실어 보내 영영 산다.
   return {
-    // 빈 문자열은 "기본값 사용" 이다 — 여기서 기본값으로 되돌려 소비처가 분기하지 않게 한다
-    opencodeUrl:
-      typeof opencode === 'string' && opencode.trim() !== '' ? opencode.trim() : DEFAULT_OPENCODE_URL,
     language: toLanguage(source['language']),
     taskDoneNotify: toBool(source['taskDoneNotify'], DEFAULT_SETTINGS.taskDoneNotify),
     desktopMcp: toBool(source['desktopMcp'], DEFAULT_SETTINGS.desktopMcp),

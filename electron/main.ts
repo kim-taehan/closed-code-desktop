@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, nativeImage, powerMonitor, protocol, utilityProcess } from 'electron'
+import { app, BrowserWindow, ipcMain, nativeImage, powerMonitor, protocol } from 'electron'
 import { installAppMenu } from './appMenu'
 import * as path from 'node:path'
 import { existsSync } from 'node:fs'
@@ -12,10 +12,11 @@ import { SettingsStore, defaultSettingsPath } from './settings/settingsStore'
 import { LogBridge } from './ipc/logBridge'
 import { GitBridge } from './ipc/gitBridge'
 import { ExtensionBridge } from './ipc/extensionBridge'
-import { captureConsole } from './logs/logStore'
+import { captureConsole, logStore } from './logs/logStore'
+import { OpencodeServerPool } from './opencode/serverPool'
+import { installQuitGuard } from './app/quitGuard'
 import type { ExtensionService } from './extensions/service'
-import { startExtensionHost } from './extensions/appHost'
-import type { ExtensionAskText } from './extensions/serviceDispatch'
+import { launchExtensionHost } from './extensions/appLaunch'
 import { ExtensionViewHost, VIEW_SCHEME } from './extensions/viewHost'
 import type { DesktopMcp } from './mcp/desktopMcp'
 import { createDesktopMcp } from './mcp/appWiring'
@@ -29,6 +30,15 @@ protocol.registerSchemesAsPrivileged([
 ])
 
 const extensionViews = new ExtensionViewHost()
+
+/**
+ * 프로젝트마다 하나씩 띄우는 opencode 서버 (`opencode/serverPool.ts`).
+ *
+ * **앱 수명이다.** 창 수명(SessionBridge)에 매달면 macOS 에서 창을 닫았다 되살릴 때마다
+ * 서버가 통째로 새로 뜬다. 회수는 창이 사라질 때(`window-all-closed` → `bridge.dispose`)와
+ * 앱이 끝날 때 두 곳에서 한다 — 둘 다 **표에 있는 자식만** 죽인다.
+ */
+const opencodeServers = new OpencodeServerPool({ log: (line) => logStore.add('desktop', line) })
 
 // vite dev 서버를 쓸 때만 설정된다. 없으면 빌드 산출물을 로드한다.
 const DEV_SERVER_URL = process.env['DAVIS_DEV_SERVER_URL']
@@ -93,8 +103,7 @@ async function createWindow(): Promise<void> {
   })
 
   // 세션은 프로젝트마다 하나다. 목록이 세션 수명을 이끈다 (설계 §3).
-  // opencode 서버는 사용자가 띄운 것에 붙기만 한다 — 주소가 설정의 전부다.
-  const stored = await settings.load()
+  // opencode 서버도 프로젝트마다 하나이고 **우리가 띄운다** (`opencode/serverPool.ts`).
   // 에이전트가 이 앱을 조작하는 문. **창마다 새로 만들지 않는다** — 포트와 토큰이 둘이 되면
   // opencode 에 등록된 옛 주소가 죽는다. 포트들이 왜 함수인지는 `mcp/appWiring.ts` 머리말.
   desktopMcp ??= createDesktopMcp({
@@ -102,11 +111,13 @@ async function createWindow(): Promise<void> {
     registry: () => projectRegistry,
     window: () => mainWindow,
     activeFile: () => extensionIpc?.currentActiveFile() ?? null,
+    // 등록은 **그 프로젝트의 서버**에 한다 — 여기가 갈리는 것이 격리의 전부다
+    serverUrl: (projectId) => opencodeServers.urlOf(projectId),
   })
   const mcp = desktopMcp
   bridge = new SessionBridge(
     window,
-    { opencodeUrl: stored.opencodeUrl },
+    opencodeServers,
     {
       // opencode 의 MCP 등록은 instance 수명이라 **붙을 때마다** 다시 해야 한다
       onSessionReady: (project) => void mcp.onProjectReady(project),
@@ -127,8 +138,9 @@ async function createWindow(): Promise<void> {
       },
       onReconnect: (project) => bridge?.reconnect(project) ?? Promise.resolve(),
       onRestartRuntime: (open) => bridge?.restartRuntime(open) ?? Promise.resolve(),
-      onRuntimeConfigChange: (runtime, open) =>
-        bridge?.applyRuntimeConfig({ opencodeUrl: runtime.opencodeUrl }, open) ?? Promise.resolve(),
+      // 진단·설정 조회는 **활성 프로젝트의 서버**에 묻는다. 없으면 null 이고, 그 자리는
+      // "아직 안 뜬 것" 과 "못 띄운 것" 을 구별하지 않는다 — 둘 다 물을 곳이 없다.
+      activeServerUrl: () => opencodeServers.urlOf(registry.active?.id),
     },
     settings,
   )
@@ -142,7 +154,8 @@ async function createWindow(): Promise<void> {
       const active = registry.active
       return active === null ? null : { id: active.id, root: active.root }
     },
-    opencodeUrl: async () => (await settings.load()).opencodeUrl,
+    // 드로어의 pty 도 그 프로젝트의 서버가 굴린다 — 활성 프로젝트를 따라간다
+    opencodeUrl: () => opencodeServers.urlOf(registry.active?.id),
   })
   drawer.register()
 
@@ -201,36 +214,6 @@ function applyDockIcon(): void {
   if (!image.isEmpty()) app.dock.setIcon(image)
 }
 
-/** 확장 호스트 기동. 판단은 전부 `extensions/appHost.ts` 에 있고 여기서는 앱 상태만 잇는다. */
-function launchExtensionHost(): void {
-  const started = startExtensionHost({
-    userDataDir: app.getPath('userData'),
-    entryPath: path.join(__dirname, 'extensions', 'hostEntry.js'),
-    // 실제 utilityProcess 결선은 이 한 줄뿐이다 — host.ts 는 fork 를 주입받아
-    // vitest(node 환경, electron 이 가짜)에서도 그대로 돈다.
-    fork: (modulePath, args, options) => utilityProcess.fork(modulePath, args, options),
-    registry: () => projectRegistry,
-    // 확장이 물으면 **그 프로젝트의 채팅에 턴을 만들어** 묻는다 (설계 2026-08-13).
-    // 창이 없으면 브리지도 없다 — 그 경우 거절이 돌아간다.
-    askViaChat: (projectId, prompt) =>
-      bridge?.ask(projectId, prompt) ??
-      Promise.resolve({ status: "rejected" as const, reason: "창이 없습니다" }),
-    // 보고 있는 파일은 **브리지**가 쥔다. 브리지는 창과 함께 생기고 이 호스트는 앱과 함께
-    // 뜨므로, 값이 아니라 함수로 넘긴다 — 여기서 굳히면 늘 「없음」이다.
-    activeFile: () => extensionIpc?.currentActiveFile() ?? null,
-    // 물음창도 브리지(=창)가 쥔다. 창이 없으면 물을 곳이 없으니 사유와 함께 거절한다 —
-    // 조용히 취소로 눙치면 확장은 사람이 닫은 줄 알고 아무 말도 하지 않는다.
-    askText: (options: Parameters<ExtensionAskText>[0]) =>
-      extensionIpc === null || extensionIpc === undefined
-        ? Promise.reject(new Error('물어볼 창이 없습니다'))
-        : extensionIpc.askText(options),
-    // 호스트가 설정보다 먼저 뜰 수 있어 없으면 빈 목록으로 둔다 (전부 켜진 상태).
-    disabledNames: async () => (await appSettings?.load())?.disabledExtensions ?? [],
-    log: (line) => console.log(line),
-  })
-  extensions = started.service
-}
-
 void app.whenReady().then(async () => {
   // 창을 만들기 전에 건다 — 기동 중에 찍히는 것이 로그의 앞부분이라 놓치면 안 된다
   captureConsole()
@@ -245,7 +228,14 @@ void app.whenReady().then(async () => {
       headers: { 'content-type': 'text/html; charset=utf-8' },
     })
   })
-  launchExtensionHost()
+  // 창 수명 물건들은 **함수로** 넘긴다 — 호스트는 앱 수명이라 굳히면 죽은 세대를 본다
+  extensions = launchExtensionHost({
+    registry: () => projectRegistry,
+    askViaChat: (projectId, prompt) => bridge?.ask(projectId, prompt) ?? null,
+    activeFile: () => extensionIpc?.currentActiveFile() ?? null,
+    askText: (options) => extensionIpc?.askText(options) ?? null,
+    settings: () => appSettings,
+  })
   await createWindow()
 
   app.on('activate', () => {
@@ -258,7 +248,8 @@ void app.whenReady().then(async () => {
 })
 
 app.on('window-all-closed', () => {
-  // 우리가 띄운 runtime 을 정리하고 나서 종료한다
+  // 우리가 띄운 서버를 정리하고 나서 종료한다 (`bridge.dispose` 가 풀까지 거둔다).
+  // macOS 는 여기서 앱이 안 죽는다 — 독에서 되살리면 서버도 다시 뜬다.
   ipcMain.removeAllListeners(Channel.NOTIFY_TASK_DONE)
   projects?.dispose()
   projects = null
@@ -282,15 +273,16 @@ app.on('window-all-closed', () => {
   })
 })
 
-// 앱이 완전히 종료되기 전에도 정리한다 (Cmd+Q 등)
-app.on('before-quit', () => {
-  void bridge?.dispose()
-  // 확장 호스트는 앱 수명이라 여기 한 곳에서만 거둔다.
-  // 유예 종료(stop())가 아니라 dispose() 인 이유: 이벤트 핸들러가 동기라 기다릴 수 없다
-  // (기존 dispose 들도 `void` 로 흘린다). 종료 시 유예는 §2-6 J 로 미결이다.
+// 앱이 완전히 종료되기 전에 정리한다 (⌘Q 등). **끝날 때까지 붙잡는다** —
+// 이제 거둘 것에 자식 프로세스가 있어 흘려보내면 서버가 남는다 (`app/quitGuard.ts`).
+// 「종료 시 유예 없음(§2-6 J)」이 여기서는 풀렸다. 확장 호스트 쪽은 그대로 미결이다.
+installQuitGuard(async () => {
+  // 세션 + 우리가 띄운 opencode 서버 전부
+  await bridge?.dispose()
+  // 확장 호스트는 앱 수명이라 여기 한 곳에서만 거둔다
   extensions?.dispose()
   extensions = null
   // 듣던 포트를 닫는다. opencode 쪽 등록은 우리가 지우지 않아도 instance 와 함께 사라진다.
-  void desktopMcp?.dispose()
+  await desktopMcp?.dispose()
   desktopMcp = null
 })

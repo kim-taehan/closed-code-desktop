@@ -15,17 +15,22 @@ export async function probeRuntime(): Promise<{ outcome: CheckOutcome; diag: Dia
   return { outcome: { ok: diag.runtime.ok, detail: diag.runtime.detail }, diag }
 }
 
-/** desktop → opencode 서버 직접 ping */
-export function probeServer(payload: { opencodeUrl?: string } = {}): Promise<CheckOutcome> {
-  return window.davis.pingServer(payload)
+/**
+ * desktop → **그 프로젝트의** opencode 서버 직접 ping.
+ *
+ * 주소를 인자로 받던 자리다. 서버를 우리가 프로젝트마다 띄우면서 화면이 고를 주소가
+ * 없어졌다 — main 이 활성 프로젝트의 서버를 고른다 (`ipc/projectBridge.ts`).
+ */
+export function probeServer(): Promise<CheckOutcome> {
+  return window.davis.pingServer()
 }
 
 /**
  * 쓸 모델이 붙어 있는지. 서버는 떴는데 프로바이더 설정이 비면
  * 증상이 "보내도 답이 없다" 로만 나타나서, 진단에서 미리 갈라 준다.
  */
-export async function probeModels(payload: { opencodeUrl?: string } = {}): Promise<CheckOutcome> {
-  const result = await window.davis.checkModels(payload)
+export async function probeModels(): Promise<CheckOutcome> {
+  const result = await window.davis.checkModels()
   return { ok: result.ok, detail: result.message }
 }
 

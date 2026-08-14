@@ -161,10 +161,11 @@ const bridge: DesktopBridge = {
   getSettings: () => ipcRenderer.invoke(Channel.SETTINGS_GET) as Promise<AppSettings>,
   setSettings: (settings: AppSettings) =>
     ipcRenderer.invoke(Channel.SETTINGS_SET, settings) as Promise<AppSettings>,
-  checkModels: (payload: { opencodeUrl?: string }) =>
-    ipcRenderer.invoke(Channel.MODEL_CHECK, payload) as Promise<{ ok: boolean; message: string }>,
-  pingServer: (payload: { opencodeUrl?: string } = {}) =>
-    ipcRenderer.invoke(Channel.SERVER_PING, payload) as Promise<{ ok: boolean; detail: string }>,
+  // 볼 대상은 **활성 프로젝트의 서버**로 정해진다 — 화면이 주소를 실어 보내지 않는다
+  checkModels: () =>
+    ipcRenderer.invoke(Channel.MODEL_CHECK) as Promise<{ ok: boolean; message: string }>,
+  pingServer: () =>
+    ipcRenderer.invoke(Channel.SERVER_PING) as Promise<{ ok: boolean; detail: string }>,
   reconnectProject: () => ipcRenderer.invoke(Channel.SESSION_RECONNECT) as Promise<void>,
   restartRuntime: () => ipcRenderer.invoke(Channel.RUNTIME_RESTART) as Promise<void>,
   listCommands: () => ipcRenderer.invoke(Channel.COMMAND_LIST) as Promise<CommandListPayload>,

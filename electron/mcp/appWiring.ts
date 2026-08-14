@@ -26,6 +26,8 @@ export interface DesktopMcpDeps {
   window: () => BrowserWindow | null
   /** 렌더러가 알려 준 마지막 활성 파일 (`ExtensionBridge.currentActiveFile`) */
   activeFile: () => unknown
+  /** 그 프로젝트의 opencode 서버 주소 (`opencode/serverPool.ts`). 안 떴으면 null */
+  serverUrl: (projectId: string) => string | null
 }
 
 /**
@@ -52,10 +54,9 @@ export function desktopMcpPorts(deps: DesktopMcpDeps): McpToolPorts {
 
 export function createDesktopMcp(deps: DesktopMcpDeps): DesktopMcp {
   return new DesktopMcp({
-    settings: async () => {
-      const current = await deps.settings()
-      return { desktopMcp: current.desktopMcp, opencodeUrl: current.opencodeUrl }
-    },
+    settings: async () => ({ desktopMcp: (await deps.settings()).desktopMcp }),
+    // 주소도 **그때그때** 읽는다 — 프로젝트마다 다르고, 탭을 닫았다 열면 새 서버가 뜬다
+    serverUrl: deps.serverUrl,
     ports: desktopMcpPorts(deps),
     log: (line) => logStore.add('desktop', line),
   })

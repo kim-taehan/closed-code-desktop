@@ -15,11 +15,21 @@ import { createToolRunner, type McpToolPorts } from './tools'
 
 export interface DesktopMcpOptions {
   /**
-   * **매번 읽는다** — 스위치(`desktopMcp`)도 서버 주소(`opencodeUrl`)도 설정탭에서
-   * 바뀌고, 그때 앱을 다시 띄우지 않아도 되어야 한다. `SettingsStore.load()` 는
-   * 캐시라 디스크를 다시 읽지 않는다.
+   * **매번 읽는다** — 스위치(`desktopMcp`)는 설정탭에서 바뀌고, 그때 앱을 다시 띄우지
+   * 않아도 되어야 한다. `SettingsStore.load()` 는 캐시라 디스크를 다시 읽지 않는다.
+   *
+   * 서버 주소는 여기 없다. 예전에는 같이 있었다(`opencodeUrl`) — 앱이 붙는 곳이 하나뿐
+   * 이었기 때문이다. 지금은 **프로젝트마다 서버가 달라** 아래 `serverUrl` 로 그때그때 묻는다.
    */
-  settings: () => Promise<{ desktopMcp: boolean; opencodeUrl: string }>
+  settings: () => Promise<{ desktopMcp: boolean }>
+  /**
+   * 그 프로젝트의 opencode 서버 주소. 아직 안 떴으면 null.
+   *
+   * **등록이 프로젝트별로 갈리는 것이 여기서 결정된다.** opencode 의 MCP 등록은
+   * instance 수명이라 서버가 갈리면 서로 안 보인다 (실측) — `?directory=` 로 한 겹,
+   * **서버 자체가 다른 것**으로 또 한 겹이다.
+   */
+  serverUrl: (projectId: string) => string | null
   ports: McpToolPorts
   password?: string
   fetchImpl?: typeof fetch
@@ -55,12 +65,21 @@ export class DesktopMcp {
         return
       }
 
+      // 세션이 ready 라면 그 프로젝트의 서버는 이미 떠 있다. 그래도 없을 수 있는 경우가
+      // 하나 있다 — 이 신호가 오는 사이에 탭이 닫혀 서버까지 거둔 때다. 그때는 등록할 곳이
+      // 없으니 자리를 비우고 물러난다 (다음 ready 에 다시 시도한다).
+      const opencodeUrl = this.options.serverUrl(project.id)
+      if (opencodeUrl === null) {
+        this.registered.delete(project.id)
+        return
+      }
+
       await this.server.start()
       const address = this.server.address()
       if (address === null) throw new Error('MCP 서버가 포트를 잡지 못했습니다')
 
       const result = await registerMcpServer({
-        opencodeUrl: settings.opencodeUrl,
+        opencodeUrl,
         directory: project.root,
         projectId: project.id,
         address,

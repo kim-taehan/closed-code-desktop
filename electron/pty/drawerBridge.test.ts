@@ -85,7 +85,7 @@ describe('PtyDrawerBridge — 떠날 때의 신원', () => {
     const bridge = new PtyDrawerBridge({
       window: { isDestroyed: () => false, webContents: { send: () => {} } } as never,
       activeProject: () => active,
-      opencodeUrl: () => Promise.resolve('http://127.0.0.1:4096'),
+      opencodeUrl: () => 'http://127.0.0.1:4096',
     })
     bridge.register()
     return bridge

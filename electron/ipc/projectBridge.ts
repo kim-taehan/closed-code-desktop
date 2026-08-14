@@ -33,10 +33,17 @@ export interface ProjectBridgeListener {
    * **멀쩡히 살아 있는 런타임을 재시작한다** (사다리 다음 칸).
    */
   onReconnect(project: ProjectRecord): Promise<void>
-  /** runtime 을 새로 띄우고 열려 있는 프로젝트를 모두 되살린다 */
+  /** 우리가 띄운 서버를 접고 다시 띄운 뒤 열려 있는 프로젝트를 모두 되살린다 */
   onRestartRuntime(projects: ProjectRecord[]): Promise<void>
-  /** opencode 서버 주소가 설정탭에서 바뀌었다 — config 를 갱신하고 재시작 없이 다시 붙는다 */
-  onRuntimeConfigChange(runtime: { opencodeUrl: string }, projects: ProjectRecord[]): Promise<void>
+  /**
+   * **지금 활성 프로젝트의** opencode 서버 주소. 아직 안 떴으면 null.
+   *
+   * 전역 설정 `opencodeUrl` 이 있던 자리다. 서버가 프로젝트마다 갈리면서 "앱이 붙는 주소"
+   * 라는 것이 없어졌고, 여기서 묻는 것들(명령 목록·설정 읽기·프로브)은 전부
+   * **활성 프로젝트 기준**이라 활성만 알면 된다. 띄우지는 않는다 — 진단 버튼이 서버를
+   * 만들어 내면 안 된다 (`serverPool.urlOf` 주석).
+   */
+  activeServerUrl(): string | null
 }
 
 // 프로젝트 목록 IPC 만 책임진다. 세션 배선은 SessionBridge 가 따로 한다.
@@ -112,19 +119,12 @@ export class ProjectBridge {
       this.pushState()
     })
     ipcMain.handle(Channel.SETTINGS_GET, () => this.settings.load())
-    ipcMain.handle(Channel.SETTINGS_SET, async (_event, payload: AppSettings) => {
-      const before = await this.settings.load()
-      // 정규화된 값을 **돌려줘야** 화면이 그 값으로 다시 그린다 (useAppSettings 계약).
-      const saved = await this.settings.save(payload)
-      // opencode 서버 주소가 바뀌면 재시작 없이 다시 붙는다 (진행률은 RUNTIME_STATE).
-      if (before.opencodeUrl !== payload.opencodeUrl) {
-        void this.listener.onRuntimeConfigChange(
-          { opencodeUrl: payload.opencodeUrl },
-          this.registry.openProjects,
-        )
-      }
-      return saved
-    })
+    // 정규화된 값을 **돌려줘야** 화면이 그 값으로 다시 그린다 (useAppSettings 계약).
+    //
+    // 저장이 세션을 건드리지 않는다. 예전에는 `opencodeUrl` 이 바뀌면 여기서 곧바로
+    // 재조립했는데, 그 항목이 없어졌다 — 서버 주소는 이제 설정이 아니라 **우리가 띄운
+    // 프로세스가 알려 주는 값**이다 (`opencode/serverPool.ts`).
+    ipcMain.handle(Channel.SETTINGS_SET, (_event, payload: AppSettings) => this.settings.save(payload))
     ipcMain.handle(Channel.SESSION_RECONNECT, async () => {
       const active = this.registry.active
       if (active) await this.listener.onReconnect(active)
@@ -135,7 +135,7 @@ export class ProjectBridge {
     ipcMain.handle(Channel.COMMAND_LIST, async () => {
       // 목록은 **디렉토리마다 다르다** — 활성 프로젝트 경로를 반드시 실어 보낸다
       // (빼면 서버 cwd 의 목록이 온다. commandList.ts 머리말).
-      const result = await fetchCommands(await this.opencodeUrlOf(), this.registry.active?.root ?? '')
+      const result = await fetchCommands(this.serverUrl(), this.registry.active?.root ?? '')
       // 못 받아도 빈 목록으로 돌려준다 — 사유만 함께 알린다
       return {
         ok: result.error === undefined,
@@ -144,8 +144,8 @@ export class ProjectBridge {
       }
     })
     // opencode 자신의 설정 — 활성 프로젝트의 `opencode.json` 하나만 다룬다.
-    ipcMain.handle(Channel.OPENCODE_CONFIG_READ, async () =>
-      readOpencodeConfig(this.registry.active?.root ?? '', await this.opencodeUrlOf()),
+    ipcMain.handle(Channel.OPENCODE_CONFIG_READ, () =>
+      readOpencodeConfig(this.registry.active?.root ?? '', this.serverUrl()),
     )
     ipcMain.handle(Channel.OPENCODE_CONFIG_WRITE, (_event, payload: { path: string; content: string }) =>
       writeOpencodeConfig(payload.path, payload.content),
@@ -155,7 +155,7 @@ export class ProjectBridge {
     ipcMain.handle(Channel.OPENCODE_CONFIG_RELOAD, async () => {
       const active = this.registry.active
       if (!active) return { ok: false, error: '열린 프로젝트가 없습니다' }
-      const result = await disposeInstance(active.root, await this.opencodeUrlOf())
+      const result = await disposeInstance(active.root, this.serverUrl())
       if (!result.ok) return result
       await this.listener.onReconnect(active)
       return result
@@ -174,23 +174,27 @@ export class ProjectBridge {
     ipcMain.handle(Channel.ATTACH_RESOLVE, (_event, payload: { paths: string[] }) =>
       resolveAttachments(payload.paths, this.registry.active?.root ?? null),
     )
-    // 저장 전에도 확인할 수 있어야 하므로, 화면이 준 주소가 있으면 그걸 먼저 쓴다.
-    ipcMain.handle(Channel.MODEL_CHECK, async (_event, payload: { opencodeUrl?: string }) => {
-      const result = await checkModels(await this.opencodeUrlOf(payload.opencodeUrl))
+    // 화면이 주소를 실어 보내던 자리다. 이제 고칠 주소가 없다 — 서버는 우리가 띄우고,
+    // 진단은 **그 서버**만 본다. (설정 화면에서 주소를 바꿔 저장 전에 확인하던 흐름이
+    // 통째로 없어졌다. `shared/settings/appSettings.ts` 의 `opencodeUrl` 제거 근거와 같다.)
+    ipcMain.handle(Channel.MODEL_CHECK, async () => {
+      const result = await checkModels(this.serverUrl())
       return { ok: result.ok, message: result.detail }
     })
-    ipcMain.handle(Channel.SERVER_PING, async (_event, payload: { opencodeUrl?: string } = {}) =>
-      pingOpencode(await this.opencodeUrlOf(payload.opencodeUrl)),
-    )
+    ipcMain.handle(Channel.SERVER_PING, () => pingOpencode(this.serverUrl()))
     // 파일 읽기/쓰기/OS 열기/디렉토리 — 300줄 상한 때문에 등록만 갈라냈다
     registerFsHandlers(this.fs)
   }
 
-  /** 화면이 준 주소 > 저장된 설정. 설정은 빈 값을 기본값으로 정규화해 두므로 여기선 그대로 쓴다. */
-  private async opencodeUrlOf(fromForm?: string): Promise<string> {
-    const typed = fromForm?.trim()
-    if (typed) return typed
-    return (await this.settings.load()).opencodeUrl
+  /**
+   * 활성 프로젝트의 서버 주소. **아직 안 떴으면 빈 문자열이다.**
+   *
+   * null 대신 빈 문자열로 내리는 이유: 이 값을 받는 넷(`fetchCommands`·`readOpencodeConfig`·
+   * `disposeInstance`·프로브)이 이미 "주소가 비면 이런 사유로 실패" 를 각자 갖고 있다.
+   * 여기서 갈래를 하나 더 만들면 같은 판단이 두 곳에 생긴다.
+   */
+  private serverUrl(): string {
+    return this.listener.activeServerUrl() ?? ''
   }
 
   dispose(): void {
