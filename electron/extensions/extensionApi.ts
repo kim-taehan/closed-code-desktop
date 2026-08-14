@@ -94,9 +94,14 @@ export interface ExtensionApi {
     /** 저장한 절대경로. 사용자가 창을 닫으면 `null` — **취소는 실패가 아니다.** */
     save(fileName: string, text: string): Promise<string | null>
   }
-  agent: {
+  /**
+   * **`agent` 가 아니라 `chat` 이다** (설계 2026-08-13 §3). 곁길로 묻던 시절의 이름은
+   * `agent.ask` 였는데, 지금은 사용자 대화에 턴을 넣는 일이라 이름이 그 사실을 말해야 한다.
+   * RPC 메서드(`chat.ask`)는 처음부터 이 이름이었고 확장이 보는 쪽만 옛 이름으로 남아 있었다.
+   */
+  chat: {
     /**
-     * 최종 답 텍스트. 도구 호출·사고 과정은 빼고 결론만 온다. 실패하면 던진다.
+     * 최종 답 텍스트. 도구 호출·사고 과정은 빼고 결론만 온다.
      *
      * **사용자 대화에 턴이 만들어진다** (설계 2026-08-13). 질문도 답도 화면에 그대로 보이고,
      * 도구 승인·질문 카드는 사용자가 답한다. 그래서 진행 상황을 따로 중계하지 않는다 —
@@ -175,7 +180,7 @@ export function createExtensionApi(call: RpcCall, extensionName: string, extensi
     export: {
       save: async (fileName, text) => asPathOrNull(await call(METHOD_EXPORT_SAVE, { fileName, text })),
     },
-    agent: {
+    chat: {
       ask: async (prompt) => (await call(METHOD_CHAT_ASK, { prompt })) as AskResult,
     },
     ui: {

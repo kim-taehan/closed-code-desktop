@@ -13,6 +13,7 @@ import { resolveSlashSubmission, setModelSlashCommand } from '../state/slashComm
 import { useComposerSendBridges } from '../state/useComposerSendBridges'
 import { parseMentions } from '../state/atMentions'
 import { useOpencodeCommands } from '../state/useOpencodeCommands'
+import { isRealFilePath } from '../state/editorContext'
 import { useSendQueue } from '../state/useSendQueue'
 import { useModelSelect } from '../state/useModelSelect'
 import { isModelSwitcherEligible } from '../state/modelSelect'
@@ -64,7 +65,12 @@ export interface ChatComposerProps {
 }
 
 export function ChatComposer(props: ChatComposerProps) {
-  const viewingFile = props.activeTab !== 'chat' ? props.activeTab : null
+  // **파일 탭일 때만이다.** 활성 탭에는 파일이 아닌 것이 섞인다 — git diff 탭
+  // (`git:staged:…`)과 확장 화면 탭(`ext:{확장}:{뷰}`)은 가짜 경로라, 그대로 쓰면
+  // `<루트>/ext:screen-scenario:…` 같은 없는 파일을 첨부해 보낸다.
+  // 실측(2026-08-14): 확장 판을 열어 둔 채로 입력창에 그 줄이 붙어 나갔다.
+  const viewingFile =
+    props.activeTab !== 'chat' && isRealFilePath(props.activeTab) ? props.activeTab : null
   const queue = useSendQueue(props.project?.id ?? null, props.isStreaming)
   const history = useInputHistory(props.project?.id ?? null)
   const [skills, setSkills] = useState(false)

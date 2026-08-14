@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { activeEditorOf, isRealFilePath, type EditorSelection } from './editorContext'
 import { diffTabKey, type OpenFile } from './useOpenFiles'
+import { htmlTabKey } from './useOpenHtmlTab'
 
 // 채팅 요청에 실을 편집기 컨텍스트의 형태 규칙.
 // runtime 은 모르는 키를 조용히 버리고 형식이 어긋나도 알려주지 않으므로 여기서 잠근다.
@@ -17,6 +18,23 @@ describe('실제 파일 경로 판정', () => {
   it('git diff 탭은 거른다 (담김·변경 양쪽)', () => {
     expect(isRealFilePath(diffTabKey('src/a.ts', true))).toBe(false)
     expect(isRealFilePath(diffTabKey('src/a.ts', false))).toBe(false)
+  })
+
+  // 확장 화면 탭도 가짜 경로다. **`files` 에 들어가므로** 「목록에 없어서 걸린다」는
+  // 방어가 안 통한다 — 실측(2026-08-14): 확장 판을 열어 둔 채 대화를 보내면
+  // 입력창에 `ext:screen-scenario:screenScenario.board 함께 보냄` 이 붙어 나갔다.
+  it('확장 화면 탭은 거른다', () => {
+    expect(isRealFilePath(htmlTabKey('screen-scenario', 'screenScenario.board'))).toBe(false)
+  })
+})
+
+describe('활성 편집기 참조 — 파일 아닌 탭', () => {
+  it('확장 화면 탭이 활성이면 아무것도 안 싣는다', () => {
+    const key = htmlTabKey('screen-scenario', 'screenScenario.board')
+
+    // **탭 목록에 실제로 들어 있는 상태**로 잰다. 안 넣고 재면 `files.some` 이 먼저
+    // 끊어, 겨누려던 관문(`isRealFilePath`)이 돌지도 않고 초록이 난다.
+    expect(activeEditorOf([file(key)], key, {})).toBeNull()
   })
 })
 

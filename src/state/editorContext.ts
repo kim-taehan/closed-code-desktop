@@ -40,19 +40,28 @@ export type ChatEditorContext = Pick<ChatSendPayload, 'activeEditor' | 'autoCont
 /**
  * 실제 파일 탭인가.
  *
- * git diff 탭은 `git:staged:` / `git:unstaged:` 접두사가 붙은 **가짜 경로**라
- * (`useOpenFiles.diffTabKey`) 그대로 보내면 없는 파일을 가리킨다. main 도 방어하지만
- * 여기서 먼저 거른다.
+ * 가짜 경로를 쓰는 탭이 **둘** 있고 둘 다 거른다. 그대로 보내면 없는 파일을 가리킨다.
+ *
+ * - `git:staged:` / `git:unstaged:` — git diff 탭 (`useOpenFiles.diffTabKey`)
+ * - `ext:{확장이름}:{뷰id}` — 확장 화면 탭 (`useOpenHtmlTab.htmlTabKey`)
+ *
+ * **확장 쪽은 2026-08-14 에 실측으로 찾았다.** 아래 `activeEditorOf` 의 주석이
+ * *"파일 아닌 탭은 `files` 에 없으므로 자연히 걸린다 — 새 탭 종류가 생겨도 안 샌다"*
+ * 고 단언했는데, 확장 화면 탭은 **`files` 에 들어간다**(`useOpenHtmlTab` 이 넣는다).
+ * 확장 판을 열어 둔 채 대화를 보내면 입력창에 `ext:screen-scenario:…` 이 붙어 나갔다.
+ *
+ * main 도 방어하지만 여기서 먼저 거른다.
  */
 export function isRealFilePath(path: string): boolean {
-  return !path.startsWith('git:')
+  return !path.startsWith('git:') && !path.startsWith('ext:')
 }
 
 /**
  * 활성 탭이 실제 파일이면 그 참조를, 아니면 null.
  *
- * '대화'·'로그' 같은 파일 아닌 탭은 `files` 에 없으므로 여기서 자연히 걸린다 —
- * 탭 이름을 하나씩 배제하지 않는다 (새 탭 종류가 생겨도 안 샌다).
+ * '대화'·'로그' 같은 파일 아닌 탭은 `files` 에 없으므로 여기서 자연히 걸린다.
+ * **그 방어만으로는 부족하다** — `files` 에 들어가면서 파일이 아닌 탭이 둘 있고
+ * (git diff · 확장 화면), 그것은 `isRealFilePath` 가 막는다.
  */
 export function activeEditorOf(
   files: OpenFile[],
