@@ -23,15 +23,37 @@ export interface ThemeState {
   setChoice: (choice: ThemeChoice) => void
 }
 
-export function useTheme(): ThemeState {
-  const [choice, setChoiceState] = useState<ThemeChoice>(readStored)
+/**
+ * CSS 는 data-theme 속성으로 분기한다.
+ *
+ * **효과가 아니라 그 자리에서 건다.** 효과에만 두면 늦는다 — 이 훅을 부르는 App 은
+ * 부모고, React 는 **자식 효과를 부모 효과보다 먼저** 돌린다. 그래서 팔레트를
+ * `getComputedStyle` 로 읽는 자식(`DrawerTerminal`)이 아직 안 바뀐 속성을 읽어
+ * **늘 한 테마 뒤처졌다** — 다크로 바꿔도 터미널만 흰 배경으로 남았다.
+ * 첫 마운트는 더해서, 자식이 읽는 시점에는 속성이 **아직 없었다**
+ * (`useTheme.order.test.tsx` 가 둘 다 겨눈다).
+ */
+function applyTheme(choice: ThemeChoice): void {
+  document.documentElement.setAttribute('data-theme', choice)
+}
 
-  // CSS 는 data-theme 속성으로 분기한다
+export function useTheme(): ThemeState {
+  const [choice, setChoiceState] = useState<ThemeChoice>(() => {
+    const stored = readStored()
+    // 첫 그림 전에 건다. 여기서 안 걸면 첫 렌더의 자식들이 속성 없는 문서를 읽는다.
+    applyTheme(stored)
+    return stored
+  })
+
+  // 저장값 복원·핫리로드처럼 setChoice 를 거치지 않고 값이 온 경우의 그물.
+  // 같은 값을 다시 거는 것은 무해하다.
   useEffect(() => {
-    document.documentElement.setAttribute('data-theme', choice)
+    applyTheme(choice)
   }, [choice])
 
   const setChoice = useCallback((next: ThemeChoice) => {
+    // 렌더를 기다리지 않는다 — 자식이 색을 읽기 전에 문서가 이미 새 테마여야 한다
+    applyTheme(next)
     setChoiceState(next)
     try {
       localStorage.setItem(STORAGE_KEY, next)

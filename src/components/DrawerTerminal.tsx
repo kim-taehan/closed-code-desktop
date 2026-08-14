@@ -131,7 +131,13 @@ export function DrawerTerminal({ projectId, active, theme }: Props): React.React
   }, [projectId])
 
   // 테마를 바꿔도 터미널은 다시 세우지 않는다 — 세우면 화면이 한 번 깜빡인다.
-  // 색만 갈아 끼운다. data-theme 이 이미 바뀐 뒤라 CSS 에서 새 값이 읽힌다.
+  // 색만 갈아 끼운다.
+  //
+  // ⚠️ **"data-theme 이 이미 바뀐 뒤라 새 값이 읽힌다" 는 한동안 거짓이었다.** 이 효과는
+  // 자식 것이고 속성을 거는 것은 부모(App 의 `useTheme`)인데, React 는 자식 효과를 먼저
+  // 돌린다 — 그래서 여기서 읽던 색은 **늘 한 테마 전 것**이었다 (다크로 바꿔도 터미널만
+  // 흰 배경). 이제 참인 이유는 순서가 아니라 자리다: `useTheme` 이 속성을 효과가 아니라
+  // `setChoice` 그 자리에서 건다 (`useTheme.ts` · `useTheme.order.test.tsx`).
   useEffect(() => {
     const xterm = xtermRef.current
     if (xterm !== null) xterm.options.theme = terminalColors()
