@@ -71,6 +71,20 @@ export interface McpRemoteConfig {
   timeout?: number
 }
 
+/**
+ * 설정 계열 질의(`/config`·`/config/providers`)에 프로젝트 신원을 싣는다.
+ *
+ * ⚠️ **이 헬퍼를 다른 표면으로 넓히지 말 것.** `addMcpServer` 는 질의 이름이 같은데도
+ * 일부러 따로 조립한다 — 표면마다 이름이 갈리고(pty 는 `location[directory]=`), 한쪽 규칙이
+ * 헬퍼를 타고 넘어가면 두 표면이 조용히 같이 틀어진다 (`addMcpServer` 주석).
+ *
+ * 디렉토리를 모를 때(세션 전)는 붙이지 않는다 — 그때는 서버 전역 설정이 답이다.
+ */
+function withDirectory(path: string, directory: string | null): string {
+  if (directory === null || directory === '') return path
+  return `${path}?directory=${encodeURIComponent(directory)}`
+}
+
 export class OpencodeClient {
   private readonly baseUrl: string
   private readonly fetchImpl: typeof fetch
@@ -169,9 +183,14 @@ export class OpencodeClient {
    * **없는데 404 가 아니다.** 그 주소는 **200 에 웹 UI HTML** 을 준다 (SPA 폴백).
    * `response.ok` 가 참이라 여기서 안 끊기고 JSON 파싱에서야 터진다 — 상태 코드로는
    * 못 가린다. README 실측 함정 11.
+   *
+   * ⚠️ **`?directory=` 를 실어야 그 프로젝트의 `opencode.json` 을 읽는다** (2026-08-14 실측).
+   * 서버 하나로 프로젝트가 여럿일 때 답이 갈린다 — 같은 서버에서 없이 부르면 프로바이더 3개,
+   * `directory=projX` 로 부르면 4개(그 프로젝트에만 있는 것 하나가 더 온다).
+   * **틀려도 200 이다** — 질의 이름을 못 알아들으면 그냥 무시하고 전역 설정을 준다.
    */
-  async providers(): Promise<ProvidersResponse> {
-    return this.get<ProvidersResponse>('/config/providers')
+  async providers(directory: string | null): Promise<ProvidersResponse> {
+    return this.get<ProvidersResponse>(withDirectory('/config/providers', directory))
   }
 
   /**
@@ -180,9 +199,14 @@ export class OpencodeClient {
    * ⚠️ **모델을 주지 않고 세션을 만들면 응답에 `model` 이 없다** (실측 1.17.18 — 줘서
    * 만들면 있다). 그 세션의 기본이 무엇인지는 이 설정값으로만 알 수 있고, 모르면
    * 스위처에서 오버라이드를 풀었을 때 되돌아갈 자리가 없다.
+   *
+   * ⚠️ **여기도 `?directory=` 가 필요하다** (2026-08-14 실측). 프로젝트가 자기
+   * `opencode.json` 에 `"model"` 을 정해 두면 없이 부를 때와 값이 다르다 — 전역
+   * `davis-litellm/glm-5.2` 대 프로젝트 `projonly/only-here`. 안 실으면 오버라이드를
+   * 풀었을 때 **그 프로젝트가 정한 기본이 아닌 전역 모델로** 되돌아간다.
    */
-  async config(): Promise<{ model?: string }> {
-    return this.get<{ model?: string }>('/config')
+  async config(directory: string | null): Promise<{ model?: string }> {
+    return this.get<{ model?: string }>(withDirectory('/config', directory))
   }
 
   /**

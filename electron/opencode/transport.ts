@@ -165,7 +165,7 @@ export class OpencodeTransport implements Transport {
     this.emit({ kind: Kind.AUTH, action: Action.AUTH_STATE, data: { state: AuthState.VALID } })
   }
 
-  /** workspace_sync → opencode 세션 생성. directory 가 곧 워크스페이스다. */
+  /** workspace_sync → opencode 세션 생성. directory 가 곧 워크스페이스이자 설정 조회 범위다. */
   private async onWorkspaceSync(data: Record<string, unknown>): Promise<void> {
     const workspace = (data['workspace'] ?? {}) as Record<string, unknown>
     const directory = typeof workspace['workspacePath'] === 'string' ? workspace['workspacePath'] : ''
@@ -183,7 +183,7 @@ export class OpencodeTransport implements Transport {
       ...(this.options.agent ? { agent: this.options.agent } : {}),
     })
     this.sessionId = session.id
-    this.model.adopt(session.model)
+    this.model.adopt(session.model, directory)
     this.emit({
       kind: Kind.WORKSPACE,
       action: Action.WORKSPACE_STATE,

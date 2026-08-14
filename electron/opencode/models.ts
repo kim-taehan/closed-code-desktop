@@ -26,18 +26,29 @@ export class SessionModel {
   /** 세션을 만들 때 정해진 모델. 없으면 서버 설정에서 늦게 채운다. */
   private base: ModelRef | null = null
   private active: ModelRef | null = null
+  /**
+   * 이 세션의 프로젝트 디렉토리. **설정 조회에 같이 실어야 한다** — 안 실으면 서버 전역
+   * 설정이 와서, 프로젝트가 자기 `opencode.json` 에 정한 기본 모델·프로바이더가 무시된다
+   * (`client.config`/`client.providers` 주석의 실측). 세션이 서기 전에는 null 이고,
+   * 그때는 전역이 맞는 답이다.
+   */
+  private directory: string | null = null
 
   constructor(private readonly client: Pick<OpencodeClient, 'config' | 'providers' | 'setModel'>) {}
 
-  /** 세션 생성 응답이 알려준 기본 모델 (모델을 주지 않고 만들면 null 이다) */
-  adopt(model: ModelRef | null): void {
+  /**
+   * 세션 생성 응답이 알려준 기본 모델 (모델을 주지 않고 만들면 null 이다)과
+   * 그 세션이 선 프로젝트 디렉토리를 함께 받는다.
+   */
+  adopt(model: ModelRef | null, directory: string | null): void {
     this.base = model
     this.active = model
+    this.directory = directory
   }
 
   /** 요청한 모델(없으면 기본)로 맞춘다. 이미 그 모델이면 아무것도 하지 않는다. */
   async apply(sessionId: string, requested: ModelRef | null): Promise<void> {
-    const next = requested ?? (this.base ??= await serverDefaultModel(this.client))
+    const next = requested ?? (this.base ??= await serverDefaultModel(this.client, this.directory))
     if (next === null) return
     if (this.active && modelName(this.active) === modelName(next)) return
     await this.client.setModel(sessionId, next)
@@ -46,8 +57,8 @@ export class SessionModel {
 
   /** 스위처에 돌려줄 davis status payload */
   async status(): Promise<Record<string, unknown>> {
-    this.base ??= await serverDefaultModel(this.client)
-    return resolveStatus(this.client, this.active ?? this.base)
+    this.base ??= await serverDefaultModel(this.client, this.directory)
+    return resolveStatus(this.client, this.active ?? this.base, this.directory)
   }
 }
 
@@ -103,12 +114,16 @@ export function statusPayload(current: string, models: string[]): Record<string,
  *
  * 못 알아내면 null 이고, 그때 어댑터는 모델을 건드리지 않는다 — 모르는 채로 아무 모델이나
  * 밀면 사용자가 고르지도 않은 모델로 대화가 이어진다.
+ *
+ * **`directory` 가 곧 "누구의 기본이냐" 다.** 안 넘기면 서버 전역 기본으로 되돌아가,
+ * 프로젝트가 정해 둔 모델이 오버라이드를 풀 때마다 조용히 밀려난다.
  */
 export async function serverDefaultModel(
   client: Pick<OpencodeClient, 'config'>,
+  directory: string | null,
 ): Promise<ModelRef | null> {
   try {
-    const model = (await client.config()).model
+    const model = (await client.config(directory)).model
     return typeof model === 'string' ? toModelRef(model) : null
   } catch {
     return null
@@ -121,14 +136,18 @@ export async function serverDefaultModel(
  * **조회에 실패해도 던지지 않는다.** 스위처는 목록이 비면 스스로 숨으므로(fail-closed)
  * 지금 쓰는 모델 하나만 남긴 목록으로 답한다. 여기서 예외를 올리면 모델과 아무 상관 없는
  * 대화 화면에 실패가 뜬다.
+ *
+ * **목록도 프로젝트별이다** — `directory` 를 안 넘기면 그 프로젝트에만 설정된 프로바이더가
+ * 스위처에서 빠진다 (실측: 3개 대 4개).
  */
 export async function resolveStatus(
   client: Pick<OpencodeClient, 'providers'>,
   current: ModelRef | null,
+  directory: string | null,
 ): Promise<Record<string, unknown>> {
   const name = current ? modelName(current) : ''
   try {
-    return statusPayload(name, listModels(await client.providers()))
+    return statusPayload(name, listModels(await client.providers(directory)))
   } catch {
     return statusPayload(name, name ? [name] : [])
   }
