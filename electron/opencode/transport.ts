@@ -1,13 +1,15 @@
 import { randomUUID } from 'node:crypto'
-import { Action, AuthState, Kind, PermissionMode, WorkspaceState } from '../../shared/protocol/kinds'
+import { Action, AuthState, Kind, PermissionMode } from '../../shared/protocol/kinds'
 import { parseInbound } from '../../shared/protocol/envelope'
 import { HandlerSet, type CloseInfo, type Transport, type Unsubscribe } from '../ws/transport'
-import { OpencodeClient, type PermissionReply } from './client'
+import { OpencodeClient } from './client'
+import { replyApproval, replyUserAnswer } from './replies'
 import { SessionModel, toModelRef } from './models'
 import { applyPermissionMode } from './agents'
 import { withPromptContext } from './promptContext'
 import { SseStream } from './sse'
 import { translate, type TranslateContext } from './translate'
+import { syncWorkspace } from './workspace'
 import type { OpencodeEvent } from './events'
 
 // `Transport` 의 opencode 구현 — 부패방지 계층.
@@ -34,6 +36,8 @@ export class OpencodeTransport implements Transport {
   protected readonly sse: SseStream
   private sessionId: string | null = null
   private streamId: string | null = null
+  /** 이 턴에 interrupt 를 보냈는가. `step.failed` 를 취소로 읽는 유일한 근거다. */
+  private cancelling = false
   private started = false
   /** 세션에 실제로 걸린 권한 모드. 요청이 거절되면 이 값이 화면을 되돌린다. */
   private permissionMode: PermissionMode = PermissionMode.DEFAULT
@@ -118,9 +122,13 @@ export class OpencodeTransport implements Transport {
       if (kind === Kind.CHAT && action === Action.CHAT_REQUEST) return await this.onChatRequest(data)
       if (kind === Kind.CHAT && action === Action.STREAM_CANCEL) return await this.onCancel()
       if (kind === Kind.CHAT && action === Action.TOOL_APPROVAL_RESPONSE) {
-        return await this.onApproval(data)
+        if (this.sessionId) await replyApproval(this.client, this.sessionId, data)
+        return
       }
-      if (kind === Kind.CHAT && action === Action.USER_ANSWER) return await this.onUserAnswer(data)
+      if (kind === Kind.CHAT && action === Action.USER_ANSWER) {
+        if (this.sessionId) await replyUserAnswer(this.client, this.sessionId, data)
+        return
+      }
       if (kind === Kind.LLM_CONFIG && action === Action.LLM_CONFIG_STATUS) {
         return await this.onLlmStatus()
       }
@@ -165,30 +173,17 @@ export class OpencodeTransport implements Transport {
     this.emit({ kind: Kind.AUTH, action: Action.AUTH_STATE, data: { state: AuthState.VALID } })
   }
 
-  /** workspace_sync → opencode 세션 생성. directory 가 곧 워크스페이스이자 설정 조회 범위다. */
+  /** workspace_sync → opencode 세션 생성 (`workspace.ts`). 세션 id 를 붙잡는 것이 여기 몫이다. */
   private async onWorkspaceSync(data: Record<string, unknown>): Promise<void> {
-    const workspace = (data['workspace'] ?? {}) as Record<string, unknown>
-    const directory = typeof workspace['workspacePath'] === 'string' ? workspace['workspacePath'] : ''
-    if (!directory) {
-      this.emit({
-        kind: Kind.WORKSPACE,
-        action: Action.ERROR,
-        data: { code: 'NO_WORKSPACE', message: 'workspacePath 가 비어 있습니다' },
-      })
-      return
-    }
-    const session = await this.client.createSession({
-      directory,
+    const result = await syncWorkspace(this.client, data, {
       ...(this.options.model ? { model: this.options.model } : {}),
       ...(this.options.agent ? { agent: this.options.agent } : {}),
     })
-    this.sessionId = session.id
-    this.model.adopt(session.model, directory)
-    this.emit({
-      kind: Kind.WORKSPACE,
-      action: Action.WORKSPACE_STATE,
-      data: { state: WorkspaceState.READY },
-    })
+    if (result.session) {
+      this.sessionId = result.session.id
+      this.model.adopt(result.session.model, result.session.directory)
+    }
+    this.emit(result.frame)
   }
 
   /**
@@ -210,6 +205,10 @@ export class OpencodeTransport implements Transport {
     // 붙인 문서·보는 파일은 글로 번역해 함께 보낸다 — 안 하면 사라진다 (`promptContext.ts`)
     const query = withPromptContext(typeof data['query'] === 'string' ? data['query'] : '', data)
     this.streamId = randomUUID()
+    // 새 턴은 취소 기억 없이 시작한다. 앞 턴의 중단이 종료 이벤트를 못 받고 끝났을 때
+    // (프롬프트 접수 직후 interrupt 는 opencode 가 아무 이벤트도 안 낸다 — 실측)
+    // 플래그가 남아 다음 턴의 진짜 실패를 취소로 삼켜 버린다.
+    this.cancelling = false
     this.emit({ kind: Kind.CHAT, action: Action.STREAM_START, data: {}, streamId: this.streamId })
 
     // 모델 오버라이드는 **보내기 직전에** 세션에 건다. davis 는 요청마다 실어 보냈고
@@ -248,32 +247,25 @@ export class OpencodeTransport implements Transport {
     })
   }
 
-  private async onCancel(): Promise<void> {
-    if (this.sessionId) await this.client.interrupt(this.sessionId)
-  }
-
   /**
-   * 승인 응답 매핑.
-   *   거부                        → reject
-   *   승인 + session/local_allow  → always  (opencode 는 범위 구분이 없다 — 둘 다 always)
-   *   승인만                      → once
+   * stream_cancel → `POST …/interrupt`.
+   *
+   * **조용히 버리지 않는다.** 세션이 없으면 보낼 곳이 없는데, 그냥 돌아서면 사용자에겐
+   * "중단 버튼이 무시됐다" 로만 보인다. `fail()` 이 같은 사유로 이미 화면까지 올린다 —
+   * 그 선례를 따른다 (열려 있는 턴도 stream_end 로 함께 닫는다).
+   *
+   * 성공 경로에서는 **중단을 요청했다는 사실을 기억한다.** opencode 는 중단된 턴을
+   * `step.failed` 로 알리고, 그것이 사용자 취소인지 프로바이더 실패인지 구분해 주지
+   * 않는다 — 가르는 근거가 이 플래그뿐이다 (`translate.ts` 의 STEP_FAILED 분기).
    */
-  private async onApproval(data: Record<string, unknown>): Promise<void> {
-    if (!this.sessionId) return
-    const requestId = typeof data['requestId'] === 'string' ? data['requestId'] : ''
-    if (!requestId) return
-    const approved = data['approved'] === true
-    const followUp = data['followUp']
-    const reply: PermissionReply = !approved ? 'reject' : followUp ? 'always' : 'once'
-    await this.client.replyPermission(this.sessionId, requestId, reply)
-  }
-
-  private async onUserAnswer(data: Record<string, unknown>): Promise<void> {
-    if (!this.sessionId) return
-    const questionId = typeof data['questionId'] === 'string' ? data['questionId'] : ''
-    if (!questionId) return
-    const answer = typeof data['answer'] === 'string' ? data['answer'] : null
-    await this.client.replyQuestion(this.sessionId, questionId, answer)
+  private async onCancel(): Promise<void> {
+    const sessionId = this.sessionId
+    if (!sessionId) {
+      this.fail(Kind.CHAT, new Error('세션이 없어 중단 요청을 보내지 못했습니다'))
+      return
+    }
+    this.cancelling = true
+    await this.client.interrupt(sessionId)
   }
 
   /**
@@ -289,11 +281,15 @@ export class OpencodeTransport implements Transport {
     // 턴이 없는 동안 도착한 스트림 이벤트는 버린다. 핸드셰이크용 system 프레임만 통과시킨다.
     // 이 가드가 없으면 종료 신호가 둘(step.ended·session.idle) 다 왔을 때 stream_end 가
     // 두 번 나가 위층의 턴 게이트가 이미 닫힌 턴을 또 닫는다.
-    const context: TranslateContext = { streamId: this.streamId ?? 'no-stream' }
+    const context: TranslateContext = { streamId: this.streamId ?? 'no-stream', cancelling: this.cancelling }
     for (const frame of translate(event, context)) {
       if (this.streamId === null && frame['kind'] !== Kind.SYSTEM) continue
       this.emit(frame)
-      if (frame['action'] === Action.STREAM_END) this.streamId = null
+      // 턴이 닫히면 취소 기억도 함께 푼다 — 다음 턴의 진짜 실패를 취소로 오독하지 않도록.
+      if (frame['action'] === Action.STREAM_END) {
+        this.streamId = null
+        this.cancelling = false
+      }
     }
   }
 }

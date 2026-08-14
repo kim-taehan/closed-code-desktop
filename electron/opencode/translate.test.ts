@@ -102,6 +102,51 @@ describe('턴 경계', () => {
   })
 })
 
+// 중단(`POST …/interrupt`)의 종료 신호는 **`step.ended` 가 아니라 `step.failed`** 다.
+// 아래 페이로드는 1.18.18 에서 실제로 캡처한 것이다 (2026-08-14):
+//   204 뒤에 `text.ended` → `step.failed{error:{type:"unknown",message:"Provider turn interrupted"}}`
+//   `step.ended` 는 끝내 오지 않는다.
+// 이 자리가 비어 있던 동안 취소한 턴을 닫는 것은 TurnGate 의 5초 강제 종단뿐이었고,
+// 그 5초가 사용자에게는 "중단 버튼이 무시됐다" 로 보였다.
+describe('중단', () => {
+  const INTERRUPTED = {
+    assistantMessageID: MSG,
+    error: { type: 'unknown', message: 'Provider turn interrupted' },
+  }
+
+  it('중단을 요청한 턴의 step.failed 는 턴을 닫는다 — 5초를 기다리지 않는다', () => {
+    const frames = translate(event('session.next.step.failed', INTERRUPTED), {
+      ...CTX,
+      cancelling: true,
+    })
+    expect(frames).toHaveLength(2)
+    expect(dataOf(frames[0])).toMatchObject({ messageType: 'turn_end', terminal: true })
+    expect(frames[1]).toMatchObject({ action: 'stream_end', data: { terminal: true } })
+  })
+
+  it('중단은 실패가 아니다 — failed 를 싣지 않는다 (안 그러면 에러 말풍선이 뜬다)', () => {
+    const frames = translate(event('session.next.step.failed', INTERRUPTED), {
+      ...CTX,
+      cancelling: true,
+    })
+    expect(dataOf(frames[1])['failed']).toBeUndefined()
+    expect(frames.map((frame) => dataOf(frame)['messageType'])).not.toContain('error')
+  })
+
+  it('요청하지 않은 step.failed 는 실패다 — 에러를 보여주고 닫는다', () => {
+    const frames = translate(
+      event('session.next.step.failed', {
+        assistantMessageID: MSG,
+        error: { type: 'unknown', message: 'Provider 폭발' },
+      }),
+      CTX,
+    )
+    // error 는 `{data:{message}}` 가 아니라 한 겹 얕은 `{message}` 로 온다
+    expect(dataOf(frames[0])).toMatchObject({ messageType: 'error', message: 'Provider 폭발' })
+    expect(frames[frames.length - 1]).toMatchObject({ action: 'stream_end', data: { failed: true } })
+  })
+})
+
 describe('텍스트·추론', () => {
   it('text.delta → TEXT, segmentId 는 메시지ID:textID 다', () => {
     const [frame] = translate(

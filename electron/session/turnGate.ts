@@ -43,6 +43,15 @@ export class TurnGate {
     return this.activeStreamId
   }
 
+  /**
+   * 이 턴에 이미 중단을 요청해 뒀는가. 같은 턴을 두 번 끊지 않게 하는 근거다
+   * (`ChatSession.cancel`). 이 플래그가 잠금이 되지는 않는다 — 푸는 것은 턴 종료이고,
+   * 종료는 아래 강제 종단 타이머가 `CANCEL_FORCE_CLOSE_MS` 안에 반드시 만들어 낸다.
+   */
+  get isCancelRequested(): boolean {
+    return this.cancelRequested
+  }
+
   onStreamStart(streamId: string): void {
     this.activeStreamId = streamId
   }

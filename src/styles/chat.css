@@ -1186,6 +1186,18 @@ body {
   cursor: pointer;
 }
 
+/* 「중단중…」 — 응답이 올 때까지 다시 못 누른다 (.new-chat:disabled 와 같은 값) */
+.turn-cancel:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* 중단 신호에 응답이 없어 상한을 넘긴 자리. 버튼 옆에 붙는다 */
+.turn-cancel-stalled {
+  color: var(--dc-text-muted);
+  font-size: 12px;
+}
+
 /* ── 턴 리뷰 카드 (V2) ───────────────────────── */
 .turn-review {
   margin: 4px 0 12px 19px;

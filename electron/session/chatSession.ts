@@ -152,9 +152,12 @@ export class ChatSession {
     this.pushSnapshot()
   }
 
-  /** 진행 중인 스트림을 취소한다. runtime 이 취소 안내 + stream_end 를 보내 턴은 정상 닫힌다. */
+  /** 진행 중인 스트림을 취소한다. 취소가 도착하면 턴은 stream_end 로 정상 닫힌다 —
+   *  davis runtime 은 취소 안내와 함께 보냈고, opencode 는 `step.failed` 로 알린다
+   *  (어댑터가 옮긴다 — `opencode/translate.ts`). **같은 턴은 두 번 끊지 않는다**:
+   *  버튼 disable 은 버튼만 막아서, 연타·Esc 반복만큼 interrupt 가 나가던 자리다. */
   cancel(): boolean {
-    if (!this.gate.isOpen) return false
+    if (!this.gate.isOpen || this.gate.isCancelRequested) return false
     // 확장이 기다리는 턴이면 취소로 돌려준다 — 뒤이어 올 stream_end 보다 뜻이 정확하다
     if (this.gate.streamId) this.options.binder?.onCancelled(this.gate.streamId)
     this.gate.requestCancel()

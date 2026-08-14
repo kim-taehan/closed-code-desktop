@@ -24,6 +24,15 @@ export const OpencodeEventType = {
   SERVER_CONNECTED: 'server.connected',
   STEP_STARTED: 'session.next.step.started',
   STEP_ENDED: 'session.next.step.ended',
+  /**
+   * ⚠️ **중단(`POST …/interrupt`)의 종료 신호가 이것이다 — `step.ended` 가 아니다.**
+   * 1.18.18 실측(2026-08-14): 턴 도중 interrupt 를 넣으면 204 뒤에 딱 두 건이 온다.
+   *   `session.next.text.ended` → `session.next.step.failed`
+   *     `{sessionID, assistantMessageID, error:{type:"unknown", message:"Provider turn interrupted"}}`
+   * `step.ended` 는 **끝내 오지 않는다.** 이 이벤트를 안 번역하면 취소한 턴을 닫는 것은
+   * TurnGate 의 5초 강제 종단뿐이라, 사용자에겐 "중단이 무시됐다" 로 보인다.
+   */
+  STEP_FAILED: 'session.next.step.failed',
   TEXT_DELTA: 'session.next.text.delta',
   REASONING_DELTA: 'session.next.reasoning.delta',
   TOOL_INPUT_STARTED: 'session.next.tool.input.started',
@@ -58,6 +67,15 @@ export interface StepEndedProps extends StepScoped {
   finish?: string
   cost?: number
   tokens?: { input?: number; output?: number; reasoning?: number }
+}
+
+/**
+ * 실패로 끝난 step. `finish` 도 `tokens` 도 없고 `error` 하나뿐이다 (실측).
+ * 중단으로 끝난 턴도 이 모양으로 온다 — 그래서 "실패" 로 단정해 옮기면 안 된다
+ * (`translate.ts` 의 STEP_FAILED 분기).
+ */
+export interface StepFailedProps extends StepScoped {
+  error?: { type?: string; message?: string }
 }
 
 /** 텍스트·추론 델타. textID 는 메시지 안에서만 유일하다 (`text-0` 이 매번 재사용된다). */

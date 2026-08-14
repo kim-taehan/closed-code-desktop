@@ -83,6 +83,22 @@ describe('취소', () => {
     expect(fixture.chat.isTurnOpen).toBe(false)
   })
 
+  it('같은 턴을 두 번 끊지 않는다 — 연타·Esc 반복으로 interrupt 가 겹쳐 나갔다', async () => {
+    // 화면이 응답하기 전에 또 누르는 것이 이 버그의 실제 사용 방식이었다
+    // ("누른 티가 안 나서 또 누르게 된다"). 버튼 disable 은 버튼만 막으므로 여기서도 막는다.
+    fixture = await connectAndHandshake(openEndedTurn())
+
+    fixture.chat.send('오래 걸리는 일')
+    await vi.waitFor(() => expect(countOf(fixture!.events, 'turn_started')).toBe(1))
+
+    expect(fixture.chat.cancel()).toBe(true)
+    expect(fixture.chat.cancel()).toBe(false)
+    expect(fixture.chat.cancel()).toBe(false)
+
+    await new Promise((resolve) => setTimeout(resolve, 60))
+    expect(fixture.server.received.filter((f) => f.action === 'stream_cancel')).toHaveLength(1)
+  })
+
   it('취소 후 다음 대화를 보낼 수 있다', async () => {
     fixture = await connectAndHandshake(openEndedTurn())
 

@@ -78,4 +78,62 @@ describe.skipIf(!LIVE)('live opencode', () => {
     expect(unknown).toEqual([])
     expect(items.some((item) => item.kind === 'text')).toBe(true)
   }, 150_000)
+
+  /**
+   * 중단이 **실제로 화면까지 끝나는가.**
+   *
+   * 가짜 서버로는 못 잡는 자리다 — 중단의 종료 신호가 `step.ended` 가 아니라
+   * `step.failed` 라는 사실 자체가 실측에서만 나왔다 (1.18.18, 2026-08-14).
+   * 그걸 안 옮기던 동안 턴을 닫는 것은 main 의 5초 강제 종단뿐이었고,
+   * 사용자에게는 그 5초가 "중단 버튼이 무시됐다" 로 보였다.
+   * 그래서 여기서 재는 것은 "닫히는가" 가 아니라 **얼마나 빨리 닫히는가** 다.
+   */
+  it('중단하면 그 자리에서 stream_end 가 온다 — 5초 강제 종단을 기다리지 않는다', async () => {
+    const transport = new OpencodeConnection({ baseUrl: BASE, autoReconnect: false })
+    let firstChunk = false
+    let endedAt = 0
+    let endData: Record<string, unknown> | null = null
+    transport.onMessage((raw) => {
+      const frame = parseInbound(raw)
+      if (!frame) return
+      if (frame.action === 'stream_chunk') firstChunk = true
+      if (frame.action === 'stream_end' && endedAt === 0) {
+        endedAt = Date.now()
+        endData = (frame.data ?? {}) as Record<string, unknown>
+      }
+    })
+
+    const workspacePath = mkdtempSync(join(tmpdir(), 'oc-live-cancel-'))
+    const handshake = new Handshake(transport, { workspacePath, projectName: 'oc-live-cancel' })
+    const ready = handshake.run()
+    await transport.connect()
+    await ready
+
+    transport.send(
+      JSON.stringify({
+        kind: 'chat',
+        action: 'chat_request',
+        reqId: 'r1',
+        data: { query: 'Count from 1 to 300, one number per line. No explanation.' },
+      }),
+    )
+
+    const startDeadline = Date.now() + 60_000
+    while (!firstChunk && Date.now() < startDeadline) await new Promise((r) => setTimeout(r, 100))
+    expect(firstChunk).toBe(true)
+
+    const cancelledAt = Date.now()
+    transport.send(JSON.stringify({ kind: 'chat', action: 'stream_cancel', reqId: 'r2', data: {} }))
+
+    const deadline = Date.now() + 20_000
+    while (endedAt === 0 && Date.now() < deadline) await new Promise((r) => setTimeout(r, 50))
+    transport.close()
+
+    expect(endedAt).toBeGreaterThan(0)
+    // main 의 CANCEL_FORCE_CLOSE_MS(5초)보다 확실히 빨라야 한다 — 그 값에 걸려 닫히는
+    // 것이라면 어댑터는 여전히 중단 신호를 못 옮기고 있는 것이다.
+    expect(endedAt - cancelledAt).toBeLessThan(3_000)
+    // 사용자가 끊은 것은 실패가 아니다
+    expect(endData?.['failed']).toBeUndefined()
+  }, 120_000)
 })

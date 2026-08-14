@@ -189,6 +189,48 @@ describe('채팅', () => {
     transport.close()
   })
 
+  // 중단 뒤 opencode 가 내는 것은 `step.ended` 가 아니라 `step.failed` 다 (1.18.18 실측).
+  // 이걸 안 옮기면 취소한 턴을 닫는 것은 TurnGate 의 5초 강제 종단뿐이고, 그 5초가
+  // 사용자에게는 "중단 버튼이 무시됐다" 로 보인다.
+  it('중단 뒤 step.failed 는 턴을 닫는다 — 5초 강제 종단을 기다리지 않는다', async () => {
+    const { server, transport, frames } = await readySession()
+    transport.send(JSON.stringify({ kind: 'chat', action: 'chat_request', reqId: 'r', data: { query: '길게' } }))
+    await tick()
+    transport.send(JSON.stringify({ kind: 'chat', action: 'stream_cancel', reqId: 'r', data: {} }))
+    await tick()
+
+    server.emit('session.next.step.failed', {
+      sessionID: 'ses_fake',
+      error: { type: 'unknown', message: 'Provider turn interrupted' },
+    })
+    await tick()
+
+    const ends = frames.map((f) => JSON.parse(f)).filter((f) => f.action === 'stream_end')
+    expect(ends).toHaveLength(1)
+    // 사용자가 끊은 것은 실패가 아니다 — failed 를 실으면 에러 말풍선이 뜬다
+    expect(ends[0].data.failed).toBeUndefined()
+    transport.close()
+  })
+
+  // 조용히 버리면 화면에는 아무 일도 안 일어나고, 사용자는 버튼이 무시됐다고 읽는다.
+  it('세션 없이 온 stream_cancel 은 오류를 화면까지 올린다', async () => {
+    const server = fakeServer()
+    const transport = makeTransport(server)
+    const frames: string[] = []
+    transport.onMessage((raw) => frames.push(raw))
+    transport.open()
+    await tick()
+    server.emit('server.connected')
+    await tick()
+
+    transport.send(JSON.stringify({ kind: 'chat', action: 'stream_cancel', reqId: 'r', data: {} }))
+    await tick()
+
+    expect(frames.some((raw) => raw.includes('중단 요청을 보내지 못했습니다'))).toBe(true)
+    expect(server.find((call) => call.url.endsWith('/interrupt'))).toBeUndefined()
+    transport.close()
+  })
+
   it('다른 세션의 이벤트는 걸러낸다 — /event 는 서버 전역이다', async () => {
     const { server, transport, frames } = await readySession()
     const before = frames.length

@@ -22,6 +22,14 @@ import {
 export interface TranslateContext {
   /** 이번 턴의 streamId. 어댑터가 chat_request 때 만들어 턴 끝까지 유지한다. */
   streamId: string
+  /**
+   * 이 턴에 중단을 요청해 뒀는가.
+   *
+   * opencode 는 중단된 턴을 **실패(`step.failed`)로 알린다** — 사용자가 끊은 것과
+   * 프로바이더가 터진 것을 이벤트만으로는 가를 수 없다. 가르는 근거는 "우리가 방금
+   * interrupt 를 보냈다" 는 사실뿐이라 어댑터가 여기에 실어 준다 (`transport.ts`).
+   */
+  cancelling?: boolean
 }
 
 export type Frame = Record<string, unknown>
@@ -80,6 +88,10 @@ function errorMessage(props: Record<string, unknown>): string {
     const message = (data as Record<string, unknown>)['message']
     if (typeof message === 'string') return message
   }
+  // `step.failed` 는 한 겹 얕다 — `{type, message}` 로 온다 (1.18.18 실측).
+  // `session.error` 의 `{data:{message}}` 와 모양이 달라 둘 다 본다.
+  const flat = (error as Record<string, unknown>)['message']
+  if (typeof flat === 'string') return flat
   const name = (error as Record<string, unknown>)['name']
   return typeof name === 'string' ? name : '알 수 없는 오류'
 }
@@ -111,6 +123,25 @@ export function translate(event: OpencodeEvent, ctx: TranslateContext): Frame[] 
       // 도구를 부르려고 끊긴 것이면 다음 step 이 이어진다 — 턴은 아직 안 끝났다.
       if (step.finish === 'tool-calls') return []
       return endTurn(ctx, step.tokens ? { tokenUsage: step.tokens } : {})
+    }
+
+    /**
+     * 실패로 끝난 step — **중단의 종료 신호이기도 하다.**
+     *
+     * 실측(1.18.18, 2026-08-14): 턴 도중 `POST …/interrupt` 를 넣으면 204 뒤에
+     * `text.ended` + `step.failed{error:{message:"Provider turn interrupted"}}` 만 오고
+     * `step.ended` 는 끝내 안 온다. 여기가 비어 있던 동안 취소한 턴을 닫는 것은
+     * TurnGate 의 5초 강제 종단뿐이었고, 그 5초가 "중단이 무시됐다" 의 정체다.
+     *
+     * 우리가 요청한 중단은 **실패가 아니다** — `failed` 를 실으면 사용자가 스스로 끊은
+     * 자리에 "요청을 처리하지 못했습니다" 가 뜬다 (turnGate.end).
+     */
+    case OpencodeEventType.STEP_FAILED: {
+      if (ctx.cancelling) return endTurn(ctx)
+      return [
+        chunkFrame({ messageType: ChunkType.ERROR, message: errorMessage(props) }, ctx.streamId),
+        ...endTurn(ctx, { failed: true }),
+      ]
     }
 
     case OpencodeEventType.TEXT_DELTA: {

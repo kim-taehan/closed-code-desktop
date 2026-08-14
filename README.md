@@ -79,7 +79,8 @@ session/*  ──davis 봉투(kind/action)──▶  OpencodeTransport  ──HT
 | `tool_call` | `session.next.tool.input.started` (이 시점에 이미 이름을 안다) |
 | `tool_result` | `session.next.tool.success` / `.failed` |
 | `turn_end` + `stream_end` | `session.next.step.ended` 중 `finish !== 'tool-calls'` |
-| `error` | `session.error` |
+| `turn_end` + `stream_end` (중단) | **`session.next.step.failed`** — 중단은 `step.ended` 로 안 끝난다 (함정 15) |
+| `error` | `session.error` · 중단을 요청하지 않은 `session.next.step.failed` |
 | `tool_approval_request` → 응답 | `permission.v2.asked` → `POST …/permission/{id}/reply` |
 | `user_question` → 응답 | `question.v2.asked` → `POST …/question/{id}/reply` |
 | `stream_cancel` | `POST …/interrupt` |
@@ -192,6 +193,28 @@ session/*  ──davis 봉투(kind/action)──▶  OpencodeTransport  ──HT
     보내면 `session.next.prompt.admitted` 에 `{"text":"/init"}` 이 **그대로** 실린다.
     `/compact` 처럼 "런타임이 알아서 처리한다" 를 전제한 자리는 opencode 에서 안 통한다
     (그건 `POST /api/session/:id/compact` 를 불러야 한다 — 아직 안 붙였다).
+
+15. **중단은 `step.ended` 로 끝나지 않는다 — `step.failed` 다.** 1.18.18 실측(2026-08-14).
+    턴 도중 `POST …/interrupt` 를 넣으면 204 뒤에 딱 두 건이 오고 끝난다:
+
+    ```
+    session.next.text.ended
+    session.next.step.failed  {sessionID, assistantMessageID,
+                               error:{type:"unknown", message:"Provider turn interrupted"}}
+    ```
+
+    `step.ended` 는 **끝내 오지 않는다** (45초 관측). 그래서 이 이벤트를 안 옮기면 취소한 턴을
+    닫는 것은 `session/turnGate.ts` 의 5초 강제 종단뿐이고, 증상은 **"중단 버튼이 가끔
+    무시된다"** 로만 보인다 — 실제로 사용자가 그렇게 신고했다. 또 하나: 이 이벤트만으로는
+    사용자 취소인지 프로바이더 실패인지 **가를 수 없다.** 가르는 근거는 "우리가 방금
+    interrupt 를 보냈다" 는 사실뿐이라 어댑터가 `TranslateContext.cancelling` 으로 실어 준다.
+
+    ⚠️ **프롬프트 접수 직후(`step.started` 전) 중단하면 아무 이벤트도 오지 않는다.** 204 만
+    받고 그 턴은 시작도 종료도 없이 사라진다 (45초 관측). 지금 UI 는 이 창에서 버튼이 안 뜨지만
+    (`isStreaming` 이 `turn_started` 에서 켜진다), 화면의 「중단중…」에 상한이 필요한 이유가 이것이다.
+
+    `error` 의 모양도 `session.error` 와 다르다 — `{data:{message}}` 가 아니라 한 겹 얕은
+    `{type, message}` 다 (`translate.ts` 의 `errorMessage` 가 둘 다 본다).
 
 > 버전을 올리면 `curl http://127.0.0.1:4096/doc` 을 다시 떠서 대조할 것.
 
