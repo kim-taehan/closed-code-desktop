@@ -1,5 +1,8 @@
 const store = require('./core/store')
 const { boardHtml } = require('./core/render/list')
+const { parseScreens } = require('./core/parse')
+const { mergeScreens } = require('./core/merge')
+const { findPrompt, refindPrompt } = require('./core/prompt')
 
 // 확장 4호 「화면 시나리오」 — 설계:
 // `docs/superpowers/specs/2026-08-13-screen-scenario-extension-design.md`
@@ -7,8 +10,8 @@ const { boardHtml } = require('./core/render/list')
 // 이 파일은 **배선만** 한다: 명령을 등록하고, 저장된 것을 그리고, 다시 그리라는 요청을 받는다.
 // 판단(무엇이 화면인가·시나리오를 어떻게 쓰는가)은 `core/` 가 진다.
 //
-// 3단계에서는 **에이전트를 부르지 않는다.** 저장된 것을 그리는 길을 먼저 세워야,
-// 다음 단계에서 화면이 비었을 때 그것이 「에이전트 답」 탓인지 「그리기」 탓인지 갈린다.
+// 에이전트에게 묻는 길은 `code.chat.ask` 하나다 — 그 질문은 **사용자 대화의 턴**이 되어
+// 화면에 그대로 보인다 (설계 §3.1). 그래서 진행 상황을 따로 중계하지 않는다.
 
 const VIEW = 'screenScenario.board'
 
@@ -69,15 +72,61 @@ function activate(code) {
     await draw()
   }
 
+  /**
+   * 화면 찾기. 에이전트에게 묻고 답을 목록으로 얹는다.
+   *
+   * **규칙 훑기 뒷문을 만들지 않는다** (설계 §3.1). 두 갈래가 있으면 지금 보는 목록을
+   * 누가 만들었는지 알 수 없고, 한쪽이 조용히 망가져도 다른 쪽이 채워 준다.
+   */
+  async function find() {
+    const before = await store.load(code)
+    code.progress('화면을 찾는 중입니다…')
+
+    const answer = await code.chat.ask(before.length === 0 ? findPrompt() : refindPrompt(before))
+
+    if (answer.status === 'cancelled') {
+      // 사용자가 대화창에서 끊었다. 실패가 아니다 — 있던 목록은 그대로다.
+      code.progress('화면 찾기를 멈췄습니다', undefined, undefined, { kind: 'note' })
+      return
+    }
+    if (answer.status !== 'done') {
+      code.progress(`화면을 찾지 못했습니다: ${answer.reason}`, undefined, undefined, { kind: 'fail' })
+      return
+    }
+
+    const read = parseScreens(answer.text)
+    if (!read.ok) {
+      // **빈 목록으로 삼키지 않는다.** 답은 대화창에 그대로 있으니 그리로 안내한다.
+      code.progress(`목록을 못 읽었습니다 (${read.reason}) — 대화창의 답을 보세요`, undefined, undefined, {
+        kind: 'fail',
+      })
+      return
+    }
+
+    const merged = mergeScreens(before, read.screens)
+    await store.save(code, merged.screens)
+    await draw()
+
+    if (merged.distrusted) {
+      // 지우지 않았다는 것을 말해 준다. 조용히 넘기면 사용자는 갱신이 먹은 줄 안다.
+      code.progress(
+        `새로 ${merged.added}개. 사라졌다는 화면이 너무 많아 지우지 않았습니다 — 다시 눌러 보세요`,
+        undefined,
+        undefined,
+        { kind: 'fail' },
+      )
+      return
+    }
+    code.progress(`화면 ${merged.screens.length}개 (새로 ${merged.added} · 사라짐 ${merged.removed})`, undefined, undefined, {
+      kind: 'done',
+    })
+  }
+
   return {
     commands: {
       // 주 행동 — 사이드바 아래 고정 바에 뜬다. 누르면 본문 탭이 앞으로 온다
       'screenScenario.open': () => draw(),
-      'screenScenario.find': async () => {
-        // 4단계에서 `code.chat.ask` 로 채운다. 지금 조용히 아무 일도 안 하면
-        // 사용자에게는 「단추가 안 먹는다」로 보인다.
-        code.progress('화면 찾기는 아직 준비 중입니다', undefined, undefined, { kind: 'note' })
-      },
+      'screenScenario.find': () => find(),
       'screenScenario.add': () => add(),
     },
     // 화면이 붙은 뒤 앱이 부른다 (`METHOD_REDRAW`). 프로젝트를 옮겨도 여기로 다시 온다
