@@ -1,5 +1,6 @@
 import { dispatchChatFrame } from './frameDispatch'
-import { approvalFrame, cancelFrame, chatRequestFrame, planResponseFrame, userAnswerFrame, type ApprovalFollowUp } from './chatFrames'
+import { createResponder, type ChatResponder } from './chatResponses'
+import { cancelFrame, chatRequestFrame, type ApprovalFollowUp } from './chatFrames'
 import type { ChatSendContext } from '../../shared/ipc/chatPayloads'
 import type { TurnEvent } from '../../shared/ipc/channels'
 import type { ChatMessage, TurnMeta } from '../../shared/ipc/messageTypes'
@@ -45,6 +46,7 @@ export class ChatSession {
   private readonly turns = new TurnMetaStore()
   private readonly tasks = new AgentTaskStore()
   private readonly router: ChunkRouter
+  private readonly responder: ChatResponder
   // 턴 종료 판정·중단 방어(turnOpen 가드, terminal 해석, 취소 타임아웃)는 TurnGate 몫이다
   private readonly gate: TurnGate
   // 보낸 요청이 침묵으로 끝나지 않게 하는 최후 보장 (replyWatch.ts)
@@ -58,6 +60,7 @@ export class ChatSession {
     private readonly options: ChatSessionOptions = {},
   ) {
     this.router = new ChunkRouter({ messages: this.messages, turns: this.turns, tasks: this.tasks })
+    this.responder = createResponder(transport, () => this.chatId)
     this.gate = new TurnGate({
       turns: this.turns,
       messages: this.messages,
@@ -120,13 +123,18 @@ export class ChatSession {
   send(query: string, context: ChatSendContext = {}): boolean {
     // 첨부는 **요약만** 남긴다 — 내용을 담으면 스냅샷마다 수 MB 가 오간다
     this.messages.addUserMessage(query, context.attachments ?? [])
-    const sent = this.transport.send(chatRequestFrame(query, context, { chatId: this.chatId }))
-    // 확장이 보낸 것이면 다음에 열리는 턴이 그 요청의 턴이다 (`turnBinder.ts`)
+    // 확장이 보낸 것이면 다음에 열리는 턴이 그 요청의 턴이다 (`turnBinder.ts`).
+    //
+    // **보내기 전에 등록한다.** 어댑터의 `send()` 는 프레임을 받자마자 같은 호출 안에서
+    // `STREAM_START` 를 emit 한다 (`opencode/transport.ts` — dispatch 가 async 지만 첫
+    // await 전에 emit 이 끝난다). 뒤에 등록하면 턴이 이미 열린 뒤라 **아무것도 안 묶이고**,
+    // 답이 와도 확장의 promise 가 영영 안 풀린다 (2026-08-14 실물에서 겪었다).
     const asked = context.extensionRequestId
-    if (asked) {
-      if (sent) this.options.binder?.markPending(asked)
-      else this.options.binder?.rejectPending('연결이 끊겨 보내지 못했습니다')
-    }
+    if (asked) this.options.binder?.markPending(asked)
+
+    const sent = this.transport.send(chatRequestFrame(query, context, { chatId: this.chatId }))
+    // 못 보냈으면 방금 등록한 것을 되돌린다. 이미 묶인 턴은 건드리지 않는다.
+    if (asked && !sent) this.options.binder?.rejectPending('연결이 끊겨 보내지 못했습니다')
     // 사용자 말풍선은 이미 올라갔다. 여기서 실패를 삼키면 화면은 "보냈다" 고 말하면서
     // 영원히 답이 오지 않는다 — 답이 없는 채로 끝나는 경우는 없어야 한다.
     if (sent) this.reply.arm()
@@ -196,22 +204,11 @@ export class ChatSession {
     this.pushSnapshot()
   }
 
-  /** 승인 응답. 보내지 않으면 턴이 그 자리에서 멈춘다 */
-  respondApproval(requestId: string, approved: boolean, followUp?: ApprovalFollowUp): boolean {
-    return this.transport.send(
-      approvalFrame(requestId, approved, { chatId: this.chatId }, followUp),
-    )
-  }
-
-  /** ask_user 답. null 은 취소 — 어느 쪽이든 보내야 턴이 이어진다 */
-  respondQuestion(questionId: string, answer: string | null): boolean {
-    return this.transport.send(userAnswerFrame(questionId, answer, { chatId: this.chatId }))
-  }
-
-  /** 계획 승인/거부 응답 */
-  respondPlan(planId: string, approved: boolean, comment?: string): boolean {
-    return this.transport.send(planResponseFrame(planId, approved, comment, { chatId: this.chatId }))
-  }
+  // 카드 답신 셋은 `chatResponses.ts` 가 진다 (세션 상태를 안 건드린다). 여기는 통로일 뿐이라
+  // `setChatId` 처럼 한 줄로 둔다.
+  respondApproval(id: string, ok: boolean, more?: ApprovalFollowUp) { return this.responder.approval(id, ok, more) }
+  respondQuestion(id: string, answer: string | null) { return this.responder.question(id, answer) }
+  respondPlan(id: string, ok: boolean, comment?: string) { return this.responder.plan(id, ok, comment) }
 
   // 프레임을 누구에게 넘길지는 `frameDispatch` 가 정한다 (해석은 여전히 ChunkRouter 몫이다).
   private handleMessage(raw: string): void {
