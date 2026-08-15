@@ -152,6 +152,35 @@ export function approvalTurnScript(context: PromptContext): Event[] {
   ]
 }
 
+/**
+ * 질문을 던지는 도구 대본.
+ *
+ * ⚠️ **글이 `questions[0]` 안에 있고 평평한 `question` 이 없는 것이 핵심이다** — 실물
+ * 레거시가 그렇다. 평평하게 적어 두면 `fromQuestionAsked` 를 안 밟고 초록이 나는데,
+ * 실물에서는 질문 카드가 **빈 채로** 뜬다.
+ */
+export function questionTurnScript(context: PromptContext): Event[] {
+  const messageID = `msg_${context.sessionID}`
+  return [
+    stepStarted(context.sessionID, messageID),
+    event('question.asked', {
+      id: `que_${context.sessionID}`,
+      sessionID: context.sessionID,
+      questions: [
+        {
+          question: '어느 쪽으로 갈까요?',
+          header: '방향',
+          options: [
+            { label: '왼쪽', description: '왼쪽으로' },
+            { label: '오른쪽', description: '오른쪽으로' },
+          ],
+        },
+      ],
+      tool: { messageID, callID: `call_${context.sessionID}` },
+    }),
+  ]
+}
+
 /** 기본 대본: 텍스트 한 번 답하고 끝난다. 프롬프트를 그대로 되돌려 격리 검증에 쓴다. */
 export function turnScript(context: PromptContext): Event[] {
   const messageID = `msg_${context.sessionID}`

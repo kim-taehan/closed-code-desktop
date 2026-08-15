@@ -1,11 +1,11 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { FakeOpencodeServer } from '../../tests/fake-opencode/FakeOpencodeServer'
-import { approvalTurnScript } from '../../tests/fake-opencode/turnScript'
+import { approvalTurnScript, questionTurnScript } from '../../tests/fake-opencode/turnScript'
 import { parseInbound } from '../../shared/protocol/envelope'
 import { Handshake } from '../session/handshake'
 import { OpencodeConnection } from './connection'
 
-// 승인 왕복을 **진짜 HTTP 가짜 서버**로 한 바퀴 돈다.
+// 카드 왕복(승인·질문)을 **진짜 HTTP 가짜 서버**로 한 바퀴 돈다.
 //
 // ⚠️ **이 자리가 한 번 조용히 죽어 있었다.** 프롬프트·중단·스트림을 레거시로 옮기면서
 // 승인 **응답**만 신규 세대로 남았다. 앞의 셋은 "보내고 받는" 축이라 같이 눈에 들어왔는데
@@ -22,17 +22,14 @@ import { OpencodeConnection } from './connection'
 let server: FakeOpencodeServer
 let connection: OpencodeConnection | null = null
 
-beforeEach(() => {
-  server = new FakeOpencodeServer({ turn: approvalTurnScript })
-})
-
 afterEach(async () => {
   connection?.close()
   connection = null
   await server.stop()
 })
 
-async function askForApproval() {
+async function askForCard(turn: typeof approvalTurnScript, want: string) {
+  server = new FakeOpencodeServer({ turn })
   await server.start()
   connection = new OpencodeConnection({ baseUrl: server.baseUrl, autoReconnect: false })
   const chunks: Record<string, unknown>[] = []
@@ -56,10 +53,13 @@ async function askForApproval() {
   connection.send(
     JSON.stringify({ kind: 'chat', action: 'chat_request', reqId: 'r1', data: { query: '지워라' } }),
   )
-  await vi.waitFor(() => expect(chunks.some((c) => c['messageType'] === 'tool_approval_request')).toBe(true))
-  const card = chunks.find((c) => c['messageType'] === 'tool_approval_request')!
+  await vi.waitFor(() => expect(chunks.some((c) => c['messageType'] === want)).toBe(true))
+  const card = chunks.find((c) => c['messageType'] === want)!
   return { card, errors }
 }
+
+const askForApproval = () => askForCard(approvalTurnScript, 'tool_approval_request')
+const askForQuestion = () => askForCard(questionTurnScript, 'user_question')
 
 describe('승인 왕복', () => {
   // 카드에 도구 이름이 실려야 무엇을 승인하는지 보인다. 레거시 페이로드에는 `action` 이
@@ -91,6 +91,43 @@ describe('승인 왕복', () => {
     expect(reply?.body).toEqual({ response: 'once' })
     // 신규 표면으로 샌 호출이 하나도 없어야 한다 (가짜가 404 를 준다 → 오류로 드러난다)
     expect(server.calls.some((call) => /\/api\/session\/[^/]+\/permission\//.test(call.url))).toBe(false)
+    expect(errors).toEqual([])
+  })
+})
+
+// 질문은 승인과 같은 병을 앓았는데 **더 조용했다** — 신규 경로가 404 가 아니라 400
+// (`Missing key at ["answers"]`) 이라, 세대가 틀렸다는 사실 자체를 안 알려준다.
+// 단위 테스트가 경로·본문·매핑을 각각 잠그고 있지만 **배선 한 겹**(`replies.ts` →
+// `client.replyQuestion` → 레거시)이 승인과 달리 안 잠겨 있었다 (contract-qa 지적).
+describe('질문 왕복', () => {
+  // 레거시 페이로드는 글이 `questions[0]` 안에 있다. 매핑이 빠지면 여기가 빈 문자열이 되고,
+  // 사용자는 **무엇을 묻는지 모르는 채** 답을 고르게 된다.
+  it('중첩된 레거시 question.asked 가 글이 실린 질문 카드가 된다', async () => {
+    const { card } = await askForQuestion()
+    expect(card['question']).toBe('어느 쪽으로 갈까요?')
+  })
+
+  it('답신이 레거시 경로로 나간다 — 신규로 가면 실물이 400 이다', async () => {
+    const { card, errors } = await askForQuestion()
+
+    connection!.send(
+      JSON.stringify({
+        kind: 'chat',
+        action: 'user_answer',
+        reqId: 'r2',
+        data: { questionId: card['questionId'], answer: '왼쪽' },
+      }),
+    )
+
+    await vi.waitFor(() => {
+      expect(server.calls.some((call) => call.url.startsWith('/question/'))).toBe(true)
+    })
+    const reply = server.calls.find((call) => call.url.startsWith('/question/'))
+    // 세션 id 가 경로에 없다 — 레거시 질문 표면은 요청 id 하나로 찾는다.
+    expect(reply?.url).toBe(`/question/${card['questionId']}/reply`)
+    // `{text}` 가 아니라 답 하나가 배열인 `answers` 다.
+    expect(reply?.body).toEqual({ answers: [['왼쪽']] })
+    expect(server.calls.some((call) => /\/api\/session\/[^/]+\/question\//.test(call.url))).toBe(false)
     expect(errors).toEqual([])
   })
 })
