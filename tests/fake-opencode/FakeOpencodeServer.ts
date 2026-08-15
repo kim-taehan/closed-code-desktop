@@ -96,12 +96,25 @@ export class FakeOpencodeServer {
     const prompt = /^\/session\/([^/]+)\/prompt_async$/.exec(url)
     if (request.method === 'POST' && prompt) return this.prompt(prompt[1]!, body, response)
 
-    // 레거시 중단은 본문이 `true` 다 (`{data:...}` 래핑 없음 — 실물 그대로).
-    if (request.method === 'POST' && /^\/session\/[^/]+\/abort$/.test(url)) {
+    // 레거시 중단·승인·질문은 본문이 `true` 다 (`{data:...}` 래핑 없음 — 실물 그대로).
+    //
+    // ⚠️ **신규 세대로 오면 실물처럼 거절한다.** 실물은 레거시 턴이 올린 승인·질문을
+    // 신규 표면에서 **아예 못 본다** — 승인은 404, 질문은 본문 검증이 먼저 걸려 400 이다.
+    // 여기서 200 을 주면 "카드를 눌러도 아무 일이 없는" 차단급 결함을 이 가짜가 통과시킨다
+    // (실제로 그렇게 한 번 샜다 — contract-qa 교차 대조에서 잡혔다).
+    if (request.method === 'POST' && /^\/api\/session\/[^/]+\/permission\/[^/]+\/reply$/.test(url)) {
+      return send(response, 404, { _tag: 'PermissionNotFoundError', message: '레거시 승인은 신규 표면에 없다' })
+    }
+    if (request.method === 'POST' && /^\/api\/session\/[^/]+\/question\/[^/]+\//.test(url)) {
+      return send(response, 400, { _tag: 'InvalidRequestError', message: 'Missing key\n  at ["answers"]' })
+    }
+    if (request.method === 'POST' && /^\/session\/[^/]+\/(abort|permissions\/[^/]+)$/.test(url)) {
+      return send(response, 200, true)
+    }
+    if (request.method === 'POST' && /^\/question\/[^/]+\/(reply|reject)$/.test(url)) {
       return send(response, 200, true)
     }
 
-    // permission reply·question reply 는 기록만 하고 성공으로 답한다.
     send(response, 200, { data: {} })
   }
 

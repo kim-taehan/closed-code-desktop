@@ -272,22 +272,24 @@ describe('승인 응답 매핑', () => {
     await tick()
     transport.send(JSON.stringify({ kind: 'chat', action: 'tool_approval_response', reqId: 'r', data: body }))
     await tick()
-    const call = server.find((c) => c.url.includes('/permission/'))
+    const call = server.find((c) => c.url.includes('/permissions/'))
     transport.close()
     return call
   }
 
   it('거부 → reject', async () => {
-    expect((await approve({ requestId: 'per_1', approved: false }))?.body).toEqual({ reply: 'reject' })
+    expect((await approve({ requestId: 'per_1', approved: false }))?.body).toEqual({ response: 'reject' })
   })
 
   it('한 번 승인 → once', async () => {
-    expect((await approve({ requestId: 'per_1', approved: true }))?.body).toEqual({ reply: 'once' })
+    expect((await approve({ requestId: 'per_1', approved: true }))?.body).toEqual({ response: 'once' })
   })
 
   it('범위 승인(session_allow) → always — opencode 는 범위 구분이 없다', async () => {
     const call = await approve({ requestId: 'per_1', approved: true, followUp: 'session_allow' })
-    expect(call?.body).toEqual({ reply: 'always' })
-    expect(call?.url).toBe('http://127.0.0.1:4096/api/session/ses_fake/permission/per_1/reply')
+    expect(call?.body).toEqual({ response: 'always' })
+    // 레거시 세대다 — `permissions`(복수), 끝에 `/reply` 없음, 본문 키는 `response`.
+    // 신규 경로로 보내면 실물이 404 를 주고 턴이 그 자리에서 영원히 멈춘다.
+    expect(call?.url).toBe('http://127.0.0.1:4096/session/ses_fake/permissions/per_1')
   })
 })

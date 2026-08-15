@@ -1,23 +1,17 @@
 // opencode 헤드리스 서버 HTTP 클라이언트.
 //
-// **경로는 공식 문서(opencode.ai/docs/server)와 다르다.** 실측(1.17.18 `/doc`) 기준:
-//
-//   문서                                    실제
-//   POST /session/:id/permissions/:pid  →  POST /api/session/:id/permission/:rid/reply
-//
-// 문서를 믿고 짜면 404 가 난다. 버전을 올릴 때는 `/doc` 을 다시 떠서 대조할 것.
+// 버전을 올릴 때는 `/doc` 을 다시 떠서 대조할 것 — 공식 문서(opencode.ai/docs/server)와
+// 실제 경로가 다르고, 문서를 믿고 짜면 404 가 난다.
 //
 // ⚠️ **채팅 계열은 일부러 레거시(`/api` 없는) 세대를 쓴다** (2026-08-14 전환).
+// **다섯이 한 세트다** — 프롬프트·중단·이벤트 스트림·승인 응답·질문 응답. 목록과 실측은
+// `legacyChat.ts` 머리말이 정본이고(스트림만 아래 `eventUrl`), 왜 레거시인지와 이벤트
+// 매핑표는 `legacyEvents.ts` 머리말이다.
 //
-//   프롬프트  POST /session/:id/prompt_async   (신규 `/api/session/:id/prompt` 아님)
-//   중단      POST /session/:id/abort          (신규 `/api/session/:id/interrupt` 아님)
-//   이벤트    GET  /event                      (신규 `/api/event` 아님 — `eventUrl`)
-//
-// **셋은 한 세트다 — 하나만 바꾸면 조용히 반쯤 죽는다.** 근거(MCP 도구가 신규 경로에서
-// 빠지는 캡처)와 매핑표는 `legacyEvents.ts` 머리말이 정본이고, 보내는 두 호출의 실측은
-// `legacyChat.ts`, 스트림 쪽 실측은 아래 `eventUrl` 주석에 있다.
+// 이 머리말에는 예전에 **`POST /session/:id/permissions/:pid` 를 신규로 고쳐 쓰라**는
+// 표가 있었다. 지금은 정확히 거꾸로다 — 그 줄을 되살리면 승인이 다시 404 로 죽는다.
 
-import { abortTurn, sendPrompt } from './legacyChat'
+import { abortTurn, replyPermissionLegacy, replyQuestionLegacy, sendPrompt } from './legacyChat'
 
 /**
  * `OPENCODE_SERVER_PASSWORD` 를 건 서버에 붙을 때의 인증 헤더.
@@ -254,9 +248,9 @@ export class OpencodeClient {
     await abortTurn((path, body) => this.post(path, body), sessionId)
   }
 
-  /** 도구 승인 응답. 보내지 않으면 턴이 그 자리에서 멈춘다. */
+  /** 도구 승인 응답 (레거시 세대 — 실측은 `legacyChat.ts`). 안 보내면 턴이 그 자리에서 멈춘다. */
   async replyPermission(sessionId: string, requestId: string, reply: PermissionReply): Promise<void> {
-    await this.post(`/api/session/${sessionId}/permission/${requestId}/reply`, { reply })
+    await replyPermissionLegacy((path, body) => this.post(path, body), sessionId, requestId, reply)
   }
 
   /**
@@ -289,10 +283,13 @@ export class OpencodeClient {
     return this.post(`/mcp?directory=${encodeURIComponent(directory)}`, { name, config })
   }
 
-  /** ask_user 대응. answer 가 null 이면 거절 경로로 보낸다. */
-  async replyQuestion(sessionId: string, requestId: string, answer: string | null): Promise<void> {
-    const path = `/api/session/${sessionId}/question/${requestId}`
-    if (answer === null) return void (await this.post(`${path}/reject`, {}))
-    await this.post(`${path}/reply`, { text: answer })
+  /**
+   * ask_user 대응 (레거시 세대 — 실측은 `legacyChat.ts`).
+   *
+   * `sessionId` 를 받지만 안 쓴다 — 레거시 질문 표면은 요청 id 하나로 찾는다.
+   * 부르는 쪽(`replies.ts`)의 모양을 승인과 맞춰 두려고 인자는 남긴다.
+   */
+  async replyQuestion(_sessionId: string, requestId: string, answer: string | null): Promise<void> {
+    await replyQuestionLegacy((path, body) => this.post(path, body), requestId, answer)
   }
 }

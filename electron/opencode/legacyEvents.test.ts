@@ -184,6 +184,36 @@ describe('승인 요청 — 이름은 같은데 필드가 다르다', () => {
   })
 })
 
+describe('질문 — 글이 questions[] 안에 있다', () => {
+  // 실측 페이로드 그대로. 평평한 `question` 이 없어서, 안 올려 주면 질문 카드가 빈 채로 뜬다.
+  it('questions[0].question 을 평평한 자리로 올린다', () => {
+    const frames = translate(
+      event('question.asked', {
+        id: 'que_1',
+        questions: [
+          {
+            question: '어느 쪽으로 갈까요?',
+            header: '방향',
+            options: [{ label: '왼쪽' }, { label: '오른쪽' }],
+          },
+        ],
+        tool: { messageID: MSG, callID: 'call_ask_1' },
+      }),
+      CTX,
+    )
+    expect(dataOf(frames[0])).toMatchObject({
+      messageType: 'user_question',
+      questionId: 'que_1',
+      question: '어느 쪽으로 갈까요?',
+    })
+  })
+
+  it('평평한 question 이 이미 있으면 건드리지 않는다', () => {
+    const frames = translate(event('question.asked', { id: 'que_2', question: '이미 평평하다' }), CTX)
+    expect(dataOf(frames[0])).toMatchObject({ question: '이미 평평하다' })
+  })
+})
+
 describe('취소', () => {
   /**
    * 레거시에서 사용자 취소는 `session.error` 로 온다 (실측 순서:

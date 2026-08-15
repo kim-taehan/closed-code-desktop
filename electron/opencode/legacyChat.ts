@@ -1,8 +1,20 @@
-// 레거시 세대로 보내는 채팅 호출 두 건 (프롬프트·중단).
+// 레거시 세대로 보내는 호출 네 건 (프롬프트·중단·승인 응답·질문 응답).
 //
 // `client.ts` 에서 갈라냈다 (300줄 상한). 왜 레거시 세대인지는 `legacyEvents.ts` 머리말이
-// 정본이다 — 요약하면 **신규 v2 경로가 LLM 요청에 MCP 도구를 안 싣기 때문**이고,
-// 프롬프트·중단·이벤트 스트림 셋은 세대가 같아야 한다.
+// 정본이다 — 요약하면 **신규 v2 경로가 LLM 요청에 MCP 도구를 안 싣기 때문**이다.
+//
+// ⚠️ **다섯이 한 세트다 — 하나만 남겨 두면 조용히 반쯤 죽는다.**
+//
+//   프롬프트  POST /session/:id/prompt_async      (신규 `/api/session/:id/prompt` 아님)
+//   중단      POST /session/:id/abort             (신규 `/api/session/:id/interrupt` 아님)
+//   승인 응답 POST /session/:id/permissions/:pid  (신규 `…/permission/:rid/reply` 아님)
+//   질문 응답 POST /question/:rid/reply           (신규 `…/question/:rid/reply` 아님)
+//   이벤트    GET  /event                         (신규 `/api/event` 아님 — `client.ts` 의 `eventUrl`)
+//
+// 처음엔 앞의 셋만 옮겼고 승인·질문 응답이 신규로 남아 **카드는 뜨는데 눌러도 아무 일이
+// 없는** 상태를 만들었다 (contract-qa 교차 대조에서 잡혔다). 원인은 하나다:
+// **한쪽 세대가 올린 요청은 다른 세대의 목록에 아예 안 보인다.** 같은 시각·같은 세션에서
+// `GET /permission` 에는 있는 승인이 `GET /api/session/:id/permission` 에는 `[]` 다.
 //
 // 받는 쪽(`legacyEvents.ts`)과 짝이다. 한쪽만 세대를 바꾸면 조용히 반쯤 죽는다.
 
@@ -49,4 +61,59 @@ export async function sendPrompt(post: PostJson, sessionId: string, text: string
  */
 export async function abortTurn(post: PostJson, sessionId: string): Promise<void> {
   await post(`/session/${sessionId}/abort`, {})
+}
+
+/**
+ * 도구 승인 응답. 보내지 않으면 턴이 그 자리에서 멈춘다.
+ *
+ * ⚠️ **승인도 세대가 갈린다 — 레거시 턴이 올린 승인은 레거시 목록에만 있다** (실측):
+ *
+ *   GET /permission                        → 대기 중인 승인이 보인다
+ *   GET /api/session/:id/permission        → `{"data":[]}`  (같은 시각·같은 세션)
+ *   POST /api/session/:id/permission/:rid/reply → **404 PermissionNotFoundError**
+ *
+ * 만료가 아니다 — 404 를 받은 뒤에도 그 승인은 `GET /permission` 에 계속 살아 있다.
+ * 증상이 고약하다: 승인 카드는 **정상적으로 뜨는데** 사용자가 "허용" 을 눌러도 아무 일도
+ * 안 일어나고 턴이 영원히 멈춘다. 도구 승인을 켠 사용자는 채팅이 통째로 죽는다.
+ *
+ * ⚠️ **본문 키가 `reply` 가 아니라 `response` 다.** 값 셋(`once`·`always`·`reject`)은
+ * 두 세대가 같아서 타입은 그대로 쓴다 — 키 이름만 다르다. 경로도 `permissions`(복수)이고
+ * 끝에 `/reply` 가 없다.
+ *
+ * 실측: 이 호출 → `200 true` → 도구가 `running → completed` 로 진행 → `session.idle`.
+ */
+export async function replyPermissionLegacy(
+  post: PostJson,
+  sessionId: string,
+  requestId: string,
+  response: string,
+): Promise<void> {
+  await post(`/session/${sessionId}/permissions/${requestId}`, { response })
+}
+
+/**
+ * 질문(ask_user) 답신. `answer` 가 null 이면 거절 경로로 간다.
+ *
+ * ⚠️ **여기도 세대가 갈리는데, 승인보다 더 조용히 실패한다.** 신규 경로는 404 가 아니라
+ * **400** 을 준다 — 본문 검증이 먼저 걸려서, 세대가 틀렸다는 사실 자체를 안 알려준다:
+ *
+ *   GET /question                       → 대기 중인 질문이 보인다
+ *   GET /api/session/:id/question       → `{"data":[]}`
+ *   POST /api/session/:id/question/:rid/reply  {text}  → **400 `Missing key at ["answers"]`**
+ *
+ * ⚠️ **본문이 `{text}` 가 아니라 `{answers}` 이고, 답 하나가 배열이다** — `QuestionAnswer`
+ * 가 `string[]` 이라 질문 하나에 답 하나면 `[[답]]` 이 된다 (질문마다 하나씩, 순서대로).
+ *
+ * **세션 id 를 안 쓴다** — 레거시 질문 표면은 요청 id 하나로 찾는다. 거절은 본문이 없다.
+ *
+ * 한계: davis 의 질문 카드는 질문 하나에 답 하나라, 여러 질문이 한 번에 온 경우 첫 질문에만
+ * 답한다. 실측한 것도 질문 하나짜리다 — 여럿이 오는 경우를 만나면 여기서 넓힌다.
+ */
+export async function replyQuestionLegacy(
+  post: PostJson,
+  requestId: string,
+  answer: string | null,
+): Promise<void> {
+  if (answer === null) return void (await post(`/question/${requestId}/reject`, {}))
+  await post(`/question/${requestId}/reply`, { answers: [[answer]] })
 }

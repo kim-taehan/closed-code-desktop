@@ -192,6 +192,28 @@ function fromPermissionAsked(event: OpencodeEvent): OpencodeEvent {
 }
 
 /**
+ * 질문도 **이름은 같은데 모양이 다르다.**
+ *
+ * 레거시 실측(1.18.18, 내장 `question` 도구를 부르게 해서 받았다):
+ *   `{id, sessionID, questions:[{question, header, options:[{label, description}]}],
+ *     tool:{messageID, callID}}`
+ *
+ * `translate.ts` 는 평평한 `question`/`text` 를 읽으므로 **글이 `questions[0]` 안에 있으면
+ * 못 찾고 질문 카드가 빈 채로 뜬다.** 첫 질문의 글을 그 자리에 올려 준다.
+ *
+ * 한계: davis 의 질문 카드는 하나만 묻는다. 여럿이 와도 첫 질문만 보이고, 답신도
+ * 첫 질문에만 간다 (`legacyChat.ts` 의 `replyQuestionLegacy`). 실측한 것도 하나짜리다.
+ */
+function fromQuestionAsked(event: OpencodeEvent): OpencodeEvent {
+  const props = event.properties as Record<string, unknown>
+  if (typeof props['question'] === 'string' || typeof props['text'] === 'string') return event
+  const questions = props['questions']
+  const first = Array.isArray(questions) ? (questions[0] as Record<string, unknown> | undefined) : undefined
+  if (first === undefined || typeof first['question'] !== 'string') return event
+  return { ...event, properties: { ...props, question: first['question'] } }
+}
+
+/**
  * 레거시 이벤트면 신규 이름으로 되옮기고, 아니면 그대로 돌려준다.
  * 옮길 수 없는 것(중간 상태·에코)은 `null` — 부르는 쪽이 버린다.
  */
@@ -203,6 +225,8 @@ export function normalizeLegacyEvent(event: OpencodeEvent): OpencodeEvent | null
       return fromPartUpdated(event)
     case OpencodeEventType.PERMISSION_ASKED:
       return fromPermissionAsked(event)
+    case OpencodeEventType.QUESTION_ASKED:
+      return fromQuestionAsked(event)
     default:
       return event
   }
