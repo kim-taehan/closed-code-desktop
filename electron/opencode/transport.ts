@@ -248,15 +248,19 @@ export class OpencodeTransport implements Transport {
   }
 
   /**
-   * stream_cancel → `POST …/interrupt`.
+   * stream_cancel → `POST …/abort` (레거시 세대 — `legacyChat.ts`).
    *
    * **조용히 버리지 않는다.** 세션이 없으면 보낼 곳이 없는데, 그냥 돌아서면 사용자에겐
    * "중단 버튼이 무시됐다" 로만 보인다. `fail()` 이 같은 사유로 이미 화면까지 올린다 —
    * 그 선례를 따른다 (열려 있는 턴도 stream_end 로 함께 닫는다).
    *
-   * 성공 경로에서는 **중단을 요청했다는 사실을 기억한다.** opencode 는 중단된 턴을
+   * 성공 경로에서는 **중단을 요청했다는 사실을 기억한다.** 신규 세대는 중단된 턴을
    * `step.failed` 로 알리고, 그것이 사용자 취소인지 프로바이더 실패인지 구분해 주지
-   * 않는다 — 가르는 근거가 이 플래그뿐이다 (`translate.ts` 의 STEP_FAILED 분기).
+   * 않았다 — 가르는 근거가 이 플래그뿐이었다 (`translate.ts` 의 STEP_FAILED 분기).
+   *
+   * ⚠️ **지금(레거시)은 이 플래그 없이도 갈린다** — 취소가 `MessageAbortedError` 라는
+   * **이름을 달고** 와서 SESSION_ERROR 가 이름만 보고 판단한다. 그래도 남기는 것은
+   * STEP_FAILED 가 신규 세대로 되돌릴 때의 자리라서다 (지우면 취소가 빨간 오류로 뜬다).
    */
   private async onCancel(): Promise<void> {
     const sessionId = this.sessionId

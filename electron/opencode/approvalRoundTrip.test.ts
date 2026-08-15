@@ -25,8 +25,22 @@ let connection: OpencodeConnection | null = null
 afterEach(async () => {
   connection?.close()
   connection = null
-  await server.stop()
+  // `server` 는 `askForCard` 안에서 만들어진다 — 그 앞에서 실패하면 아직 없다.
+  await server?.stop()
 })
+
+/**
+ * 이번 턴의 세션 id.
+ *
+ * 가짜가 만든 id 를 **서버에게 물어서** 쓴다. 카드의 `requestId` 에서 접두사를 떼어
+ * 만들어 쓰던 자리인데, 그건 `per_<세션id>` 라는 대본의 우연한 생김새에 기댄 것이라
+ * 대본을 바꾸면 조용히 엉뚱한 문자열을 비교하게 된다.
+ */
+function sessionId(): string {
+  const created = server.calls.find((call) => call.url === '/api/session')
+  expect(created).toBeDefined()
+  return String((server.calls.find((call) => /\/prompt_async$/.test(call.url))?.url ?? '').split('/')[2])
+}
 
 async function askForCard(turn: typeof approvalTurnScript, want: string) {
   server = new FakeOpencodeServer({ turn })
@@ -86,7 +100,7 @@ describe('승인 왕복', () => {
       expect(server.calls.some((call) => call.url.includes('/permissions/'))).toBe(true)
     })
     const reply = server.calls.find((call) => call.url.includes('/permissions/'))
-    expect(reply?.url).toBe(`/session/${String(card['requestId']).replace('per_', '')}/permissions/${card['requestId']}`)
+    expect(reply?.url).toBe(`/session/${sessionId()}/permissions/${card['requestId']}`)
     // 경로도 본문 키도 레거시여야 한다 — 신규는 `reply` 다.
     expect(reply?.body).toEqual({ response: 'once' })
     // 신규 표면으로 샌 호출이 하나도 없어야 한다 (가짜가 404 를 준다 → 오류로 드러난다)

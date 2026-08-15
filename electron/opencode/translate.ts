@@ -124,8 +124,16 @@ export function translate(raw: OpencodeEvent, ctx: TranslateContext): Frame[] {
     }
 
     /**
-     * 턴 종료 판정. **`session.idle` 에 기대면 안 된다** — 실측상 `/api` 경로에서는
-     * idle 이 아예 오지 않고 여기서 끝난다. idle 만 기다리면 진행 표시기가 영원히 돈다.
+     * 턴 종료 판정.
+     *
+     * ⚠️ **"`session.idle` 에 기대면 안 된다" 는 조건부였다.** 그 지시문은 프롬프트를
+     * **`/api` 로 넣던 시절**의 실측이다 — 그때는 idle 이 아예 오지 않고 여기서 끝나서,
+     * idle 만 기다리면 진행 표시기가 영원히 돌았다.
+     *
+     * 지금(레거시 세대)은 `session.idle` 이 **실제로 온다.** 그래도 여기서 닫는 것은
+     * 그대로 두는데, 이유가 바뀌었다: 레거시는 `step-finish` 와 `session.idle` 이 **둘 다**
+     * 오므로 먼저 오는 이쪽이 턴을 닫고, 뒤따르는 idle 은 어댑터가 `streamId` 를 비워
+     * 막는다 (`transport.ts` 의 STREAM_END 처리).
      */
     case OpencodeEventType.STEP_ENDED: {
       const step = props as unknown as StepEndedProps
@@ -247,8 +255,17 @@ export function translate(raw: OpencodeEvent, ctx: TranslateContext): Frame[] {
       ]
     }
 
-    // 폴백. `/api` 경로에서는 실측상 오지 않지만, 레거시 경로나 취소(interrupt) 뒤에는
-    // 이쪽으로 턴이 닫힐 수 있다. 중복 종료는 어댑터가 streamId 를 비워 막는다.
+    // ⚠️ **폴백이 아니다 — 취소된 턴의 유일한 종결자다.**
+    //
+    // 예전엔 폴백이었다(`/api` 경로에서는 실측상 오지 않았다). 레거시로 옮긴 뒤로는
+    // 정상 턴에서도 오고, 무엇보다 **사용자 취소는 여기서만 닫힌다**: abort 뒤에는
+    // `session.error{MessageAbortedError}` → `session.status{idle}` → `session.idle` 만
+    // 오고 `step-finish` 는 끝내 안 온다. 위 SESSION_ERROR 분기가 그 오류를 일부러
+    // 안 내보내므로, 이 분기를 지우면 **취소한 턴이 영영 안 닫힌다** (진행 표시기가
+    // 5초 강제 종단까지 돈다 — 사용자에겐 "중단이 무시됐다" 로 보인다).
+    //
+    // 정상 턴에서는 `step-finish` 가 먼저 닫고 이건 뒤늦게 온다. 중복 종료는 어댑터가
+    // streamId 를 비워 막는다.
     case OpencodeEventType.SESSION_IDLE:
       return endTurn(ctx)
 

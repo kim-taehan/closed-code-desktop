@@ -58,7 +58,9 @@ session/*  ──davis 봉투(kind/action)──▶  OpencodeTransport  ──HT
 | `electron/opencode/events.ts` | opencode 이벤트 타입 + SSE 한 줄 파싱 |
 | `electron/opencode/translate.ts` | **이벤트 → davis 봉투.** 매핑의 정본 |
 | `electron/opencode/client.ts` | HTTP 호출 (세션·프롬프트·중단·승인·질문) |
-| `electron/opencode/sse.ts` | `/api/event` SSE 리더 (재연결 포함) |
+| `electron/opencode/sse.ts` | `/event` SSE 리더 (재연결 포함) |
+| `electron/opencode/legacyChat.ts` | 레거시 세대로 보내는 네 호출 (프롬프트·중단·승인·질문) |
+| `electron/opencode/legacyEvents.ts` | 레거시 이벤트 → 신규 이름 되옮기기. **레거시 전환의 근거가 여기 있다** |
 | `electron/opencode/transport.ts` | `Transport` 구현. 위 넷을 묶고 없는 개념을 합성 |
 | `electron/opencode/connection.ts` | 연결 수명(붙기·버리기·재연결·상태). `WsConnection` 과 같은 자리 |
 | `electron/opencode/endpoint.ts` | 서버 주소 해석 (탐색 없음) |
@@ -79,26 +81,48 @@ session/*  ──davis 봉투(kind/action)──▶  OpencodeTransport  ──HT
 | `tool_call` | `session.next.tool.input.started` (이 시점에 이미 이름을 안다) |
 | `tool_result` | `session.next.tool.success` / `.failed` |
 | `turn_end` + `stream_end` | `session.next.step.ended` 중 `finish !== 'tool-calls'` |
-| `turn_end` + `stream_end` (중단) | **`session.next.step.failed`** — 중단은 `step.ended` 로 안 끝난다 (함정 15) |
-| `error` | `session.error` · 중단을 요청하지 않은 `session.next.step.failed` |
-| `tool_approval_request` → 응답 | `permission.v2.asked` → `POST …/permission/{id}/reply` |
-| `user_question` → 응답 | `question.v2.asked` → `POST …/question/{id}/reply` |
-| `stream_cancel` | `POST …/interrupt` |
+| `turn_end` + `stream_end` (중단) | `session.idle` — 취소 턴의 **유일한** 종결자다 |
+| `error` | `session.error` (단, `MessageAbortedError` 는 취소라 오류로 안 낸다) |
+| `tool_approval_request` → 응답 | `permission.asked` → `POST /session/:id/permissions/:pid` |
+| `user_question` → 응답 | `question.asked` → `POST /question/:rid/reply` |
+| `stream_cancel` | `POST /session/:id/abort` |
+
+> ⚠️ **오른쪽 열의 `session.next.*` 는 와이어 이름이 아니라 「어댑터 안쪽 모양」이다.**
+> 와이어로 실제 오는 것은 레거시 계열(`message.part.updated` · `message.part.delta`)이고,
+> `legacyEvents.ts` 가 그것을 위 이름으로 되옮긴 뒤 `translate.ts` 에 넣는다. 매핑의 정본을
+> 한 벌로 두려는 것이다. **와이어 실물을 보려면 `legacyEvents.ts` 머리말을 봐라** — 거기에
+> 레거시↔신규 대응표가 있다.
 
 ## ⚠️ opencode 실측 함정 (공식 문서와 다르다)
 
 전부 직접 부딪혀 확인한 것이다. **문서를 믿고 짜면 전부 밟는다.**
 
 1. **API 가 두 벌이고 이벤트 계열이 통째로 다르다**
-   - `POST /session/:id/message` (레거시) → `message.part.*`
+   - `POST /session/:id/prompt_async` (레거시) → `message.part.*`
    - `POST /api/session/:id/prompt` (신규) → `session.next.*`
    - 섞으면 핸드셰이크는 통과하는데 **채팅 청크가 0건**이다.
 
-2. **SSE 도 두 벌이다.** 같은 시각 동시에 떠서 비교한 결과:
-   - `/api/event` → `session.next.*` 전부 (238줄)
-   - `/event` → `server.connected` + heartbeat 뿐 (10줄)
+   **우리는 레거시를 쓴다** (2026-08-14 전환). 신규 v2 경로가 LLM 요청의 `tools` 배열에
+   **MCP 도구를 안 싣기 때문**이다 — 같은 서버·같은 세션·같은 MCP 등록 상태에서 레거시는
+   `probe_probe_tool` 포함 12개, 신규는 그것만 빠진 12개였다 (목 LLM 와이어 캡처).
+   신규 본문에는 tools 를 넣을 필드 자체가 없어 클라이언트가 우회할 수도 없다.
 
-3. **페이로드 필드 이름이 스트림마다 다르다.** `/api/event` 는 `data`, 레거시 `/event` 는 `properties`.
+   ⚠️ **세대를 갈아탈 때 옮길 자리는 다섯이다** — 프롬프트·중단·이벤트 스트림·**승인 응답**·
+   **질문 응답**. 뒤의 둘은 사용자 입력에서 시작하는 **역방향**이라 앞의 셋을 훑는 눈에 안
+   걸린다. 실제로 그렇게 두 번 샜다 (함정 16).
+
+2. **SSE 도 두 벌이고, 어느 쪽이 정답인지는 프롬프트를 어느 세대로 넣었는지에 딸린다.**
+   스트림 자체의 성질이 아니다. 두 번 다 같은 시각에 두 스트림을 동시에 떠서 쟀다:
+   - 프롬프트를 `/api/…/prompt` 로 → `/api/event` 238줄 · `/event` 는 heartbeat 뿐 10줄 (1.17.18)
+   - 프롬프트를 `/session/…/prompt_async` 로 → `/event` 44건 · `/api/event` 6건 (1.18.18)
+
+   **"`/event` 는 비어 있다" 는 옛 결론을 조건 없이 읽지 말 것** — 그때는 참이었다.
+   지금은 `/event` 가 정본이다. 어긋나게 짝지으면 **반쯤만 죽어서 더 헷갈린다**:
+   `/api/event` 에도 `session.created` 와 **사용자 메시지 에코**까지는 오므로 연결도
+   핸드셰이크도 멀쩡해 보이는데, 어시스턴트 텍스트·도구·`session.idle` 이 한 건도 안 온다.
+
+3. **페이로드 필드 이름이 스트림마다 다르다.** `/api/event` 는 `data`, 레거시 `/event` 는
+   `properties` — **우리가 쓰는 쪽이 후자다.** `parseEvent` 가 둘 다 받아 `properties` 로 모은다.
    안 맞추면 파싱은 되는데 필드가 전부 undefined 가 되어 **내용 없는 청크**가 흐른다.
 
 4. **`/api/*` 응답은 대개 `{ data: ... }` 로 감싸여 온다 — 전부는 아니다.** 레거시 경로는 안 감싼다.
@@ -130,10 +154,18 @@ session/*  ──davis 봉투(kind/action)──▶  OpencodeTransport  ──HT
    **잰 점은 1.14.28 · 1.17.17 · 1.17.18 · 1.18.16 넷이고 그 사이는 안 쟀다.**
    `/global/health` 도 안 감싼다.
 
-5. **경로 이름이 문서와 다르다.** `abort` → `interrupt`, `permissions/:id` → `permission/:id/reply`.
+5. **경로 이름이 문서와 다르다** — 다만 **어느 세대에 서 있느냐로 방향이 뒤집힌다.**
+   신규 세대에 설 때는 `abort` → `interrupt`, `permissions/:id` → `permission/:id/reply` 로
+   고쳐 써야 했다. **지금은 레거시라 정확히 거꾸로다** — 문서 쪽 이름이 맞다.
+   `client.ts` 머리말이 이 자리를 한 번 거꾸로 안내해 승인이 404 로 죽은 적이 있다.
 
-6. **`session.idle` 에 기대지 말 것.** `/api` 경로에서는 오지 않는다. 턴 종료는
-   `session.next.step.ended` 의 `finish` 로 판정한다 (`tool-calls` 면 아직 안 끝났다).
+6. **`session.idle` 에 기대지 말 것 — 이것도 조건부였다.** `/api` 경로에서는 오지 않아서,
+   턴 종료를 `step.ended` 의 `finish` 로 판정해야 했다 (`tool-calls` 면 아직 안 끝났다).
+
+   **레거시에서는 `session.idle` 이 실제로 온다.** 정상 턴은 여전히 `step-finish` 가 먼저
+   닫지만, **사용자 취소는 `session.idle` 로만 닫힌다** — abort 뒤에는
+   `session.error{MessageAbortedError}` → `session.status{idle}` → `session.idle` 만 오고
+   `step-finish` 는 끝내 안 온다. 그래서 이 자리는 폴백이 아니라 **취소 턴의 유일한 종결자**다.
 
 7. **`textID` 는 메시지 안에서만 유일하다** (`text-0` 이 매번 재사용됨).
    버블 묶기 키는 `assistantMessageID:textID` 여야 한다.
@@ -195,6 +227,8 @@ session/*  ──davis 봉투(kind/action)──▶  OpencodeTransport  ──HT
     (그건 `POST /api/session/:id/compact` 를 불러야 한다 — 아직 안 붙였다).
 
 15. **중단은 `step.ended` 로 끝나지 않는다 — `step.failed` 다.** 1.18.18 실측(2026-08-14).
+    ⚠️ **이 항목은 신규 세대(`/api`) 이야기다.** 레거시로 옮긴 지금 중단은 아래 16번 모양으로
+    오고, `session.idle` 이 실제로 온다. 신규로 되돌릴 때를 위해 그대로 남긴다.
     턴 도중 `POST …/interrupt` 를 넣으면 204 뒤에 딱 두 건이 오고 끝난다:
 
     ```
@@ -212,6 +246,32 @@ session/*  ──davis 봉투(kind/action)──▶  OpencodeTransport  ──HT
     ⚠️ **프롬프트 접수 직후(`step.started` 전) 중단하면 아무 이벤트도 오지 않는다.** 204 만
     받고 그 턴은 시작도 종료도 없이 사라진다 (45초 관측). 지금 UI 는 이 창에서 버튼이 안 뜨지만
     (`isStreaming` 이 `turn_started` 에서 켜진다), 화면의 「중단중…」에 상한이 필요한 이유가 이것이다.
+
+16. **세대는 다섯 자리가 한 세트다 — 그리고 뒤의 둘은 역방향이라 안 보인다.**
+    1.18.18 실측(2026-08-14). 프롬프트·중단·이벤트 스트림만 레거시로 옮기고 **승인 응답**과
+    **질문 응답**을 신규로 남겼더니, 앞의 셋은 멀쩡한데 카드에서 막혔다.
+
+    원인은 하나다: **한쪽 세대가 올린 요청은 다른 세대의 목록에 아예 안 보인다.**
+    같은 시각·같은 세션에서 `GET /permission` 에는 있는 승인이
+    `GET /api/session/:id/permission` 에는 `[]` 다. 만료가 아니다 — 거절당한 뒤에도
+    그 요청은 레거시 목록에 계속 살아 있다.
+
+    | 답신을 신규로 보내면 | 결과 |
+    |---|---|
+    | `POST /api/session/:id/permission/:rid/reply` | **404** `PermissionNotFoundError` |
+    | `POST /api/session/:id/question/:rid/reply` `{text}` | **400** `Missing key at ["answers"]` |
+
+    증상은 둘 다 **"카드는 정상으로 뜨는데 눌러도 아무 일이 없고 턴이 영원히 멈춤"** 이다.
+    질문 쪽이 더 고약하다 — 400 은 **본문 검증**이 먼저 걸린 것이라 세대가 틀렸다는 사실
+    자체를 안 알려준다.
+
+    레거시 답신은 모양도 다르다:
+    - 승인: `POST /session/:id/permissions/:pid` — `permissions`(복수), 끝에 `/reply` 없음,
+      본문 키가 `reply` 가 아니라 **`response`**
+    - 질문: `POST /question/:rid/reply` — **세션 id 를 안 쓴다.** 본문이 `{text}` 가 아니라
+      **`{answers:[["왼쪽"]]}`** (답 하나가 배열이다)
+    - `question.asked` 페이로드에는 평평한 `question` 이 **없다** — 글이 `questions[0]` 안에
+      있어서, 안 올려 주면 질문 카드가 **빈 채로** 뜬다
 
     `error` 의 모양도 `session.error` 와 다르다 — `{data:{message}}` 가 아니라 한 겹 얕은
     `{type, message}` 다 (`translate.ts` 의 `errorMessage` 가 둘 다 본다).
@@ -333,8 +393,10 @@ system 없이 캐주얼하게 물으면 도구 대신 "확인 중입니다…" �
 | 세션 | `tests/fake-opencode/` | 프로젝트 격리·연결 생사 (가짜 HTTP+SSE 서버) |
 | 실물 | `live.test.ts` | 계약 어긋남 (실서버, 기본 skip) |
 
-> 가짜 서버는 **실물 계약을 그대로** 흉내낸다 — `{data:...}` 래핑, 이벤트 페이로드 필드 `data`,
-> `/api/event` 가 서버 전역인 점까지. 실물과 어긋난 가짜는 초록을 주면서 버그를 통과시킨다.
+> 가짜 서버는 **실물 계약을 그대로** 흉내낸다 — `{data:...}` 래핑, 이벤트 페이로드 필드
+> `properties`, `/event` 가 서버 전역인 점, 프롬프트가 **204**(본문 없음)인 점, 그리고
+> **신규 세대 답신에 실물처럼 승인 404 · 질문 400 을 주는 것**까지. 실물과 어긋난 가짜는
+> 초록을 주면서 버그를 통과시킨다 — 이 마지막 한 줄이 없던 동안 함정 16 이 그대로 샜다.
 > 특히 **세션 격리는 opencode 에서 davis 때보다 위험하다**: 서버 하나에 세션이 여럿이고
 > 이벤트 스트림이 전역이라, 남의 턴이 내 스트림으로 들어온다. 격리는 어댑터의 sessionID 필터뿐이다.
 
