@@ -109,7 +109,22 @@ async function mcpSettings(
   }
 }
 
-/** payload 는 snake_case 다 — 이 도메인에 camelCase 별칭이 없다는 davis 규칙 그대로. */
+/**
+ * payload 는 snake_case 다 — 이 도메인에 camelCase 별칭이 없다는 davis 규칙 그대로.
+ *
+ * ⚠️ **`enabled` 를 일부러 안 싣는다. 「꺼짐」의 근거는 런타임 `status` 하나다.**
+ *
+ * 설정의 `enabled` 와 `GET /mcp` 의 status 는 **갈라지고, 갈라진 채로 남는다** (contract-qa
+ * 실측): `enabled:false` 인 서버에 connect 하면 상태가 `disabled` → `failed` 로 넘어가는데
+ * 파일의 `enabled` 는 `false` 그대로다. disconnect 를 부르기 전까지 그 상태로 남는다.
+ *
+ * 그래서 둘을 한 카드에 얹으면 「꺼짐 + 실패」라는 모순이 나온다. 런타임 쪽을 정본으로 삼는다 —
+ * **화면이 그려야 하는 것은 지금 실제 상태지 파일에 뭐라 적혀 있는지가 아니고**, 사용자가
+ * 카드에서 끄면 disconnect 가 나가 `disabled` 로 되돌아오므로 고리도 닫힌다.
+ *
+ * 되살리고 싶어지거든(설정에 꺼져 있는데 왜 실패로 보이나 싶을 때) 그때 진실의 출처가 둘이
+ * 된다는 것을 먼저 보라. `mcpConfig.test.ts` 의 `divergent` 항목이 이 자리를 잠근다.
+ */
 function toServer(
   name: string,
   entry: McpStatusEntry,

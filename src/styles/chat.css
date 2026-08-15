@@ -4506,11 +4506,16 @@ body {
   overflow-wrap: anywhere;
 }
 
+/* 오류 원문은 서버가 준 그대로다 — 개행 섞인 수백 자 JSON 덩어리가 온 적이 있다 (실측).
+   줄바꿈을 살리되 높이를 재우지 않으면 카드 하나가 다이얼로그를 다 먹는다. */
 .dc-mcp__err {
   margin: 5px 0 0;
   font-size: 11px;
   color: var(--dc-status-error);
   overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  max-height: 7.5em;
+  overflow-y: auto;
 }
 
 .dc-mcp__tools {

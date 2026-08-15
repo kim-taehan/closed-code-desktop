@@ -87,4 +87,17 @@ describe('McpSection', () => {
     expect(screen.getByText('로그인 필요')).toBeTruthy()
     expect(screen.queryByText('실패')).toBeNull()
   })
+
+  // 실측: `status:"failed"` 인데 `error` 가 빈 문자열인 경우가 있다 (파서가 빈 값을 떨군다).
+  // 그때 아무것도 안 그리면 빨간 pill 만 남아 사용자가 이유를 물을 곳이 없다.
+  it('실패인데 사유가 없으면 없다고 말한다 — 빨간 딱지만 남기지 않는다', () => {
+    show([server({ status: 'failed' })])
+    expect(screen.getByText(/실패 사유를 알려주지 않았습니다/)).toBeTruthy()
+  })
+
+  // 「켜기」는 런타임 한정이다 — 설정 파일의 enabled 는 false 로 남는다 (실측)
+  it('「켜기」가 영구적인 척하지 않는다', () => {
+    show([server({ status: 'disabled' })])
+    expect(screen.getByTitle(/이 실행에서만 켭니다/)).toBeTruthy()
+  })
 })

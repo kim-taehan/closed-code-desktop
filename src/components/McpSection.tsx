@@ -75,12 +75,18 @@ const TONES: Record<McpConnectionStatus, string> = {
   unknown: 'off',
 }
 
+/** `error` 를 싣는 갈래 둘 (`MCPStatusFailed`·`MCPStatusNeedsClientRegistration` 만 필수다). */
+function failed(status: McpConnectionStatus): boolean {
+  return status === 'failed' || status === 'needs_client_registration'
+}
+
 function ServerCard({ server }: { server: McpServerStatus }) {
   const [busy, setBusy] = useState(false)
   const tone = TONES[server.status]
   // 도구를 아는 것은 우리가 띄운 서버뿐이다 (`electron/opencode/mcpConfig.ts` — opencode 는
   // 남의 서버 도구를 안 준다). 그래서 이 목록이 곧 "이 앱이 띄웠다" 는 표식이다.
   const ours = server.tools.length > 0
+  const kind = ours ? 'local · 이 앱이 띄움' : server.transport === 'unknown' ? '' : server.transport
 
   function connect(enabled: boolean): void {
     setBusy(true)
@@ -94,14 +100,20 @@ function ServerCard({ server }: { server: McpServerStatus }) {
       <div className="dc-mcp__head">
         <span className={`dc-mcp__dot dc-mcp__dot--${tone}`} />
         <span className="dc-mcp__name">{server.serverName}</span>
-        <span className="dc-mcp__kind">
-          {ours ? 'local · 이 앱이 띄움' : server.transport === 'unknown' ? '' : server.transport}
-        </span>
+        {/* 설정에 없는 남의 런타임 등록 서버는 갈래를 알 길이 없다 — 빈 칸을 그리느니 뺀다 */}
+        {kind !== '' && <span className="dc-mcp__kind">{kind}</span>}
         <span className={`dc-mcp__state dc-mcp__state--${tone}`}>{LABELS[server.status]}</span>
       </div>
 
       {server.url !== undefined && <p className="dc-mcp__url">{server.url}</p>}
-      {server.error !== undefined && <p className="dc-mcp__err">{server.error}</p>}
+
+      {/* **오류 원문은 한 줄이 아닐 수 있다.** OAuth 감지가 걸린 원격에서 개행 섞인 490자
+          JSON 덩어리가 그대로 왔다 (contract-qa 실측) — 그래서 pre-wrap 에 높이를 재운다.
+          거꾸로 `status:"failed"` 인데 `error` 가 **빈 문자열**인 경우도 실측됐다. 그때
+          아무것도 안 그리면 빨간 pill 만 남아 사용자가 이유를 물을 곳이 없다. */}
+      {failed(server.status) && (
+        <p className="dc-mcp__err">{server.error ?? '서버가 실패 사유를 알려주지 않았습니다.'}</p>
+      )}
 
       {server.tools.length > 0 && (
         <div className="dc-mcp__tools">
@@ -113,12 +125,20 @@ function ServerCard({ server }: { server: McpServerStatus }) {
         </div>
       )}
 
-      {/* 꺼진 서버만 문구가 다르다. 부르는 곳은 하나다 — opencode 가 둘을 안 가른다 */}
-      {(server.status === 'failed' || server.status === 'disabled') && (
+      {/* 꺼진 서버만 문구가 다르다. 부르는 곳은 하나다 — opencode 가 둘을 안 가른다.
+          **「켜기」는 설정 파일에 안 남는다** — connect 뒤에도 `opencode.json` 의 `enabled` 는
+          `false` 그대로다 (contract-qa 실측). 이 실행에서만 켜지는 것이라 title 로 밝힌다.
+          "영구히 켜기" 로 읽히면 거짓말이 된다. */}
+      {(failed(server.status) || server.status === 'disabled') && (
         <button
           type="button"
-          className={`dc-settings__apply${server.status === 'failed' ? ' dc-settings__apply--urge' : ''}`}
+          className={`dc-settings__apply${server.status === 'disabled' ? '' : ' dc-settings__apply--urge'}`}
           disabled={busy}
+          title={
+            server.status === 'disabled'
+              ? '이 실행에서만 켭니다 — 설정 파일은 그대로입니다'
+              : '다시 붙어 봅니다'
+          }
           onClick={() => connect(true)}
         >
           {server.status === 'disabled' ? '켜기' : '다시 연결'}

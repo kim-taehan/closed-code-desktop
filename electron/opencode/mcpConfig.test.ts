@@ -5,13 +5,18 @@ import { mcpConfigFrame } from './mcpConfig'
 
 // 실측 페이로드(opencode 1.18.18, 2026-08-15) → davis `mcp_config` 봉투.
 //
-// 아래 상태 맵은 **손으로 지어낸 것이 아니다**. 빈 git 디렉터리에 remote 2 · local 2 를
-// 심고 `GET /mcp?directory=` 로 받은 응답 그대로다 — 오류 문구까지 원문이다.
+// 아래 상태 맵은 **손으로 지어낸 것이 아니다**. 빈 git 디렉터리에 remote·local 을 심고
+// `GET /mcp?directory=` 로 받은 응답 그대로다 — 오류 문구까지 원문이다.
+// `divergent` 는 contract-qa 가 자기 하네스에서 만들어 낸 상태를 옮긴 것이다 (그 항목 주석).
 
 const STATUS = {
   deadremote: { status: 'failed', error: 'SSE error: Unable to connect. Is the computer able to access the url?' },
   offremote: { status: 'disabled' },
   deadlocal: { status: 'failed', error: 'MCP error -32000: Connection closed' },
+  // **설정과 런타임이 갈라진 항목.** `enabled:false` 인데 상태는 `failed` 다 — 꺼진 서버에
+  // connect 를 부르고 disconnect 를 안 하면 이 모양으로 **남는다** (contract-qa 실측).
+  // 다른 항목은 둘이 일치해서, 이것이 없으면 「꺼짐」의 근거를 `enabled` 로 바꿔도 전부 초록이다.
+  divergent: { status: 'failed', error: 'MCP error -32000: Connection closed' },
   'open-code-desktop': { status: 'connected' },
 }
 
@@ -22,6 +27,7 @@ const CONFIG = {
     deadremote: { type: 'remote', url: 'http://127.0.0.1:9/mcp', enabled: true },
     offremote: { type: 'remote', url: 'http://127.0.0.1:9999/mcp', enabled: false },
     deadlocal: { type: 'local', command: ['/usr/bin/false'] },
+    divergent: { type: 'remote', url: 'http://127.0.0.1:9997/mcp', enabled: false },
   },
 }
 
@@ -70,6 +76,20 @@ describe('mcpConfigFrame', () => {
     expect(off?.error).toBeUndefined()
   })
 
+  // 이 자리를 잠그는 것이 이 파일의 목적 하나다 — 「꺼짐」의 근거는 런타임 status 하나이고
+  // 설정의 `enabled` 는 **경계를 넘지 않는다**. 근거와 사유는 `mcpConfig.ts` 의 `toServer` 주석.
+  it('설정은 꺼져 있는데 런타임이 실패면 실패다 — enabled 를 근거로 삼지 않는다', async () => {
+    const split = (await stateOf()).servers.find((server) => server.serverName === 'divergent')
+    expect(split?.status).toBe('failed')
+    expect(split?.error).toBe('MCP error -32000: Connection closed')
+  })
+
+  it('enabled 는 봉투에 실리지 않는다 — 진실의 출처를 둘로 만들지 않는다', async () => {
+    const frame = await mcpConfigFrame(client(), '/proj', Action.MCP_CONFIG_STATUS, {})
+    const servers = (frame?.['data'] as { servers: Record<string, unknown>[] }).servers
+    expect(servers.every((server) => !('enabled' in server))).toBe(true)
+  })
+
   // 설정 쪽을 기준으로 돌면 우리 서버가 목록에서 통째로 빠진다 — 상태 맵이 기준인 이유다
   it('설정에 없는 우리 서버도 목록에 남고, 도구 목록이 그 표식이 된다', async () => {
     const ours = (await stateOf()).servers.find((s) => s.serverName === 'open-code-desktop')
@@ -105,13 +125,13 @@ describe('mcpConfigFrame', () => {
   it('connect 가 실패해도 목록은 낸다 — 서버 하나 때문에 화면을 덮지 않는다', async () => {
     const api = client({ setMcpEnabled: vi.fn(async () => { throw new Error('404') }) })
     const state = await stateOf(api, Action.MCP_CONFIG_SET, { server_name: 'deadremote', enabled: true })
-    expect(state.servers).toHaveLength(4)
+    expect(state.servers).toHaveLength(5)
   })
 
   it('설정 조회가 실패해도 상태만으로 목록을 낸다', async () => {
     const api = client({ config: vi.fn(async () => { throw new Error('down') }) })
     const state = await stateOf(api)
-    expect(state.servers).toHaveLength(4)
+    expect(state.servers).toHaveLength(5)
     expect(state.servers[0]).toMatchObject({ transport: 'unknown' })
     expect(state.servers[0]?.url).toBeUndefined()
   })
