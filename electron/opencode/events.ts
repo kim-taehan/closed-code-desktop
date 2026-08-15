@@ -5,12 +5,18 @@
 // ⚠️ opencode 에는 API 가 **두 벌** 있고, 어느 쪽으로 프롬프트를 넣었는지에 따라
 //    흘러나오는 이벤트 계열이 **통째로 다르다**:
 //
-//      POST /session/:id/message      (레거시) → `message.part.updated` / `message.part.delta`
+//      POST /session/:id/prompt_async (레거시) → `message.part.updated` / `message.part.delta`
 //      POST /api/session/:id/prompt   (신규)   → `session.next.*`
 //
-//    우리는 `/api` 를 쓰므로 `session.next.*` 만 번역한다. 레거시 계열을 기준으로 짜면
+//    **지금 우리가 쓰는 것은 레거시다** (2026-08-14 전환 — 신규 경로가 LLM 요청에 MCP
+//    도구를 안 실어서다. 근거는 `legacyEvents.ts` 머리말). 계열이 어긋나게 짜면
 //    핸드셰이크는 통과하는데 채팅 청크가 **한 개도 안 잡힌다** (실제로 겪은 실패다).
-//    엔드포인트를 바꾸면 이 파일도 같이 바꿔야 한다.
+//
+//    ⚠️ **그런데 이 파일의 이름들은 여전히 `session.next.*` 다 — 일부러 그렇다.**
+//    레거시 이벤트는 `legacyEvents.ts` 가 신규 이름으로 되옮긴 뒤 `translate.ts` 에
+//    들어온다. 매핑의 정본을 한 벌로 두려는 것이고, 그래서 이 파일은 **어댑터 안쪽의
+//    공용 이벤트 모양**이지 더 이상 "와이어에서 오는 그대로" 가 아니다.
+//    와이어 실물을 보려면 `legacyEvents.ts` 를 봐라.
 //
 // 봉투가 `data` 가 아니라 **`properties`** 인 것도 실측 결과다.
 
@@ -118,8 +124,8 @@ export interface QuestionAskedProps {
  * SSE 한 줄 → 이벤트.
  *
  * ⚠️ **페이로드가 실린 필드 이름이 스트림마다 다르다** (실측):
- *     `/api/event` → `data`        (OpenAPI 정본. 우리가 쓰는 쪽)
- *     `/event`     → `properties`  (레거시)
+ *     `/api/event` → `data`        (OpenAPI 정본)
+ *     `/event`     → `properties`  (레거시. **우리가 쓰는 쪽** — `client.ts` 의 `eventUrl`)
  *
  * 둘 다 받아 `properties` 로 통일한다. 이걸 안 맞추면 파싱은 성공하는데 필드가 전부
  * undefined 가 되어, 청크는 오는데 **내용이 빈** 상태가 된다 — `{"messageType":"tool_call"}`

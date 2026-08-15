@@ -8,7 +8,7 @@ import type { ChatSnapshotPayload, SessionStatePayload, TurnEvent } from '../../
 // 이게 깨지면 A 의 응답이 B 화면에 뜨거나, B 에서 보낸 질문이 A 로 간다.
 //
 // **opencode 에서는 이게 davis 때보다 더 위험하다.** davis 는 프로젝트마다 별도 runtime·소켓이라
-// 물리적으로 갈렸지만, opencode 는 서버 하나에 세션이 여럿이고 `/api/event` 는 **서버 전역**이다 —
+// 물리적으로 갈렸지만, opencode 는 서버 하나에 세션이 여럿이고 `/event` 는 **서버 전역**이다 —
 // 남의 턴 이벤트가 내 스트림으로 그대로 들어온다. 격리는 오직 어댑터의 sessionID 필터뿐이다.
 // 그래서 아래 테스트들은 **두 세션을 같은 서버에 붙여** 그 필터를 실제로 겨눈다.
 
@@ -95,12 +95,14 @@ describe('세션 격리', () => {
     const { a } = await twoProjects()
     a.session.send('A 의 질문')
 
-    const prompts = () => server.calls.filter((call) => call.url.endsWith('/prompt'))
+    // 레거시 세대의 본문은 `{parts:[{type:'text', text}]}` 다 (`legacyChat.ts`).
+    const prompts = () => server.calls.filter((call) => call.url.endsWith('/prompt_async'))
     await vi.waitFor(() => expect(prompts()).toHaveLength(1))
-    expect((prompts()[0]?.body as { prompt?: { text?: string } })?.prompt?.text).toBe('A 의 질문')
+    const parts = (prompts()[0]?.body as { parts?: Array<{ text?: string }> })?.parts
+    expect(parts?.[0]?.text).toBe('A 의 질문')
   })
 
-  it('A 의 응답이 B 의 화면에 섞이지 않는다 — /api/event 는 전역이다', async () => {
+  it('A 의 응답이 B 의 화면에 섞이지 않는다 — /event 는 전역이다', async () => {
     const { a, b } = await twoProjects()
     a.session.send('A 에게')
 

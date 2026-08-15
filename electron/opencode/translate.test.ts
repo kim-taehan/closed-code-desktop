@@ -278,9 +278,17 @@ describe('모르는 이벤트', () => {
     }
   })
 
-  it('레거시 계열(message.part.*)은 번역하지 않는다 — /api 경로에서는 오지 않는다', () => {
-    expect(translate(event('message.part.delta', { partID: 'p', field: 'text', delta: 'x' }), CTX)).toEqual(
-      [],
+  /**
+   * ⚠️ **이 단언은 뒤집혔다.** 예전에는 "레거시 계열은 번역하지 않는다" 였고 그때는 맞았다 —
+   * 프롬프트를 `/api` 로 넣던 시절엔 레거시 이벤트가 올 리가 없었다. 지금은 레거시가
+   * **우리가 받는 유일한 계열**이라(`legacyEvents.ts`) 버리면 채팅이 통째로 죽는다.
+   */
+  it('레거시 계열(message.part.*)을 번역한다 — 지금은 이게 우리가 받는 계열이다', () => {
+    const frames = translate(
+      event('message.part.delta', { messageID: MSG, partID: 'p', field: 'text', delta: 'x' }),
+      CTX,
     )
+    expect(frames).toHaveLength(1)
+    expect(dataOf(frames[0])).toMatchObject({ messageType: 'text', message: 'x' })
   })
 })

@@ -11,6 +11,7 @@ import {
   type ToolInputStartedProps,
   type ToolResultProps,
 } from './events'
+import { normalizeLegacyEvent } from './legacyEvents'
 
 // opencode 이벤트 → davis 봉투. **부패방지 계층의 심장이다.**
 //
@@ -96,8 +97,16 @@ function errorMessage(props: Record<string, unknown>): string {
   return typeof name === 'string' ? name : '알 수 없는 오류'
 }
 
-/** 이벤트 하나를 davis 봉투 0~N 개로 옮긴다. 모르는 이벤트는 조용히 버린다. */
-export function translate(event: OpencodeEvent, ctx: TranslateContext): Frame[] {
+/**
+ * 이벤트 하나를 davis 봉투 0~N 개로 옮긴다. 모르는 이벤트는 조용히 버린다.
+ *
+ * 들어오는 것은 레거시 계열(`message.part.*`)이지만 **여기서는 신규 이름만 다룬다** —
+ * 이름 되옮기기는 `legacyEvents.ts` 가 먼저 하고, 이 파일은 매핑의 정본으로 남는다.
+ * 번역기를 둘로 늘리면 청크 규칙이 두 벌이 되어 한쪽만 고치는 사고가 난다.
+ */
+export function translate(raw: OpencodeEvent, ctx: TranslateContext): Frame[] {
+  const event = normalizeLegacyEvent(raw)
+  if (!event) return []
   const props = event.properties as Record<string, unknown>
 
   switch (event.type) {
@@ -214,11 +223,29 @@ export function translate(event: OpencodeEvent, ctx: TranslateContext): Frame[] 
       ]
     }
 
-    case OpencodeEventType.SESSION_ERROR:
+    /**
+     * ⚠️ **레거시에서는 사용자 취소가 이 분기로 들어온다.**
+     *
+     * 실측(1.18.18): `POST /session/:id/abort` 뒤에 이 셋이 온다 —
+     *   `session.error{error:{name:"MessageAbortedError", data:{message:"Aborted"}}}`
+     *   → `session.status{idle}` → `session.idle`
+     *
+     * 그대로 옮기면 사용자가 스스로 끊은 자리에 **"Aborted" 라는 빨간 오류**가 뜬다.
+     * 여기서는 아무것도 내지 않고 뒤따르는 `session.idle` 이 턴을 닫게 둔다 — 신규 쪽
+     * `step.failed` 가 `ctx.cancelling` 으로 가르던 것과 같은 판단이고, 다만 레거시는
+     * 이름이 실려 와서 **우리가 끊었는지 기억할 필요가 없다.**
+     * (`events.ts` 가 신규 쪽에 적어 둔 "중단으로 끝난 턴을 실패로 단정하지 말 것" 이
+     * 레거시에선 이 자리로 옮겨온다.)
+     */
+    case OpencodeEventType.SESSION_ERROR: {
+      const error = props['error']
+      const name = error !== null && typeof error === 'object' ? (error as Record<string, unknown>)['name'] : null
+      if (name === 'MessageAbortedError') return []
       return [
         chunkFrame({ messageType: ChunkType.ERROR, message: errorMessage(props) }, ctx.streamId),
         streamEnd(ctx.streamId, { failed: true }),
       ]
+    }
 
     // 폴백. `/api` 경로에서는 실측상 오지 않지만, 레거시 경로나 취소(interrupt) 뒤에는
     // 이쪽으로 턴이 닫힐 수 있다. 중복 종료는 어댑터가 streamId 를 비워 막는다.

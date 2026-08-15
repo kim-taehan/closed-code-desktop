@@ -128,9 +128,12 @@ describe('채팅', () => {
     expect(start).toBeDefined()
     expect(typeof start.streamId).toBe('string')
 
-    const prompt = server.find((call) => call.url.endsWith('/prompt'))
-    expect(prompt?.url).toBe('http://127.0.0.1:4096/api/session/ses_fake/prompt')
-    expect(prompt?.body).toEqual({ prompt: { text: '안녕' } })
+    // **레거시 세대로 간다** — 신규 `/api/session/:id/prompt` 는 LLM 요청에 MCP 도구를
+    // 안 실어서다 (`legacyEvents.ts` 머리말). URL 문자열 자체를 단언하는 이유는
+    // 세대를 잘못 짝지어도 목 서버가 200 을 주기 때문이다.
+    const prompt = server.find((call) => call.url.endsWith('/prompt_async'))
+    expect(prompt?.url).toBe('http://127.0.0.1:4096/session/ses_fake/prompt_async')
+    expect(prompt?.body).toEqual({ parts: [{ type: 'text', text: '안녕' }] })
     transport.close()
   })
 
@@ -181,11 +184,20 @@ describe('채팅', () => {
     transport.close()
   })
 
-  it('stream_cancel 은 interrupt 로 간다 (abort 가 아니다)', async () => {
+  /**
+   * ⚠️ **이 단언도 뒤집혔다** — 예전 이름은 "interrupt 로 간다 (abort 가 아니다)" 였다.
+   * 그때는 프롬프트가 신규 세대였고, 신규 턴은 `/api/…/interrupt` 로만 끊겼다.
+   * 레거시 턴에 그걸 넣으면 **204 를 주고 아무 일도 안 일어난다** (1.18.18 실측) —
+   * 조용히 무시되므로 증상은 "중단 버튼이 안 먹는다" 뿐이다.
+   */
+  it('stream_cancel 은 레거시 abort 로 간다 (interrupt 가 아니다)', async () => {
     const { server, transport } = await readySession()
     transport.send(JSON.stringify({ kind: 'chat', action: 'stream_cancel', reqId: 'r', data: {} }))
     await tick()
-    expect(server.find((call) => call.url.endsWith('/interrupt'))).toBeDefined()
+    expect(server.find((call) => call.url.endsWith('/abort'))?.url).toBe(
+      'http://127.0.0.1:4096/session/ses_fake/abort',
+    )
+    expect(server.find((call) => call.url.endsWith('/interrupt'))).toBeUndefined()
     transport.close()
   })
 

@@ -3,11 +3,21 @@
 // **경로는 공식 문서(opencode.ai/docs/server)와 다르다.** 실측(1.17.18 `/doc`) 기준:
 //
 //   문서                                    실제
-//   POST /session/:id/message           →  POST /api/session/:id/prompt   (message 는 GET 전용)
-//   POST /session/:id/abort             →  POST /api/session/:id/interrupt
 //   POST /session/:id/permissions/:pid  →  POST /api/session/:id/permission/:rid/reply
 //
 // 문서를 믿고 짜면 404 가 난다. 버전을 올릴 때는 `/doc` 을 다시 떠서 대조할 것.
+//
+// ⚠️ **채팅 계열은 일부러 레거시(`/api` 없는) 세대를 쓴다** (2026-08-14 전환).
+//
+//   프롬프트  POST /session/:id/prompt_async   (신규 `/api/session/:id/prompt` 아님)
+//   중단      POST /session/:id/abort          (신규 `/api/session/:id/interrupt` 아님)
+//   이벤트    GET  /event                      (신규 `/api/event` 아님 — `eventUrl`)
+//
+// **셋은 한 세트다 — 하나만 바꾸면 조용히 반쯤 죽는다.** 근거(MCP 도구가 신규 경로에서
+// 빠지는 캡처)와 매핑표는 `legacyEvents.ts` 머리말이 정본이고, 보내는 두 호출의 실측은
+// `legacyChat.ts`, 스트림 쪽 실측은 아래 `eventUrl` 주석에 있다.
+
+import { abortTurn, sendPrompt } from './legacyChat'
 
 /**
  * `OPENCODE_SERVER_PASSWORD` 를 건 서버에 붙을 때의 인증 헤더.
@@ -100,18 +110,23 @@ export class OpencodeClient {
   }
 
   /**
-   * SSE 스트림. **`/api/event` 여야 한다 — 레거시 `/event` 가 아니다.**
+   * SSE 스트림. **`/event` 여야 한다 — `/api/event` 가 아니다.**
    *
-   * 실측(1.17.18): 같은 시각 두 스트림을 동시에 떠서 비교했다.
-   *   `/api/event` — session.next.* 전부 (238줄)
-   *   `/event`     — server.connected + heartbeat 뿐 (10줄)
+   * ⚠️ **이 주석은 한 번 뒤집혔다. 예전 판정("`/api/event` 여야 한다")도 실측이었다** —
+   * 다만 조건부였다. 스트림의 정답은 **프롬프트를 어느 세대로 넣었는가**에 딸린 값이지
+   * 스트림 자체의 성질이 아니다. 두 번 다 같은 시각에 두 스트림을 동시에 떠서 쟀다:
    *
-   * `/event` 를 쓰면 핸드셰이크(server.connected)는 통과하는데 채팅 이벤트가 하나도
-   * 안 오고, 스트림이 곧 닫혀 "연결은 됐는데 답이 없다" 가 된다. 프롬프트를 `/api` 로
-   * 넣으면 이벤트도 `/api` 로 받아야 한다 — 두 API 세대를 섞지 말 것.
+   *   프롬프트 `/api/…/prompt`        → `/api/event` 238줄 · `/event` 10줄 (1.17.18)
+   *   프롬프트 `/session/…/prompt_async` → `/event` 44건 · `/api/event` 6건 (1.18.18)
+   *
+   * **두 API 세대를 섞지 말 것** — 이 규칙만 그대로다. 바뀐 것은 우리가 선 세대다.
+   *
+   * `?directory=` 는 붙이지 않는다. 스트림은 세션보다 먼저 열려 그 시점에 디렉토리를
+   * 모르고, `/event` 는 **서버 전역**이라 붙일 데도 없다 — 남의 세션을 거르는 것은
+   * `transport.ts` 의 sessionID 필터 하나다 (`multiSession.test.ts`).
    */
   get eventUrl(): string {
-    return `${this.baseUrl}/api/event`
+    return `${this.baseUrl}/event`
   }
 
   get headers(): Record<string, string> {
@@ -219,15 +234,9 @@ export class OpencodeClient {
     await this.post(`/api/session/${sessionId}/model`, { model })
   }
 
-  /**
-   * 프롬프트를 보낸다.
-   *
-   * 실측: 이 호출은 턴 완료를 기다리지 않고 **접수 즉시 반환**한다
-   * (`{ admittedSeq, id, delivery: "steer" }`). 턴의 진행·결과는 전부 SSE 로 온다.
-   * 따라서 응답 본문에는 답변이 없다 — 여기서 답을 꺼내려 하지 말 것.
-   */
+  /** 프롬프트를 보낸다 (레거시 세대 — 실측과 본문 규칙은 `legacyChat.ts`). */
   async prompt(sessionId: string, text: string): Promise<void> {
-    await this.post(`/api/session/${sessionId}/prompt`, { prompt: { text } })
+    await sendPrompt((path, body) => this.post(path, body), sessionId, text)
   }
 
   /**
@@ -240,9 +249,9 @@ export class OpencodeClient {
     await this.post(`/api/session/${sessionId}/agent`, { agent })
   }
 
-  /** 진행 중인 턴을 끊는다 (davis stream_cancel 대응) */
+  /** 진행 중인 턴을 끊는다 (레거시 세대 — 실측은 `legacyChat.ts`). */
   async interrupt(sessionId: string): Promise<void> {
-    await this.post(`/api/session/${sessionId}/interrupt`, {})
+    await abortTurn((path, body) => this.post(path, body), sessionId)
   }
 
   /** 도구 승인 응답. 보내지 않으면 턴이 그 자리에서 멈춘다. */
@@ -253,9 +262,9 @@ export class OpencodeClient {
   /**
    * MCP 서버를 **런타임에** 등록한다 (데스크톱이 MCP 서버 노릇을 하는 쪽 — `electron/mcp/`).
    *
-   * ⚠️ **이 한 건만 `/api` 가 아니다.** `/api/mcp` 는 없다 (1.17.18 `/doc` 162경로 전수 확인).
-   * 다른 곳에서 두 API 세대를 섞지 말라고 해 둔 것과 겉으로 충돌해 보이지만, MCP 는
-   * `/api` 판이 아예 없어 선택지가 없다. 레거시 표면이라 `{data:...}` 래핑도 없다 —
+   * ⚠️ **여기는 `/api` 판이 아예 없어서 레거시다** — `/api/mcp` 는 없다 (1.17.18 `/doc`
+   * 162경로 전수 확인). 채팅 계열이 레거시인 것은 골라서 그런 것이고(머리말) 여기는
+   * 선택지가 없다는 점이 다르다. 레거시 표면이라 `{data:...}` 래핑도 없다 —
    * 응답은 `{"<이름>":{"status":"connected"}}` 그대로다 (실측).
    *
    * ⚠️⚠️ **질의 이름이 평문 `directory=` 다.** 옆의 pty 표면은 `location[directory]=` 이고

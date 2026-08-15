@@ -43,9 +43,9 @@ export function fakeServer() {
   return {
     calls,
     fetchImpl,
-    /** `/api/event` 와 같은 봉투로 민다 — 페이로드는 `properties` 가 아니라 `data` 다 */
-    emit(type: string, data: Record<string, unknown> = {}) {
-      push?.(`data: ${JSON.stringify({ id: 'evt_1', type, data })}\n\n`)
+    /** 레거시 `/event` 와 같은 봉투로 민다 — 페이로드는 `data` 가 아니라 `properties` 다 */
+    emit(type: string, properties: Record<string, unknown> = {}) {
+      push?.(`data: ${JSON.stringify({ id: 'evt_1', type, properties })}\n\n`)
     },
     end() {
       closeStream?.()
