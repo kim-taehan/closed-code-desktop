@@ -40,6 +40,15 @@ import { OpencodeEventType, type OpencodeEvent } from './events'
 //        status="error"                            →  session.next.tool.failed
 //   session.idle · session.error · permission.asked · question.asked → 이름이 같다 (그대로 통과)
 //
+// **턴 종결자의 세션 격리 근거 (2026-08-15 실측, 1.18.18 원시 프레임):** 이 전환으로 턴을
+// 닫는 권한이 session.idle 로 옮겨 갔는데, transport 의 sessionID 필터는 필드가 없으면
+// 통과시키는(fail-open) 구조다. 그래서 원시 프레임을 떠서 확인했다 — 둘 다 싣는다:
+//   {"type":"session.idle","properties":{"sessionID":"ses_ffc4cf317ffe…"}}
+//   {"type":"session.error","properties":{"sessionID":"ses_ffc4cf70fff…","error":{…}}}
+// 같은 서버의 두 세션으로 B idle 이 A 턴 진행 중에 오는 시나리오까지 만들었고, B 의 idle 은
+// B 의 id 를 달고 와서 A 는 계속 흘렀다. 이 근거가 깨지는 버전을 만나면 legacyEvents 는
+// 채워 줄 수 없으므로(전역 스트림이라 정보 자체가 없다) transport 쪽 방어가 필요해진다.
+//
 // **되옮기는 쪽을 고른 이유:** 매핑의 정본은 `translate.ts` 하나로 두고 싶어서다. 레거시
 // 이벤트에서 davis 봉투로 곧장 가는 두 번째 번역기를 만들면 청크 규칙이 두 벌이 되고,
 // 한쪽만 고치는 사고가 난다. 여기서는 **이름과 필드만** 바꾸고 davis 쪽 판단(턴을 언제
