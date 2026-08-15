@@ -574,7 +574,10 @@
   padding: 4px;
   border: 1px solid var(--dc-border);
   border-radius: var(--dc-radius-md);
-  background: var(--dc-surface);
+  /* **떠 있는 판은 불투명해야 한다.** `--dc-surface` 는 알파 0.08 이라 뒤의 파일 목록이
+     글자에 겹쳐 읽힌다 (2026-08-15 사용자 지적). 이 레포의 다른 팝업(`.dc-mentions`)도
+     `--dc-bg` 를 쓴다 — 「눌린 항목」 표시용인 surface 와 용도가 다르다. */
+  background: var(--dc-bg);
   box-shadow: 0 8px 20px rgb(0 0 0 / 28%);
 }
 
@@ -650,7 +653,8 @@
   padding: 4px;
   border: 1px solid var(--dc-border);
   border-radius: var(--dc-radius-md);
-  background: var(--dc-surface);
+  /* 브랜치 메뉴와 같은 이유로 불투명하다 (위 주석) */
+  background: var(--dc-bg);
   box-shadow: 0 8px 20px rgb(0 0 0 / 28%);
 }
 
