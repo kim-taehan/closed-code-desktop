@@ -277,14 +277,16 @@ export class OpencodeTransport implements Transport {
    *
    * `/event` 는 **서버 전역**이라 다른 세션의 이벤트도 흘러온다. sessionID 가 실린 이벤트는
    * 우리 세션 것만 통과시킨다 — 안 거르면 다른 창의 대화가 이 화면에 섞여 렌더된다.
+   * 없으면 **통과**시킨다(fail-open). 안전한 근거는 `session.idle`·`session.error` 도
+   * sessionID 를 싣는다는 실측이다 — 안 실었다면 남의 idle 이 내 턴을 닫는다.
    */
   private onEvent(event: OpencodeEvent): void {
     const eventSession = (event.properties as Record<string, unknown> | undefined)?.['sessionID']
     if (typeof eventSession === 'string' && this.sessionId && eventSession !== this.sessionId) return
 
-    // 턴이 없는 동안 도착한 스트림 이벤트는 버린다. 핸드셰이크용 system 프레임만 통과시킨다.
-    // 이 가드가 없으면 종료 신호가 둘(step.ended·session.idle) 다 왔을 때 stream_end 가
-    // 두 번 나가 위층의 턴 게이트가 이미 닫힌 턴을 또 닫는다.
+    // 턴이 없는 동안 도착한 스트림 이벤트는 버린다 (핸드셰이크용 system 프레임만 통과).
+    // 없으면 종료 신호가 겹칠 때 stream_end 가 두 번 나가 이미 닫힌 턴을 또 닫는다.
+    // **실제로 밟힌다** — 레거시 한 턴에 `session.idle` 이 두 번 온다 (실측).
     const context: TranslateContext = { streamId: this.streamId ?? 'no-stream', cancelling: this.cancelling }
     for (const frame of translate(event, context)) {
       if (this.streamId === null && frame['kind'] !== Kind.SYSTEM) continue
