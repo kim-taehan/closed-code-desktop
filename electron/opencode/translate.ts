@@ -265,7 +265,11 @@ export function translate(raw: OpencodeEvent, ctx: TranslateContext): Frame[] {
     // 5초 강제 종단까지 돈다 — 사용자에겐 "중단이 무시됐다" 로 보인다).
     //
     // 정상 턴에서는 `step-finish` 가 먼저 닫고 이건 뒤늦게 온다. 중복 종료는 어댑터가
-    // streamId 를 비워 막는다.
+    // streamId 를 비워 막는다 (`transport.ts` 의 onEvent).
+    //
+    // ⚠️ **그 방어는 회귀 그물이 아니라 실제로 밟힌다** — 한 턴에서 `session.idle` 이
+    // **두 번** 오는 것을 실측했다(`session.status{idle}` 도 두 번). `step-finish` 까지
+    // 세면 한 턴의 종료 신호가 셋이다. 저 가드를 지우면 stream_end 가 그만큼 나간다.
     case OpencodeEventType.SESSION_IDLE:
       return endTurn(ctx)
 
