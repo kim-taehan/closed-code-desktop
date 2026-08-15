@@ -217,19 +217,22 @@
    파생시켜 8개 테마 전부 자동 대응 — 테마별 스크롤바 토큰을 따로 두지 않는다.
    숨긴 자리(.project-rail__projects·.main-tabs)는 더 구체적인 규칙이라 그대로 이긴다.
    ⚠️ 커스텀 스크롤바는 macOS "스크롤할 때만 표시" 를 덮어쓴다 — 상시 노출이 의도다. */
-::-webkit-scrollbar { width: 12px; height: 12px; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-corner { background: transparent; }
 ::-webkit-scrollbar-thumb {
-  background: color-mix(in srgb, var(--dc-muted) 35%, transparent);
+  /* ⚠️ 토큰 이름은 `--dc-text-muted` 다. `--dc-muted` 로 쓰면 color-mix 가 통째로
+     무효가 되고 **스크롤바가 아예 안 보인다** — 잘못된 색이 아니라 색 없음이라
+     증상이 "스크롤바가 사라졌다" 로 나온다 (2026-08-15 실측). */
+  background: color-mix(in srgb, var(--dc-text-muted) 45%, transparent);
   border-radius: 999px;
-  /* 투명 테두리 + padding-box 로 가장자리에서 4px 띄운다 */
-  border: 4px solid transparent;
+  /* 투명 테두리 + padding-box 로 가장자리에서 3px 띄운다 (알약 폭 4px) */
+  border: 3px solid transparent;
   background-clip: padding-box;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: color-mix(in srgb, var(--dc-accent) 50%, transparent);
-  border: 3px solid transparent;
+  background: color-mix(in srgb, var(--dc-text-muted) 75%, transparent);
+  border: 2px solid transparent;
   background-clip: padding-box;
 }
 
