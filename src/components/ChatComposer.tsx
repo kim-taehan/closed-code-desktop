@@ -1,4 +1,4 @@
-import { useEffect, useState, type DragEvent } from 'react'
+import { useEffect, useState } from 'react'
 import { useCancelRequest } from './TurnControls'
 import { ComposerQueue } from './ComposerQueue'
 import { ContextUsageBar } from './ContextUsageBar'
@@ -16,6 +16,8 @@ import { parseMentions } from '../state/atMentions'
 import { useOpencodeCommands } from '../state/useOpencodeCommands'
 import { isRealFilePath } from '../state/editorContext'
 import { useSendQueue } from '../state/useSendQueue'
+import { useOptimisticBusy } from '../state/useOptimisticBusy'
+import { useFileDrop } from '../state/useFileDrop'
 import { useModelSelect } from '../state/useModelSelect'
 import { isModelSwitcherEligible } from '../state/modelSelect'
 import { ModelSwitch } from './ModelSwitch'
@@ -72,9 +74,13 @@ export function ChatComposer(props: ChatComposerProps) {
   // 실측(2026-08-14): 확장 판을 열어 둔 채로 입력창에 그 줄이 붙어 나갔다.
   const viewingFile =
     props.activeTab !== 'chat' && isRealFilePath(props.activeTab) ? props.activeTab : null
-  const queue = useSendQueue(props.project?.id ?? null, props.isStreaming)
+  // 전송 즉시 「응답 중」 으로 바뀐다 — turn_started 를 기다리지 않는다 (useOptimisticBusy).
+  const { busy, markSent } = useOptimisticBusy(props.isStreaming)
+  // **큐도 이 값을 본다.** `isStreaming` 만 보면 turn_started 가 오기 전에 두 번째 질문이
+  // 큐를 그냥 지나쳐 바로 나가고, 그것이 큐가 막으려던 이중 전송이다.
+  const queue = useSendQueue(props.project?.id ?? null, busy)
   const history = useInputHistory(props.project?.id ?? null)
-  const cancel = useCancelRequest(props.isStreaming)
+  const cancel = useCancelRequest(busy)
   const [skills, setSkills] = useState(false)
   // `/` 로 부를 수 있는 opencode 항목. 전송 때 템플릿을 전개하려면 팝업만이 아니라
   // 여기서도 목록을 들고 있어야 한다 — 손으로 쳐서 Enter 한 것도 같은 길로 온다.
@@ -184,34 +190,23 @@ export function ChatComposer(props: ChatComposerProps) {
       ],
     })
 
+    // 여기까지 왔으면 LLM 으로 가는 길이다 (셸·데스크톱 명령은 위에서 되돌아갔다).
+    // 큐에 쌓였든 바로 나갔든 **응답을 기다리는 상태**이므로 버튼을 지금 바꾼다.
+    markSent()
+
     // 보낸 뒤에는 비운다 — 남겨 두면 다음 질문에 또 붙는다
     props.attachments.clear()
     // 물었으면 답을 봐야 한다 — 문서를 보던 채로 두면 응답을 놓친다
     props.onSelectTab('chat')
   }
 
-  const [dragOver, setDragOver] = useState(false)
-
-  // 외부에서 입력창으로 파일을 끌어다 놓으면 +버튼과 같은 경로로 붙인다.
-  function dropFiles(event: DragEvent) {
-    event.preventDefault()
-    setDragOver(false)
-    const paths = Array.from(event.dataTransfer.files)
-      .map((file) => window.davis.pathForFile(file))
-      .filter((path) => path.length > 0)
-    if (paths.length > 0) props.attachments.addPaths(paths)
-  }
+  const drop = useFileDrop(props.attachments.addPaths)
 
   return (
     <div
       className={`composer-bar${props.hidden ? ' composer-bar--hidden' : ''}`}
-      onDragOver={(event) => {
-        event.preventDefault()
-        setDragOver(true)
-      }}
-      onDragLeave={() => setDragOver(false)}
-      onDrop={dropFiles}
-      style={dragOver ? { outline: '2px dashed var(--dc-accent)', outlineOffset: -2 } : undefined}
+      {...drop.handlers}
+      style={drop.over ? { outline: '2px dashed var(--dc-accent)', outlineOffset: -2 } : undefined}
     >
       {/* 「중단」 알약이 있던 자리 — 버튼은 전송 버튼(↑→■)으로 옮겨졌고 (Composer.tsx),
           여기 남는 것은 상한을 넘겼을 때의 안내뿐이다. 말없이 되돌리면 사용자는
@@ -244,7 +239,7 @@ export function ChatComposer(props: ChatComposerProps) {
         focusKey={`${props.project?.id ?? ''}:${props.activeTab}`}
         history={history.entries}
         onHistoryRecord={history.record}
-        {...(props.isStreaming
+        {...(busy
           ? {
               stop: {
                 pending: cancel.pending,
