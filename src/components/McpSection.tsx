@@ -1,11 +1,17 @@
 import { useEffect, useState } from 'react'
-import type { McpServerStatus, McpState } from '../../shared/protocol/mcpConfig'
+import type { McpConnectionStatus, McpServerStatus, McpState } from '../../shared/protocol/mcpConfig'
 
-// 설정 창의 "MCP" — 개인 자격 설정.
+// 커넥터(MCP) 다이얼로그의 본문 — **연결 상태**를 보여준다.
 //
-// **값은 올려보내기만 한다.** 응답에는 값이 오지 않고 키 이름만 온다 —
-// 원본 보관처가 이쪽이고 노출 면적을 줄이려는 것이다 (runtime 규칙).
-// 그래서 저장된 값을 되불러와 칸에 채우지 않는다. 채워져 있다는 사실만 보여준다.
+// 여기는 davis 시절 **개인 자격 입력 칸**이었다. 값은 올려보내기만 하고 응답에는 키 이름만
+// 오는 계약이라, 저장된 값을 되불러와 칸에 채우지 않고 채워져 있다는 사실만 보여줬다.
+// **opencode 에는 그 개념이 없다** — 서버 목록도 자격도 사용자의 `opencode.json` 이 정하고
+// 앱이 밀어 넣을 자리가 없다. 그래서 입력 칸을 걷어내고 상태 카드로 바꿨다
+// (payload 가 왜 통째로 바뀌었는지는 `shared/protocol/mcpConfig.ts` 머리말).
+//
+// 「다시 연결」·「켜기」는 **같은 호출 하나**다 — opencode 의 `POST /mcp/:name/connect` 가
+// 꺼진 서버도 켠다 (실측). 그 호출은 davis 봉투 `mcp_config_set` 을 타고 나가고, 어댑터가
+// 번역한다 — 그래서 IPC 이름이 아직 `setMcpCredentials` 다. **자격은 안 실린다.**
 
 export interface McpSectionProps {
   state: McpState
@@ -19,147 +25,104 @@ export function McpSection({ state }: McpSectionProps) {
   if (state.servers.length === 0) {
     return (
       <section className="dc-settings__section">
-        <h3 className="dc-settings__heading">MCP</h3>
+        {/* 문구가 davis 때는 "관리자 화면에서 등록합니다" 였다. opencode 세계에는 그런 화면이
+            없어 거짓이 됐다 — 등록처를 정직하게 가리킨다. */}
         <p className="dc-settings__hint dc-settings__hint--above">
-          이 프로젝트에 설정된 MCP 서버가 없습니다. 서버는 관리자 화면에서 등록합니다.
+          {state.message === ''
+            ? '이 프로젝트에 설정된 MCP 서버가 없습니다.'
+            : `서버 목록을 받지 못했습니다 — ${state.message}`}
         </p>
+        <McpFooter />
       </section>
     )
   }
 
   return (
     <section className="dc-settings__section">
-      <h3 className="dc-settings__heading">MCP</h3>
-      <p className="dc-settings__hint dc-settings__hint--above">
-        내 계정 자격을 넣습니다. 입력한 값은 이 컴퓨터에서 런타임으로만 가고 되돌아오지 않습니다.
-      </p>
-
-      {/* 정책이 꺼져 있으면 넣어도 쓰이지 않는다 — 넣기 전에 알려야 한다 */}
-      {!state.policyEnabled && (
-        <p className="dc-settings__warn">
-          이 프로젝트는 개인 자격을 쓰지 않도록 되어 있습니다. 관리자에게 문의하세요.
-        </p>
-      )}
-
       {state.servers.map((server) => (
         <ServerCard key={server.serverName} server={server} />
       ))}
+      <McpFooter />
     </section>
   )
 }
 
+function McpFooter() {
+  return (
+    <p className="dc-mcp__foot">
+      서버 등록·삭제는 <code className="dc-mcp__path">~/.config/opencode/opencode.json</code> 에서 ·
+      저장하면 자동 반영
+    </p>
+  )
+}
+
+/** 상태 셋 말고도 OAuth 갈래가 둘 더 온다 — 모르는 것을 「실패」로 칠하지 않는다. */
+const LABELS: Record<McpConnectionStatus, string> = {
+  connected: '연결됨',
+  failed: '실패',
+  disabled: '꺼짐',
+  needs_auth: '로그인 필요',
+  needs_client_registration: '등록 필요',
+  unknown: '알 수 없음',
+}
+
+const TONES: Record<McpConnectionStatus, string> = {
+  connected: 'ok',
+  failed: 'err',
+  disabled: 'off',
+  needs_auth: 'warn',
+  needs_client_registration: 'warn',
+  unknown: 'off',
+}
+
 function ServerCard({ server }: { server: McpServerStatus }) {
-  const [values, setValues] = useState<Record<string, string>>({})
   const [busy, setBusy] = useState(false)
+  const tone = TONES[server.status]
+  // 도구를 아는 것은 우리가 띄운 서버뿐이다 (`electron/opencode/mcpConfig.ts` — opencode 는
+  // 남의 서버 도구를 안 준다). 그래서 이 목록이 곧 "이 앱이 띄웠다" 는 표식이다.
+  const ours = server.tools.length > 0
 
-  const filled = server.credentialSchema.filter((field) => (values[field.key] ?? '') !== '')
-  const canSave = filled.length > 0
-
-  function run(action: () => Promise<void>): void {
+  function connect(enabled: boolean): void {
     setBusy(true)
-    void action().finally(() => {
-      setBusy(false)
-      setValues({})
-    })
+    void window.davis
+      .setMcpCredentials({ serverName: server.serverName, credentials: {}, enabled })
+      .finally(() => setBusy(false))
   }
 
   return (
     <div className="dc-mcp">
       <div className="dc-mcp__head">
+        <span className={`dc-mcp__dot dc-mcp__dot--${tone}`} />
         <span className="dc-mcp__name">{server.serverName}</span>
-        <span className={`dc-mcp__state${server.configured ? ' dc-mcp__state--on' : ''}`}>
-          {server.authMode === 'oauth'
-            ? server.oauthAuthenticated
-              ? '로그인됨'
-              : '로그인 필요'
-            : server.configured
-              ? '설정됨'
-              : '미설정'}
+        <span className="dc-mcp__kind">
+          {ours ? 'local · 이 앱이 띄움' : server.transport === 'unknown' ? '' : server.transport}
         </span>
+        <span className={`dc-mcp__state dc-mcp__state--${tone}`}>{LABELS[server.status]}</span>
       </div>
 
-      {server.authMode === 'oauth' ? (
-        // 원격 서버는 사용자가 입력할 키가 없다 — 로그인 흐름은 아직 만들지 않았다
-        <p className="dc-settings__hint">
-          이 서버는 로그인 방식입니다. 데스크탑에서는 아직 로그인할 수 없습니다.
-        </p>
-      ) : (
-        <>
-          {server.credentialKeys.length > 0 && (
-            <p className="dc-settings__hint">채워진 항목: {server.credentialKeys.join(', ')}</p>
-          )}
+      {server.url !== undefined && <p className="dc-mcp__url">{server.url}</p>}
+      {server.error !== undefined && <p className="dc-mcp__err">{server.error}</p>}
 
-          {server.credentialSchema.map((field) => (
-            <div key={field.key} className="dc-mcp__field">
-              <span className="dc-settings__label">
-                {field.key}
-                {!field.required && <span className="dc-settings__scope">선택</span>}
-              </span>
-              <input
-                className="dc-settings__input"
-                type="password"
-                value={values[field.key] ?? ''}
-                placeholder={server.credentialKeys.includes(field.key) ? '채워져 있음' : ''}
-                onChange={(event) =>
-                  setValues((current) => ({ ...current, [field.key]: event.target.value }))
-                }
-                aria-label={`${server.serverName} ${field.key}`}
-              />
-            </div>
+      {server.tools.length > 0 && (
+        <div className="dc-mcp__tools">
+          {server.tools.map((tool) => (
+            <span key={tool} className="dc-mcp__tool">
+              {tool}
+            </span>
           ))}
+        </div>
+      )}
 
-          <div className="dc-settings__row">
-            <button
-              type="button"
-              className="dc-settings__apply"
-              disabled={!canSave || busy}
-              onClick={() =>
-                run(() =>
-                  window.davis.testMcpCredentials({
-                    serverName: server.serverName,
-                    credentials: values,
-                  }),
-                )
-              }
-            >
-              연결 확인
-            </button>
-            <button
-              type="button"
-              className="dc-settings__apply dc-settings__apply--urge"
-              disabled={!canSave || busy}
-              onClick={() =>
-                run(() =>
-                  window.davis.setMcpCredentials({
-                    serverName: server.serverName,
-                    credentials: values,
-                    enabled: true,
-                  }),
-                )
-              }
-            >
-              저장
-            </button>
-            {server.configured && (
-              <button
-                type="button"
-                className="dc-settings__apply"
-                disabled={busy}
-                onClick={() =>
-                  run(() =>
-                    window.davis.setMcpCredentials({
-                      serverName: server.serverName,
-                      credentials: {},
-                      enabled: false,
-                    }),
-                  )
-                }
-              >
-                해제
-              </button>
-            )}
-          </div>
-        </>
+      {/* 꺼진 서버만 문구가 다르다. 부르는 곳은 하나다 — opencode 가 둘을 안 가른다 */}
+      {(server.status === 'failed' || server.status === 'disabled') && (
+        <button
+          type="button"
+          className={`dc-settings__apply${server.status === 'failed' ? ' dc-settings__apply--urge' : ''}`}
+          disabled={busy}
+          onClick={() => connect(true)}
+        >
+          {server.status === 'disabled' ? '켜기' : '다시 연결'}
+        </button>
       )}
     </div>
   )

@@ -7,6 +7,7 @@ import { failureFrames } from './failFrames'
 import { replyApproval, replyUserAnswer } from './replies'
 import { SessionModel, toModelRef } from './models'
 import { applyPermissionMode } from './agents'
+import { mcpConfigFrame } from './mcpConfig'
 import { withPromptContext } from './promptContext'
 import { SseStream } from './sse'
 import { translate, type TranslateContext } from './translate'
@@ -36,6 +37,8 @@ export class OpencodeTransport implements Transport {
   private readonly model: SessionModel
   protected readonly sse: SseStream
   private sessionId: string | null = null
+  /** 세션이 선 프로젝트 디렉토리. MCP 질의가 프로젝트별이라 여기서도 붙잡는다 (`mcpConfig.ts`). */
+  private directory: string | null = null
   private streamId: string | null = null
   /** 이 턴에 interrupt 를 보냈는가. `step.failed` 를 취소로 읽는 유일한 근거다. */
   private cancelling = false
@@ -136,7 +139,13 @@ export class OpencodeTransport implements Transport {
       if (kind === Kind.WORKSPACE && action === Action.SET_PERMISSION_MODE) {
         return await this.onPermissionMode(data)
       }
-      // 나머지(ping/pong·mcp_config…)는 opencode 에 대응이 없다. 조용히 버린다.
+      if (kind === Kind.MCP_CONFIG) {
+        // 커넥터 다이얼로그. 번역과 실측 근거는 `mcpConfig.ts` 가 정본이다.
+        const frame = await mcpConfigFrame(this.client, this.directory, action, data)
+        if (frame) this.emit(frame)
+        return
+      }
+      // 나머지(ping/pong…)는 opencode 에 대응이 없다. 조용히 버린다.
     } catch (error) {
       this.fail(kind, error)
     }
@@ -168,6 +177,7 @@ export class OpencodeTransport implements Transport {
     })
     if (result.session) {
       this.sessionId = result.session.id
+      this.directory = result.session.directory
       this.model.adopt(result.session.model, result.session.directory)
     }
     this.emit(result.frame)

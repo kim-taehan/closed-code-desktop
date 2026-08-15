@@ -1,8 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
+import { setOpenConnectorsHandler } from '../state/slashCommands'
 
 // 입력창 왼쪽 "+" 메뉴.
 //
 // 첨부·스킬·커넥터를 고른다.
+//
+// `/mcps` 도 커넥터 다이얼로그를 연다. 그 손잡이(`onConnectors`)를 쥔 곳이 여기라 여기서
+// 심는다 — AppMenu 가 `/logs` 를 심는 것과 같은 구조다. `disabled` 여도 심는 것은 그대로다:
+// 슬래시를 칠 수 있다는 것이 곧 입력창이 살아 있다는 뜻이라 따로 가릴 것이 없다.
 
 export function ComposerAdd({
   disabled = false,
@@ -17,6 +22,12 @@ export function ComposerAdd({
 }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
+
+  // 매 렌더 다시 심는다 — 부모가 새 클로저를 주면 옛것이 남아 엉뚱한 창을 연다
+  useEffect(() => {
+    setOpenConnectorsHandler(onConnectors)
+    return () => setOpenConnectorsHandler(null)
+  }, [onConnectors])
 
   useEffect(() => {
     if (!open) return

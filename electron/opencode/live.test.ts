@@ -7,6 +7,7 @@ import { ChunkRouter } from '../session/chunkRouter'
 import { MessageStore } from '../session/messageStore'
 import { TurnMetaStore } from '../session/turnMeta'
 import { parseInbound } from '../../shared/protocol/envelope'
+import { parseMcpState } from '../../shared/protocol/mcpConfig'
 import { OpencodeConnection } from './connection'
 
 // 실제 opencode 서버에 붙여 한 턴을 끝까지 돌리는 검증.
@@ -136,4 +137,79 @@ describe.skipIf(!LIVE)('live opencode', () => {
     // 사용자가 끊은 것은 실패가 아니다
     expect(endData?.['failed']).toBeUndefined()
   }, 120_000)
+
+  /**
+   * 커넥터 다이얼로그가 **실물 상태로** 차는가 (`mcpConfig.ts`).
+   *
+   * 여기서만 잡히는 것 셋이고, 셋 다 단위테스트가 초록인 채로 틀릴 수 있는 자리다:
+   *   (1) 어댑터가 `workspace_sync` 에서 붙잡은 디렉토리를 MCP 질의에 제대로 싣는가
+   *       — 안 실으면 서버 cwd 의 목록이 와서 **남의 프로젝트 서버가 화면에 뜬다**
+   *   (2) 상태(`GET /mcp`)와 설정(`GET /config`)을 합친 것이 실제로 한 항목이 되는가
+   *   (3) 실패 서버의 `error` 가 오는가 — 이 필드가 `MCPStatusFailed` 에만 있다
+   *
+   * ⚠️ **`GET /mcp` 는 죽은 원격 서버 하나마다 수십 초를 쓴다** (붙어 보고 답한다).
+   * 그래서 타임아웃이 다른 것들보다 넉넉하다.
+   */
+  it('mcp_config 봉투가 실물 서버 상태로 채워져 돌아온다', async () => {
+    const transport = new OpencodeConnection({ baseUrl: BASE, autoReconnect: false })
+    let state: Record<string, unknown> | null = null
+    transport.onMessage((raw) => {
+      const frame = parseInbound(raw)
+      if (frame?.kind === 'mcp_config') state = (frame.data ?? {}) as Record<string, unknown>
+    })
+
+    // 임시 디렉터리에 MCP 를 심는다 — `?directory=` 만 맞으면 git 이 아니어도 읽는다 (실측).
+    // 죽은 주소를 일부러 쓴다: `failed` 와 그 `error` 원문이 이 검증의 본체다.
+    const workspacePath = mkdtempSync(join(tmpdir(), 'oc-live-mcp-'))
+    writeFileSync(
+      join(workspacePath, 'opencode.json'),
+      JSON.stringify({
+        mcp: {
+          livedead: { type: 'remote', url: 'http://127.0.0.1:9/mcp', enabled: true },
+          liveoff: { type: 'remote', url: 'http://127.0.0.1:9998/mcp', enabled: false },
+        },
+      }),
+    )
+
+    const handshake = new Handshake(transport, { workspacePath, projectName: 'oc-live-mcp' })
+    const ready = handshake.run()
+    await transport.connect()
+    await ready
+
+    transport.send(JSON.stringify({ kind: 'mcp_config', action: 'mcp_config_status', reqId: 'm1', data: {} }))
+    const deadline = Date.now() + 180_000
+    while (state === null && Date.now() < deadline) await new Promise((r) => setTimeout(r, 250))
+
+    const servers = parseMcpState(state).servers
+    const dead = servers.find((server) => server.serverName === 'livedead')
+    const off = servers.find((server) => server.serverName === 'liveoff')
+    // 이 프로젝트에 심은 둘이 보여야 한다 — 안 보이면 디렉토리가 안 실린 것이다
+    expect(dead).toBeDefined()
+    expect(off).toBeDefined()
+    expect(dead?.status).toBe('failed')
+    // 상태는 `GET /mcp`, 주소·갈래는 `GET /config` — 합쳐져야 한 항목이 된다
+    expect(dead?.transport).toBe('remote')
+    expect(dead?.url).toBe('http://127.0.0.1:9/mcp')
+    expect(dead?.error ?? '').not.toBe('')
+    expect(off?.status).toBe('disabled')
+
+    // 「다시 연결」이 성공을 지어내지 않는가. opencode 의 connect 는 **붙는 데 실패해도
+    // `true`** 를 준다 — 그 불린을 믿으면 죽은 서버가 「연결됨」으로 뜬다. 어댑터는 값을
+    // 버리고 상태를 다시 읽으므로, 여전히 죽은 주소는 여기서도 `failed` 여야 한다.
+    state = null
+    transport.send(
+      JSON.stringify({
+        kind: 'mcp_config',
+        action: 'mcp_config_set',
+        reqId: 'm2',
+        data: { server_name: 'livedead', enabled: true },
+      }),
+    )
+    const retryDeadline = Date.now() + 180_000
+    while (state === null && Date.now() < retryDeadline) await new Promise((r) => setTimeout(r, 250))
+    transport.close()
+
+    const retried = parseMcpState(state).servers.find((server) => server.serverName === 'livedead')
+    expect(retried?.status).toBe('failed')
+  }, 200_000)
 })

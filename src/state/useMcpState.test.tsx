@@ -4,7 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useMcpState } from './useMcpState'
 import { EMPTY_MCP_STATE, type McpState } from '../../shared/protocol/mcpConfig'
 
-// 개인 MCP 자격 상태 구독. runtime 이 프로젝트별로 밀어 주고, 화면은 활성 프로젝트 것만 본다.
+// 커넥터(MCP) 상태 구독. 어댑터가 프로젝트별로 밀어 주고, 화면은 활성 프로젝트 것만 본다.
+// (davis 때는 개인 자격 상태였다 — 봉투는 그대로고 실리는 것만 바뀌었다.)
 
 type McpHandler = (state: McpState, projectId: string) => void
 
@@ -12,7 +13,7 @@ let handler: McpHandler | undefined
 const unsub = vi.fn()
 
 function mkState(message: string): McpState {
-  return { servers: [], policyEnabled: true, message }
+  return { servers: [], message }
 }
 
 beforeEach(() => {

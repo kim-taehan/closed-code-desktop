@@ -35,7 +35,9 @@ describe('SlashPopup — 평면 목록', () => {
 
     const names = Array.from(document.querySelectorAll('.dc-mentions__name')).map((n) => n.textContent)
     // 데스크톱 명령이 앞이다 — 이름이 겹치면 이쪽이 임자라 찾는 순서와 같아야 한다
-    expect(names).toEqual(['new', 'compact', 'open', 'rename', 'restart', 'logs', 'init', 'pptx'])
+    // `mcps` 는 opencode 목록에 없는 앱 자체 항목이다 — 서버는 자기 MCP 상태를 보여주는
+    // 명령을 주지 않는다 (`slashCommands.ts`). 그래서 데스크톱 쪽에 섞여 앞에 선다.
+    expect(names).toEqual(['new', 'compact', 'open', 'rename', 'restart', 'logs', 'mcps', 'init', 'pptx'])
     // 카테고리 단계가 없다
     expect(screen.queryByText('command')).toBeNull()
     expect(screen.queryByText('skill')).toBeNull()

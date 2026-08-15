@@ -4,6 +4,7 @@ import {
   findSlashCommand,
   parseSlashText,
   setOpenFileHandler,
+  setOpenConnectorsHandler,
   setOpenLogsHandler,
   setSendToRuntime,
 } from './slashCommands'
@@ -138,6 +139,21 @@ describe('런타임 조작 명령', () => {
   it('/logs 는 핸들러가 없으면 조용히 넘어간다 (창 밖에서 불릴 수 있다)', () => {
     setOpenLogsHandler(null)
     expect(() => findSlashCommand('logs')!.run('')).not.toThrow()
+  })
+
+  // `/mcps` 는 **글을 보내지 않는다** — 커넥터 다이얼로그를 연다.
+  // opencode 의 `/` 목록에 없는 앱 자체 항목이라 여기가 유일한 등록처다.
+  it('/mcps 는 등록된 커넥터 열기 핸들러를 부른다', () => {
+    let opened = 0
+    setOpenConnectorsHandler(() => (opened += 1))
+    findSlashCommand('mcps')!.run('')
+    expect(opened).toBe(1)
+    setOpenConnectorsHandler(null)
+  })
+
+  it('/mcps 는 핸들러가 없으면 조용히 넘어간다', () => {
+    setOpenConnectorsHandler(null)
+    expect(() => findSlashCommand('mcps')!.run('')).not.toThrow()
   })
 
 })

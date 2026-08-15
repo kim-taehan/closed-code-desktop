@@ -1,4 +1,4 @@
-import { opencodeAuthHeaders } from '../opencode/client'
+import { opencodeAuthHeaders } from '../opencode/auth'
 
 // opencode 의 pty API HTTP 클라이언트.
 //

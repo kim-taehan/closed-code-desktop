@@ -11,27 +11,9 @@
 // 이 머리말에는 예전에 **`POST /session/:id/permissions/:pid` 를 신규로 고쳐 쓰라**는
 // 표가 있었다. 지금은 정확히 거꾸로다 — 그 줄을 되살리면 승인이 다시 404 로 죽는다.
 
+import { opencodeAuthHeaders } from './auth'
 import { abortTurn, replyPermissionLegacy, replyQuestionLegacy, sendPrompt } from './legacyChat'
-
-/**
- * `OPENCODE_SERVER_PASSWORD` 를 건 서버에 붙을 때의 인증 헤더.
- *
- * ⚠️ **Bearer 가 아니라 HTTP Basic 이고, 사용자명이 `opencode` 로 고정이다** (1.17.18 실측).
- * 네 가지를 다 넣어 봤고 통과한 것은 이것 하나뿐이었다:
- *
- *   Authorization: Bearer <pw>              → 401
- *   x-opencode-password: <pw>               → 401
- *   Authorization: Basic <"":pw>            → 401   (사용자명이 비면 안 된다)
- *   Authorization: Basic <"opencode":pw>    → 200
- *
- * **HTTP 와 WebSocket 이 같은 헤더를 쓴다** — pty 드로어의 WS(`electron/pty/socket.ts`)도
- * 이걸 그대로 실어야 붙는다 (비밀번호 건 서버에서 헤더 없이 열면 HTTP 401 로 끊긴다).
- * `POST /api/pty/{id}/connect-token` 은 비밀번호를 걸든 안 걸든 403 을 주므로 안 쓴다.
- */
-export function opencodeAuthHeaders(password?: string): Record<string, string> {
-  if (!password) return {}
-  return { Authorization: `Basic ${Buffer.from(`opencode:${password}`).toString('base64')}` }
-}
+import { addMcpServer, mcpStatus, setMcpEnabled } from './mcpApi'
 
 export interface OpencodeClientOptions {
   baseUrl: string
@@ -73,6 +55,28 @@ export interface McpRemoteConfig {
   headers?: Record<string, string>
   enabled?: boolean
   timeout?: number
+}
+
+/**
+ * `GET /mcp` 의 항목 (opencode 스키마 `MCPStatus`).
+ *
+ * status 는 다섯 갈래이고 `error` 는 `failed`·`needs_client_registration` 에만 있다
+ * (1.18.18 `/doc` — 갈래 목록의 정본은 `shared/protocol/mcpConfig.ts`).
+ */
+export interface McpStatusEntry {
+  status?: string
+  error?: string
+}
+
+/**
+ * `GET /config` 중 우리가 읽는 것.
+ *
+ * **`mcp` 절이 여기에만 있다** — `GET /mcp` 는 상태만 주고 주소도 local/remote 도 안 준다
+ * (실측). 다이얼로그가 "remote · http://…" 를 그리려면 두 표면을 합쳐야 한다.
+ */
+export interface OpencodeConfig {
+  model?: string
+  mcp?: Record<string, { type?: string; url?: string; command?: unknown; enabled?: boolean }>
 }
 
 /**
@@ -214,8 +218,20 @@ export class OpencodeClient {
    * `davis-litellm/glm-5.2` 대 프로젝트 `projonly/only-here`. 안 실으면 오버라이드를
    * 풀었을 때 **그 프로젝트가 정한 기본이 아닌 전역 모델로** 되돌아간다.
    */
-  async config(directory: string | null): Promise<{ model?: string }> {
-    return this.get<{ model?: string }>(withDirectory('/config', directory))
+  async config(directory: string | null): Promise<OpencodeConfig> {
+    return this.get<OpencodeConfig>(withDirectory('/config', directory))
+  }
+
+  /**
+   * MCP 서버들의 연결 상태 (커넥터 다이얼로그 — 실측과 함정은 `mcpApi.ts`).
+   */
+  async mcpStatus(directory: string | null): Promise<Record<string, McpStatusEntry>> {
+    return mcpStatus((path) => this.get(path), directory)
+  }
+
+  /** MCP 서버를 켜거나 끈다. **응답 불린을 믿지 말 것** — 사유는 `mcpApi.ts`. */
+  async setMcpEnabled(directory: string | null, name: string, enabled: boolean): Promise<void> {
+    await setMcpEnabled((path, body) => this.post(path, body), directory, name, enabled)
   }
 
   /**
@@ -256,31 +272,14 @@ export class OpencodeClient {
   /**
    * MCP 서버를 **런타임에** 등록한다 (데스크톱이 MCP 서버 노릇을 하는 쪽 — `electron/mcp/`).
    *
-   * ⚠️ **여기는 `/api` 판이 아예 없어서 레거시다** — `/api/mcp` 는 없다 (1.17.18 `/doc`
-   * 162경로 전수 확인). 채팅 계열이 레거시인 것은 골라서 그런 것이고(머리말) 여기는
-   * 선택지가 없다는 점이 다르다. 레거시 표면이라 `{data:...}` 래핑도 없다 —
-   * 응답은 `{"<이름>":{"status":"connected"}}` 그대로다 (실측).
-   *
-   * ⚠️⚠️ **질의 이름이 평문 `directory=` 다.** 옆의 pty 표면은 `location[directory]=` 이고
-   * **둘은 서로 바꿔 쓸 수 없는데 잘못 써도 HTTP 200 이 난다** (contract-qa 실측):
-   *
-   *   POST /mcp?location[directory]=<A>  → 200 `{"...":{"status":"connected"}}`  ← 성공처럼 보인다
-   *   그런데 GET /mcp?directory=<A>      → 없음. 서버 cwd 쪽에 등록돼 있다.
-   *
-   * 증상은 "로그에 connected 가 찍히는데 세션에 도구가 안 뜬다" 뿐이다. 그래서
-   * `register.test.ts` 는 응답이 아니라 **요청 URL 문자열 자체**를 단언한다. 같은 이유로
-   * `electron/pty/client.ts` 와 URL 조립 헬퍼를 **공유하지 않는다** — 한쪽 규칙이 다른 쪽으로
-   * 새면 두 표면이 조용히 같이 틀어진다.
-   *
-   * `directory` 를 빼면 서버가 `process.cwd()` 로 떨어져 **엉뚱한 프로젝트에 등록된다.**
-   * 실측: `GET /mcp?directory=<다른 프로젝트>` 는 `{}` 를 준다 — 등록은 디렉토리별로 갈린다.
+   * 질의 이름·응답 모양의 실측과 그 함정은 `mcpApi.ts` 머리말이 정본이다.
    */
   async addMcpServer(
     directory: string,
     name: string,
     config: McpRemoteConfig,
-  ): Promise<Record<string, { status?: string; error?: string }>> {
-    return this.post(`/mcp?directory=${encodeURIComponent(directory)}`, { name, config })
+  ): Promise<Record<string, McpStatusEntry>> {
+    return addMcpServer((path, body) => this.post(path, body), directory, name, config)
   }
 
   /**

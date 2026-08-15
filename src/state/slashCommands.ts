@@ -51,6 +51,14 @@ export function setOpenLogsHandler(handler: (() => void) | null): void {
   openLogsHandler = handler
 }
 
+// `/mcps` 는 커넥터 다이얼로그를 연다. **opencode 의 `/` 목록(`GET /command`)에는 없는 앱
+// 자체 항목이다** — 서버는 자기 MCP 상태를 보여주는 명령을 주지 않는다. 다이얼로그를 여는
+// 손잡이를 쥔 곳이 `+` 메뉴(ComposerAdd)라 거기서 심는다 (AppMenu 가 `/logs` 를 심는 것과 같은 구조).
+let openConnectorsHandler: (() => void) | null = null
+export function setOpenConnectorsHandler(handler: (() => void) | null): void {
+  openConnectorsHandler = handler
+}
+
 // `/models` 는 스위처가 뜰 조건일 때만 목록에 보인다 (fail-closed, DC-1322) —
 // 조건과 선택 상태는 이 모듈이 모르므로 ChatComposer 가 명령째로 심고 뺀다.
 let modelCommand: SlashCommand | null = null
@@ -100,6 +108,11 @@ export const BUILTIN_SLASH_COMMANDS: SlashCommand[] = [
     name: 'logs',
     description: '로그 보기 — 실행 기록 탭을 엽니다',
     run: () => openLogsHandler?.(),
+  },
+  {
+    name: 'mcps',
+    description: '커넥터 (MCP) — 붙어 있는 서버의 연결 상태를 봅니다',
+    run: () => openConnectorsHandler?.(),
   },
 ]
 

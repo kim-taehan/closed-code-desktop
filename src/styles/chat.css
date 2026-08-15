@@ -4425,6 +4425,8 @@ body {
 }
 
 /* ── MCP 서버 카드 ───────────────────────────────────── */
+/* 자격 입력 칸이던 것을 연결 상태 카드로 바꿨다 (McpSection.tsx 머리말).
+   상태색은 점과 pill 두 곳에 같은 tone 클래스로 걸린다. */
 
 .dc-mcp {
   margin-bottom: 14px;
@@ -4437,31 +4439,109 @@ body {
 .dc-mcp__head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  margin-bottom: 10px;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.dc-mcp__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+  background: var(--dc-text-muted);
+}
+
+.dc-mcp__dot--ok {
+  background: var(--dc-status-success);
+}
+.dc-mcp__dot--err {
+  background: var(--dc-status-error);
+}
+.dc-mcp__dot--warn {
+  background: var(--dc-status-warn);
+}
+.dc-mcp__dot--off {
+  opacity: 0.55;
 }
 
 .dc-mcp__name {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 12px;
   font-weight: 600;
 }
 
-.dc-mcp__state {
-  font-size: 10px;
-  padding: 2px 8px;
-  border-radius: 999px;
+.dc-mcp__kind {
+  font-size: 11px;
   color: var(--dc-text-muted);
+}
+
+.dc-mcp__state {
+  margin-left: auto;
+  font-size: 10px;
+  padding: 2px 9px;
+  border-radius: var(--dc-radius-pill);
+  color: var(--dc-text-muted);
+  background: var(--dc-bg);
+}
+
+.dc-mcp__state--ok {
+  color: var(--dc-status-success);
+  background: color-mix(in srgb, var(--dc-status-success) 12%, transparent);
+}
+.dc-mcp__state--err {
+  color: var(--dc-status-error);
+  background: color-mix(in srgb, var(--dc-status-error) 12%, transparent);
+}
+.dc-mcp__state--warn {
+  color: var(--dc-status-warn);
+  background: color-mix(in srgb, var(--dc-status-warn) 12%, transparent);
+}
+
+/* 주소·명령은 길다. 줄바꿈을 막으면 카드가 옆으로 터진다 */
+.dc-mcp__url {
+  margin: 5px 0 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  color: var(--dc-text-muted);
+  overflow-wrap: anywhere;
+}
+
+.dc-mcp__err {
+  margin: 5px 0 0;
+  font-size: 11px;
+  color: var(--dc-status-error);
+  overflow-wrap: anywhere;
+}
+
+.dc-mcp__tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.dc-mcp__tool {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: var(--dc-radius-sm);
   background: var(--dc-bg);
   border: 1px solid var(--dc-border);
 }
 
-.dc-mcp__state--on {
-  color: var(--dc-status-success);
-  border-color: color-mix(in srgb, var(--dc-status-success) 45%, transparent);
+.dc-mcp .dc-settings__apply {
+  margin-top: 9px;
 }
 
-.dc-mcp__field {
-  margin-bottom: 10px;
+.dc-mcp__foot {
+  margin: 4px 0 0;
+  font-size: 11px;
+  color: var(--dc-text-muted);
+}
+
+.dc-mcp__path {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
 }
 
 /* 스킬 목록 */

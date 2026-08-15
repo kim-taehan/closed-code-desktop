@@ -1,0 +1,137 @@
+import { Action, Kind } from '../../shared/protocol/kinds'
+import { SERVER_NAME, TOOLS } from '../mcp/rpc'
+import type { McpStatusEntry, OpencodeClient } from './client'
+
+// 커넥터(MCP) 다이얼로그의 번역 — davis `mcp_config` 봉투 ↔ opencode `/mcp`.
+//
+// 위층(`session/mcpConfig.ts`)은 davis 시절 그대로 `kind=mcp_config` 로 묻는다. 그 물음에
+// 어댑터가 답하지 않아 다이얼로그가 영영 비어 있었다 — 고친 것은 여기 한 곳이고
+// `session/*` 은 손대지 않았다 (부패방지 계층).
+//
+// **payload 의 뜻이 통째로 바뀌었다.** davis 는 개인 자격을 실어 날랐고 opencode 에는 그
+// 개념이 없다 — 지금 실리는 것은 연결 상태다. 어느 필드가 왜 사라졌는지는
+// `shared/protocol/mcpConfig.ts` 머리말이 정본이다.
+//
+// **한 화면을 두 표면에서 만든다** (실측 1.18.18):
+//   GET /mcp?directory=      → {"<이름>":{"status":"failed","error":"SSE error: …"}}  상태만
+//   GET /config?directory=   → .mcp["<이름>"] = {type:"remote", url:"…"}              주소·갈래
+// `GET /mcp` 는 주소도 local/remote 도 주지 않는다. 시안이 요구한 "remote · http://…" 는
+// 두 번째 호출에서만 나온다.
+//
+// ⚠️ **두 표면의 목록이 같지 않다.** 런타임에 등록한 서버(`POST /mcp` — 우리 자신이 그렇다)는
+// `GET /mcp` 에는 뜨지만 **`GET /config` 에는 없다** (실측 1.18.18 — 등록이 파일에 안 써지는
+// 것과 같은 사유, `mcp/register.ts` 머리말). 그래서 우리 서버는 transport 도 url 도 모른다.
+// 아는 것은 **도구 목록**뿐이고, 화면은 `tools` 가 찬 항목을 "이 앱이 띄움" 으로 읽는다.
+// 상태 맵을 기준으로 도는 것도 이 때문이다 — 설정 쪽을 기준으로 돌면 우리가 목록에서 빠진다.
+//
+// **불린을 믿지 않는다.** connect 는 실패해도 `true` 를 준다 (`client.setMcpEnabled` 주석).
+// 그래서 켜고 끈 뒤에는 항상 상태를 다시 읽어 그 결과로 봉투를 만든다. 낙관적으로 고치면
+// 죽은 서버가 「연결됨」으로 보인다 — davis 시절 "저장 뒤에는 응답으로 상태가 갱신된다"는
+// 규칙(`session/mcpConfig.ts`)이 여기서도 그대로 맞는 이유다.
+
+type McpClient = Pick<OpencodeClient, 'mcpStatus' | 'config' | 'setMcpEnabled'>
+
+/**
+ * `mcp_config` 봉투 하나를 처리하고 위층에 돌려줄 봉투를 만든다.
+ *
+ * 어떤 action 이든 **끝은 상태 한 장**이다 — 화면이 상태만 그리기 때문이고,
+ * 켜고 끄기가 성공했는지도 그 상태로만 알 수 있다.
+ *
+ * `mcp_config_test` 는 답을 만들지 않는다. davis 의 "저장하지 않고 이 자격으로 붙어만 본다"
+ * 인데 opencode 에는 대응 표면이 없다 (붙는 것은 곧 설정을 켜는 것이다). 화면도 부르지 않는다.
+ */
+export async function mcpConfigFrame(
+  client: McpClient,
+  directory: string | null,
+  action: string,
+  data: Record<string, unknown>,
+): Promise<Record<string, unknown> | null> {
+  if (action === Action.MCP_CONFIG_TEST) return null
+  if (action === Action.MCP_CONFIG_SET) await applyEnabled(client, directory, data)
+  return { kind: Kind.MCP_CONFIG, action: Action.MCP_CONFIG_STATUS, data: await readState(client, directory) }
+}
+
+/**
+ * `mcp_config_set` → connect/disconnect.
+ *
+ * davis 는 `{server_name, enabled, credentials}` 였고 자격이 본체였다. opencode 로 오면서
+ * 남는 것은 `enabled` 뿐이라 **켜고 끄기**로 읽는다 — 그 한 낱말이 마침 opencode 의
+ * connect/disconnect 와 같은 뜻이라 새 action 을 만들지 않았다.
+ *
+ * **실패해도 던지지 않는다.** 사유는 다음 줄에서 다시 읽는 상태에 `error` 로 실려 오고,
+ * 여기서 예외를 올리면 화면 전체가 실패로 덮인다 — 서버 하나가 안 붙은 것뿐인데.
+ */
+async function applyEnabled(
+  client: McpClient,
+  directory: string | null,
+  data: Record<string, unknown>,
+): Promise<void> {
+  const name = data['server_name']
+  if (typeof name !== 'string' || name === '') return
+  try {
+    await client.setMcpEnabled(directory, name, data['enabled'] !== false)
+  } catch {
+    // 삼킨다 (위 주석)
+  }
+}
+
+/**
+ * 두 표면을 합쳐 davis payload 로 만든다.
+ *
+ * **설정 조회가 실패해도 목록은 낸다** — 주소와 local/remote 를 못 그릴 뿐이고,
+ * 상태(연결됨·실패·꺼짐)는 그것만으로도 쓸모가 있다.
+ *
+ * 순서는 opencode 가 준 그대로다. 이름으로 정렬하지 않는다 — 설정 파일에 적힌 순서가
+ * 사용자가 아는 순서다.
+ */
+async function readState(client: McpClient, directory: string | null): Promise<Record<string, unknown>> {
+  let status: Record<string, McpStatusEntry>
+  try {
+    status = await client.mcpStatus(directory)
+  } catch (error) {
+    return { servers: [], message: error instanceof Error ? error.message : String(error) }
+  }
+  const configured = await mcpSettings(client, directory)
+  return {
+    servers: Object.entries(status).map(([name, entry]) => toServer(name, entry, configured[name])),
+    message: '',
+  }
+}
+
+async function mcpSettings(
+  client: McpClient,
+  directory: string | null,
+): Promise<Record<string, { type?: string; url?: string; command?: unknown }>> {
+  try {
+    return (await client.config(directory)).mcp ?? {}
+  } catch {
+    return {}
+  }
+}
+
+/** payload 는 snake_case 다 — 이 도메인에 camelCase 별칭이 없다는 davis 규칙 그대로. */
+function toServer(
+  name: string,
+  entry: McpStatusEntry,
+  setting: { type?: string; url?: string; command?: unknown } | undefined,
+): Record<string, unknown> {
+  const where = locationOf(setting)
+  return {
+    server_name: name,
+    status: typeof entry?.status === 'string' ? entry.status : 'unknown',
+    transport: setting?.type === 'local' || setting?.type === 'remote' ? setting.type : 'unknown',
+    // 우리가 띄운 서버의 도구만 안다 — opencode 는 도구 목록을 안 준다 (`mcp/rpc.ts` 가 정본)
+    tools: name === SERVER_NAME ? TOOLS.map((tool) => tool.name) : [],
+    ...(where !== '' ? { url: where } : {}),
+    ...(typeof entry?.error === 'string' && entry.error !== '' ? { error: entry.error } : {}),
+  }
+}
+
+/** remote 는 주소, local 은 실행 명령. 사용자가 "어느 서버인지" 를 가리는 근거가 이 한 줄이다. */
+function locationOf(setting: { url?: string; command?: unknown } | undefined): string {
+  if (typeof setting?.url === 'string' && setting.url !== '') return setting.url
+  if (Array.isArray(setting?.command)) {
+    return setting.command.filter((part): part is string => typeof part === 'string').join(' ')
+  }
+  return ''
+}
