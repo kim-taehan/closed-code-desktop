@@ -16,6 +16,13 @@
 // 위 davis 규칙을 지우지 않고 남기는 이유: 필드가 왜 통째로 바뀌었는지가 어댑터의 설계 근거다.
 // 없어진 필드는 `auth_mode`·`configured`·`credential_keys`·`credential_schema`·`oauth_*`·
 // `policy_enabled` 다. 되살릴 일이 생긴다면 그건 davis 로 되돌아가는 것이지 opencode 확장이 아니다.
+//
+// **나가는 쪽에 자격이 실려도 버린다.** `mcp_config_set` 은 davis 계약상 `credentials` 를
+// 실을 수 있고 화면은 `{}` 만 보내지만, 계약을 아는 다른 코드가 값을 실을 수 있다.
+// 어댑터(`electron/opencode/mcpConfig.ts` 의 `applyEnabled`)는 `server_name`·`enabled` 만 읽는다 —
+// 자격은 **opencode 로 전달되지 않고**(전달할 표면 자체가 없다) **로그로 남지 않고**
+// **응답 payload 로 되돌아오지 않는다.** 오류로 올리지 않는 것은 화면이 안 보내는 필드 때문에
+// 다이얼로그가 깨지면 안 되기 때문이고, 응답에 값을 안 싣는다는 davis 방향과도 어긋나지 않는다.
 
 /**
  * opencode `MCPStatus` 의 status (1.18.18 `/doc` 전수 — **다섯 갈래다**).

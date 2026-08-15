@@ -108,9 +108,13 @@ function ServerCard({ server }: { server: McpServerStatus }) {
       {server.url !== undefined && <p className="dc-mcp__url">{server.url}</p>}
 
       {/* **오류 원문은 한 줄이 아닐 수 있다.** OAuth 감지가 걸린 원격에서 개행 섞인 490자
-          JSON 덩어리가 그대로 왔다 (contract-qa 실측) — 그래서 pre-wrap 에 높이를 재운다.
-          거꾸로 `status:"failed"` 인데 `error` 가 **빈 문자열**인 경우도 실측됐다. 그때
-          아무것도 안 그리면 빨간 pill 만 남아 사용자가 이유를 물을 곳이 없다. */}
+          JSON 덩어리(zod 이슈 배열)가 그대로 왔다 — **contract-qa2 실측**이고 나는 재현하지
+          못했다(OAuth 를 요구하는 실물 서버를 못 만들었다). 그래서 pre-wrap 에 높이를 재운다.
+
+          거꾸로 `error` 가 **빈 문자열**인 `failed` 도 contract-qa2 가 쟀다. 그 경우는 실측과
+          별개로 **구조적으로도 도달한다** — `parseMcpState` 가 `error !== ''` 로 빈 값을
+          떨구므로, 서버가 빈 문자열을 주면 여기에는 `error` 자체가 없이 온다.
+          그때 아무것도 안 그리면 빨간 pill 만 남아 사용자가 이유를 물을 곳이 없다. */}
       {failed(server.status) && (
         <p className="dc-mcp__err">{server.error ?? '서버가 실패 사유를 알려주지 않았습니다.'}</p>
       )}

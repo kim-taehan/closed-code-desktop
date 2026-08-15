@@ -167,6 +167,9 @@ describe.skipIf(!LIVE)('live opencode', () => {
         mcp: {
           livedead: { type: 'remote', url: 'http://127.0.0.1:9/mcp', enabled: true },
           liveoff: { type: 'remote', url: 'http://127.0.0.1:9998/mcp', enabled: false },
+          // 스키마를 어긴 항목 (remote 인데 url 이 없다). opencode 가 버려서 `GET /mcp` 에는
+          // 안 나타나고 `/config` 에만 껍데기로 남는다 — 합집합을 안 돌면 화면에서 사라진다.
+          livehusk: { type: 'remote', enabled: true },
         },
       }),
     )
@@ -192,6 +195,9 @@ describe.skipIf(!LIVE)('live opencode', () => {
     expect(dead?.url).toBe('http://127.0.0.1:9/mcp')
     expect(dead?.error ?? '').not.toBe('')
     expect(off?.status).toBe('disabled')
+    // opencode 가 버린 항목도 살아남아야 한다 — 안 그러면 사용자 오타가 조용히 사라진다
+    const husk = servers.find((server) => server.serverName === 'livehusk')
+    expect(husk?.status).toBe('unknown')
 
     // 「다시 연결」이 성공을 지어내지 않는가. opencode 의 connect 는 **붙는 데 실패해도
     // `true`** 를 준다 — 그 불린을 믿으면 죽은 서버가 「연결됨」으로 뜬다. 어댑터는 값을

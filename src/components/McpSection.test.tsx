@@ -88,7 +88,8 @@ describe('McpSection', () => {
     expect(screen.queryByText('실패')).toBeNull()
   })
 
-  // 실측: `status:"failed"` 인데 `error` 가 빈 문자열인 경우가 있다 (파서가 빈 값을 떨군다).
+  // `status:"failed"` 인데 `error` 가 빈 문자열인 경우 — contract-qa2 실측이고, 실측과 별개로
+  // `parseMcpState` 가 `error !== ''` 로 빈 값을 떨구므로 구조적으로도 도달한다.
   // 그때 아무것도 안 그리면 빨간 pill 만 남아 사용자가 이유를 물을 곳이 없다.
   it('실패인데 사유가 없으면 없다고 말한다 — 빨간 딱지만 남기지 않는다', () => {
     show([server({ status: 'failed' })])

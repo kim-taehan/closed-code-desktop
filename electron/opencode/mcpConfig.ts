@@ -18,11 +18,25 @@ import type { McpStatusEntry, OpencodeClient } from './client'
 // `GET /mcp` 는 주소도 local/remote 도 주지 않는다. 시안이 요구한 "remote · http://…" 는
 // 두 번째 호출에서만 나온다.
 //
-// ⚠️ **두 표면의 목록이 같지 않다.** 런타임에 등록한 서버(`POST /mcp` — 우리 자신이 그렇다)는
-// `GET /mcp` 에는 뜨지만 **`GET /config` 에는 없다** (실측 1.18.18 — 등록이 파일에 안 써지는
-// 것과 같은 사유, `mcp/register.ts` 머리말). 그래서 우리 서버는 transport 도 url 도 모른다.
-// 아는 것은 **도구 목록**뿐이고, 화면은 `tools` 가 찬 항목을 "이 앱이 띄움" 으로 읽는다.
-// 상태 맵을 기준으로 도는 것도 이 때문이다 — 설정 쪽을 기준으로 돌면 우리가 목록에서 빠진다.
+// ⚠️ **두 표면의 목록이 같지 않다. 양쪽 모두 한쪽에만 있는 이름이 있다.**
+//
+// (a) 상태에만 있다 — 런타임 등록(`POST /mcp`). **우리 자신이 그렇다.** `GET /mcp` 에는
+//     뜨는데 `GET /config` 에는 없다 (실측 1.18.18 — 등록이 파일에 안 써지는 것과 같은 사유,
+//     `mcp/register.ts` 머리말). 그래서 우리 서버는 transport 도 url 도 모르고, 아는 것은
+//     **도구 목록**뿐이다. 화면은 `tools` 가 찬 항목을 "이 앱이 띄움" 으로 읽는다.
+//     기준을 설정 쪽으로 잡으면 우리가 목록에서 빠지므로 **상태 맵이 기준이다.**
+//
+// (b) 설정에만 있다 — opencode 가 그 항목을 **버린 것이다.** 스키마를 어긴 설정이 트리거고,
+//     증상이 고약하다 (2026-08-15 desktop-dev 실측, opencode 1.18.18):
+//
+//       opencode.json:  "badremote": {"type":"remote","enabled":true}      ← url 이 없다
+//       GET /config .mcp:  badremote = {"enabled":true}                    ← type 까지 사라진 껍데기
+//       GET /mcp        :  badremote 없음                                   ← 아예 안 나타난다
+//
+//     검증에 걸린 필드가 통째로 떨어져 나가고, 그 다음 로더가 "type 이 없다" 며 건너뛴다.
+//     **사용자는 오타를 냈는데 커넥터 화면에 아무 흔적이 없다** — 조용히 죽는 부류다.
+//     그래서 합집합을 돌아 이런 이름도 `status:'unknown'` 으로 목록에 남긴다 (`readState`).
+//     이 트리거를 찾아 준 것은 contract-qa 이고, 위 재현은 내가 따로 쟀다.
 //
 // **불린을 믿지 않는다.** connect 는 실패해도 `true` 를 준다 (`client.setMcpEnabled` 주석).
 // 그래서 켜고 끈 뒤에는 항상 상태를 다시 읽어 그 결과로 봉투를 만든다. 낙관적으로 고치면
@@ -83,6 +97,15 @@ async function applyEnabled(
  *
  * 순서는 opencode 가 준 그대로다. 이름으로 정렬하지 않는다 — 설정 파일에 적힌 순서가
  * 사용자가 아는 순서다.
+ *
+ * **두 키 집합의 합집합을 돈다.** 기준은 상태 맵이고(우리 서버가 설정에 없다), 거기에
+ * 설정에만 있는 이름을 뒤에 붙인다. 양쪽 다 한쪽에만 있는 경우가 실재하기 때문이다:
+ *
+ *   상태에만 있다 — 런타임 등록(`POST /mcp`). 우리 자신이 그렇다
+ *   설정에만 있다 — opencode 가 그 항목을 **버렸다** (아래)
+ *
+ * 설정에만 있는 쪽은 `status:'unknown'` 으로 낸다 — opencode 가 상태를 말해 주지 않았다는
+ * 것이 사실 그대로다. 지어낼 수 있는 다른 값이 없다.
  */
 async function readState(client: McpClient, directory: string | null): Promise<Record<string, unknown>> {
   let status: Record<string, McpStatusEntry>
@@ -92,10 +115,11 @@ async function readState(client: McpClient, directory: string | null): Promise<R
     return { servers: [], message: error instanceof Error ? error.message : String(error) }
   }
   const configured = await mcpSettings(client, directory)
-  return {
-    servers: Object.entries(status).map(([name, entry]) => toServer(name, entry, configured[name])),
-    message: '',
-  }
+  const listed = Object.entries(status).map(([name, entry]) => toServer(name, entry, configured[name]))
+  const orphans = Object.keys(configured)
+    .filter((name) => !(name in status))
+    .map((name) => toServer(name, {}, configured[name]))
+  return { servers: [...listed, ...orphans], message: '' }
 }
 
 async function mcpSettings(

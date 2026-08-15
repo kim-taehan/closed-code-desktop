@@ -28,6 +28,10 @@ const CONFIG = {
     offremote: { type: 'remote', url: 'http://127.0.0.1:9999/mcp', enabled: false },
     deadlocal: { type: 'local', command: ['/usr/bin/false'] },
     divergent: { type: 'remote', url: 'http://127.0.0.1:9997/mcp', enabled: false },
+    // **설정에만 있고 상태 맵에는 없는 항목.** 스키마를 어긴 설정을 opencode 가 버리면
+    // `/config` 에는 `type` 까지 떨어진 껍데기가 남고 `/mcp` 에는 아예 안 나타난다
+    // (실측 — `mcpConfig.ts` 머리말 (b)). 합집합을 안 돌면 사용자 오타가 화면에서 사라진다.
+    husk: { enabled: true },
   },
 }
 
@@ -103,7 +107,16 @@ describe('mcpConfigFrame', () => {
   })
 
   it('순서는 opencode 가 준 그대로다 — 이름순으로 고치지 않는다', async () => {
-    expect((await stateOf()).servers.map((server) => server.serverName)).toEqual(Object.keys(STATUS))
+    const names = (await stateOf()).servers.map((server) => server.serverName)
+    // 상태 맵이 먼저, 설정에만 있는 것이 뒤
+    expect(names).toEqual([...Object.keys(STATUS), 'husk'])
+  })
+
+  // opencode 가 버린 설정 항목이 화면에서 통째로 사라지던 자리. 사용자 오타가 조용히 죽는다
+  it('설정에만 있는 이름도 목록에 남는다 — status 는 unknown 이다', async () => {
+    const husk = (await stateOf()).servers.find((server) => server.serverName === 'husk')
+    expect(husk).toBeDefined()
+    expect(husk?.status).toBe('unknown')
   })
 
   it('set 은 connect 로 번역되고, 끝난 뒤 상태를 다시 읽는다', async () => {
@@ -125,7 +138,7 @@ describe('mcpConfigFrame', () => {
   it('connect 가 실패해도 목록은 낸다 — 서버 하나 때문에 화면을 덮지 않는다', async () => {
     const api = client({ setMcpEnabled: vi.fn(async () => { throw new Error('404') }) })
     const state = await stateOf(api, Action.MCP_CONFIG_SET, { server_name: 'deadremote', enabled: true })
-    expect(state.servers).toHaveLength(5)
+    expect(state.servers).toHaveLength(6)
   })
 
   it('설정 조회가 실패해도 상태만으로 목록을 낸다', async () => {
