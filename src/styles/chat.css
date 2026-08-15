@@ -3,6 +3,10 @@
    수치와 구조는 그대로 쓴다. */
 
 :root {
+  /* 네이티브 스크롤바·폼 컨트롤이 테마를 따르게 한다. 이게 없으면 Chromium 이
+     라이트 기본값으로 그려서 다크 테마 위에 흰 트랙이 세로 띠로 뜬다 (2026-08-15 실측). */
+  color-scheme: dark;
+
   --dc-rail-width: 1.5px;
   --dc-rail-color: rgba(139, 148, 158, 0.25);
   --dc-rail-offset: 6px;
@@ -54,6 +58,7 @@
 
 /* ── Paper White: 순백 배경 ─────────────────────────── */
 :root[data-theme='paper'] {
+  color-scheme: light;
   --dc-text: #1f2328;
   --dc-text-muted: #59636e;
   --dc-bg: #ffffff;
@@ -76,6 +81,7 @@
 
 /* ── Warm Ivory: 따뜻한 아이보리 + 틸 강조 (눈 피로 ↓) ─────────────────── */
 :root[data-theme='ivory'] {
+  color-scheme: light;
   --dc-text: #322f28;
   --dc-text-muted: #79736a;
   --dc-bg: #faf8f3;
@@ -162,6 +168,7 @@
 /* ── Slate: 쿨 그레이 라이트 — 그라파이트의 밝은 짝 ────────────────────
    순백(paper)·웜톤(ivory)과 달리 차가운 회색 바탕이다. */
 :root[data-theme='slate'] {
+  color-scheme: light;
   --dc-text: #2c353d;
   --dc-text-muted: #576470;
   --dc-bg: #f1f3f5;
