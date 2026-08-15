@@ -127,6 +127,31 @@ export function sessionIdle(sessionID: string): Event {
   return event('session.idle', { sessionID })
 }
 
+/**
+ * 승인을 묻는 도구 대본.
+ *
+ * `permission.asked` 의 필드 이름이 **실물 레거시 그대로**인 것이 핵심이다 —
+ * `permission`/`patterns` 이고 신규의 `action`/`resources` 가 **없다**. 신규 이름으로
+ * 적어 두면 `legacyEvents.ts` 의 매핑을 안 밟고 초록이 난다 (승인 카드가 실물에서는
+ * "알 수 없는 도구" 로 뜨는데 테스트는 통과하는 상태가 된다).
+ */
+export function approvalTurnScript(context: PromptContext): Event[] {
+  const messageID = `msg_${context.sessionID}`
+  const callID = `call_${context.sessionID}`
+  return [
+    stepStarted(context.sessionID, messageID),
+    event('permission.asked', {
+      id: `per_${context.sessionID}`,
+      sessionID: context.sessionID,
+      permission: 'bash',
+      patterns: ['echo hi'],
+      metadata: { command: 'echo hi' },
+      always: ['echo *'],
+      tool: { messageID, callID },
+    }),
+  ]
+}
+
 /** 기본 대본: 텍스트 한 번 답하고 끝난다. 프롬프트를 그대로 되돌려 격리 검증에 쓴다. */
 export function turnScript(context: PromptContext): Event[] {
   const messageID = `msg_${context.sessionID}`
