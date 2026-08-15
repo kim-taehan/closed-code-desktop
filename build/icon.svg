@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- Open Code Desktop — 모노그램: 오른쪽이 트인 O 를 캐럿이 잇는다.
+       macOS 아이콘 규격: 1024 캔버스 안에서 아트워크는 824 정사각(여백 100), 모서리 반경 185. -->
+  <defs>
+    <linearGradient id="ground" x1="0" y1="0" x2="0.45" y2="1">
+      <stop offset="0" stop-color="#28323e"/>
+      <stop offset="1" stop-color="#121820"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#8fcaff"/>
+      <stop offset="1" stop-color="#3b82f6"/>
+    </linearGradient>
+  </defs>
+
+  <g transform="translate(100,100)">
+    <!-- 바탕. 불투명이라 라이트 도크에서도 경계가 산다 -->
+    <rect width="824" height="824" rx="185" fill="url(#ground)"/>
+    <!-- 위쪽 하이라이트 — macOS 아이콘의 미묘한 광원 -->
+    <rect width="824" height="824" rx="185" fill="none" stroke="rgba(255,255,255,0.10)" stroke-width="6"/>
+
+    <g transform="translate(412,412)">
+      <!-- 오른쪽이 트인 굵은 고리. 트임은 대략 -42°~+42° -->
+      <path d="M 174 -166 A 240 240 0 1 0 174 166"
+            fill="none" stroke="#e9eef4" stroke-width="96" stroke-linecap="round"/>
+      <!-- 트인 자리를 캐럿이 잇는다. **고리 실루엣 안에 머문다** —
+           밖으로 나가면 재생 버튼으로 읽힌다 (첫 시안에서 실제로 그랬다). -->
+      <path d="M 150 -126 L 246 0 L 150 126"
+            fill="none" stroke="url(#accent)" stroke-width="88"
+            stroke-linecap="round" stroke-linejoin="round"/>
+    </g>
+  </g>
+</svg>
