@@ -25,8 +25,9 @@ import '../styles/extensions.css'
 //
 // ⚠️ runtime 의 **플러그인(Plugin)** 과 다른 체계다. 문구를 섞지 않는다.
 //
-// `ExtensionsPanel` 과 보는 것이 다르다: 저쪽은 **설치된 것 전부**(확장 목록·건너뜀·모든 뷰)를
-// 한 화면에 펼친다. 이쪽은 사용자가 고른 확장 하나만 본다.
+// 설정 창의 `ExtensionsSection` 과 보는 것이 다르다: 저쪽은 **설치된 것 전부**(확장 목록·
+// 건너뜀)를 한 화면에 펼친다. 이쪽은 사용자가 고른 확장 하나의 **결과**만 본다.
+// (구판 `ExtensionsPanel` 이 둘을 겸했는데, 이 컴포넌트가 대체하고 그쪽은 삭제됐다.)
 //
 // **뷰는 탭으로 가른다.** 예전에는 뷰마다 선택기 항목이 하나씩 생겨, 뷰를 셋 선언한 확장
 // 하나가 사이드바 선택기를 세 줄 차지했다 (`extensionPanels.ts` 머리말).
@@ -249,7 +250,7 @@ export function ExtensionViewPanel(props: ExtensionViewPanelProps) {
           />
         ) : (
           // 아직 못 그리는 종류를 조용히 빼면 확장 개발자가 왜 안 나오는지 알 수 없다
-          // (`ExtensionsPanel` 과 같은 규칙).
+          // (건너뛴 확장을 감추지 않는 것과 같은 규칙 — `ExtensionsSection.tsx` 의 「건너뜀」).
           <p className="ext-empty">
             {t('아직 그리지 못하는 화면입니다')} ({view.kind}).
           </p>

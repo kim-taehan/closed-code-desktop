@@ -13,7 +13,7 @@ import { rowOpenTarget } from './extensionRowTarget'
 import type { ExtensionProgressPayload } from '../../shared/ipc/channels'
 import { applyProgressLine, type ExtensionProgressLog } from './extensionProgressLog'
 
-// 확장 패널의 IPC 배선. 화면(`ExtensionsPanel`)은 props 로만 받으므로 여기서 붙인다.
+// 확장 패널의 IPC 배선. 화면(`ExtensionViewPanel`)은 props 로만 받으므로 여기서 붙인다.
 //
 // 설정 창의 `useExtensionList` 와 이름이 겹쳐 이쪽을 패널 이름으로 갈랐다. 보는 것이 다르다 —
 // 저쪽은 **설치본 관리**(디스크 설치·배포처), 이쪽은 **실행**(명령·결과 행)이다.
