@@ -49,24 +49,45 @@ function textOf(part: Record<string, unknown>): string {
  * 도구 한 건 → 호출 + 결과.
  *
  * 라이브는 `tool.input.started` 에서 호출을, `tool.success`/`tool.failed` 에서 결과를 냈다.
- * 재생에는 그 두 순간이 `state.status` 하나로 접혀 있다 — `completed` 면 `output`,
- * `error` 면 `error` 다 (`/doc` 의 `ToolState*`).
+ * 재생에는 그 두 순간이 `state.status` 하나로 접혀 있다 — 갈래마다 키가 다르다
+ * (`/doc` 의 `ToolState*`, contract-qa 가 실측한 분포는 completed 34 · error 1 · running 1):
  *
- * **끝나지 않은 도구(`pending`·`running`)는 결과를 내지 않는다.** 대화가 도구 실행 중에
- * 끊기면 그 상태로 남는데, 없는 결과를 지어내면 실패한 적 없는 도구가 실패로 보인다.
+ *   completed → `output`          error → `error`          pending·running → 둘 다 없다
+ *
+ * ⚠️ **결과가 없는 도구도 반드시 닫는다.** 여기에는 원래 "끝나지 않은 도구는 결과를 내지
+ * 않는다 — 없는 결과를 지어내면 실패한 적 없는 도구가 실패로 보인다" 고 적혀 있었다.
+ * **그 판단이 틀렸다** (2026-08-15, contract-qa 지적 → 렌더러에서 확인). 결과가 없으면
+ * `toolStatusOf` 가 `'running'` 을 주고(`ToolIcon.tsx:58`), `ToolCallRow` 의 경과시간이
+ * **1초마다 도는 타이머를 영영 돌린다** (`useToolElapsed` — `hasResult` 가 false 인 동안).
+ * 게다가 그 시계는 **재생한 시각부터** 세서, 작년에 끝난 대화에 "3초… 4초…" 가 올라간다.
+ * `running` 상태는 실제로 영속돼 있다(중단된 세션에 남는다) — 안 닫으면 이력을 열 때마다
+ * 끝나지 않는 스피너가 뜬다. 지어낸 실패보다 이쪽이 나쁘다.
+ *
+ * 그래서 사실대로 닫는다: 성공했다고 하지 않고, 무엇이 일어났는지를 문구로 남긴다.
+ *
+ * **`toolArgs` 는 라이브에 없고 여기에만 있다.** 라이브는 이름을 아는 즉시(인자 스트리밍
+ * 전에) 호출을 내보내느라 인자를 못 싣는다 (`translate.ts` 의 TOOL_INPUT_STARTED). 재생에는
+ * `state.input` 이 이미 있고 청크 계약에도 자리가 있어(`ToolCallChunk.toolArgs`) 그대로 싣는다 —
+ * 이 어긋남은 **재생이 라이브보다 더 보여주는** 쪽이라, 도구 행이 이름만 남는 것보다 낫다.
  */
 function toolFrames(part: Record<string, unknown>, ctx: ReplayContext): Frame[] {
   const state = (part['state'] ?? {}) as Record<string, unknown>
   const callId = typeof part['callID'] === 'string' ? part['callID'] : undefined
   const toolName = typeof part['tool'] === 'string' ? part['tool'] : '알 수 없는 도구'
+  const input = state['input']
   const frames = [
-    chunk({ messageType: ChunkType.TOOL_CALL, toolName, ...(callId ? { toolCallId: callId } : {}) }, ctx),
+    chunk(
+      {
+        messageType: ChunkType.TOOL_CALL,
+        toolName,
+        ...(callId ? { toolCallId: callId } : {}),
+        ...(input !== undefined ? { toolArgs: input } : {}),
+      },
+      ctx,
+    ),
   ]
 
-  const status = state['status']
-  if (status !== 'completed' && status !== 'error') return frames
-
-  const success = status === 'completed'
+  const success = state['status'] === 'completed'
   frames.push(
     chunk(
       {
@@ -74,14 +95,21 @@ function toolFrames(part: Record<string, unknown>, ctx: ReplayContext): Frame[] 
         toolName,
         ...(callId ? { toolCallId: callId } : {}),
         success,
-        ...(success
-          ? { result: state['output'] }
-          : { error: typeof state['error'] === 'string' ? state['error'] : '도구 실패' }),
+        ...(success ? { result: state['output'] } : { error: toolError(state) }),
       },
       ctx,
     ),
   )
   return frames
+}
+
+/** 실패 문구. 끝나지 않은 채 저장된 도구는 실패한 것이 아니라 **결과가 없는** 것이다. */
+function toolError(state: Record<string, unknown>): string {
+  if (typeof state['error'] === 'string' && state['error'] !== '') return state['error']
+  if (state['status'] === 'pending' || state['status'] === 'running') {
+    return '결과가 기록되기 전에 대화가 끝났습니다'
+  }
+  return '도구 실패'
 }
 
 /**

@@ -107,8 +107,25 @@ describe('replayFrames', () => {
     expect(call).toMatchObject({
       toolName: 'open-code-desktop_open_file',
       toolCallId: 'call_00_ET_COUN10f433lZtJolero58610',
+      // 인자는 라이브에 없고 재생에만 있다 — 없으면 도구 행이 이름만 남는다 (`toolFrames` 주석)
+      toolArgs: { path: 'README.md' },
     })
     expect(result).toMatchObject({ success: true, result: 'README.md 을(를) 화면에 열었습니다' })
+  })
+
+  it('실패한 도구는 원문 사유를 그대로 싣는다', () => {
+    const frames = replayFrames('ses_1', [
+      {
+        info: { id: 'msg_e', role: 'assistant' },
+        parts: [
+          { id: 'p', type: 'tool', callID: 'c1', tool: 'bash', state: { status: 'error', error: 'exit 1' } },
+        ],
+      },
+    ])
+    expect(chunks(frames).find((c) => c['messageType'] === ChunkType.TOOL_RESULT)).toMatchObject({
+      success: false,
+      error: 'exit 1',
+    })
   })
 
   it('step-start·step-finish 는 청크로 새지 않는다', () => {
@@ -157,17 +174,23 @@ describe('replayFrames', () => {
     expect(chunks(frames).find((c) => c['messageType'] === ChunkType.ERROR)).toMatchObject({ message: '한도 초과' })
   })
 
-  // 끝난 적 없는 도구는 결과를 지어내지 않는다 — 없는 실패를 만들면 안 된다
-  it('실행 중이던 도구는 호출만 남기고 결과를 만들지 않는다', () => {
+  /**
+   * ⚠️ **이 케이스는 원래 정반대를 단언하고 있었다** ("결과를 만들지 않는다"). 결과가 없으면
+   * `toolStatusOf` 가 `running` 을 주고(`ToolIcon.tsx:58`) `ToolCallRow` 의 경과시간 타이머가
+   * **영영 돈다** — 그것도 재생한 시각부터 세서, 옛 대화에 초가 올라간다. `running` 상태는
+   * 중단된 세션에 실제로 영속돼 있다 (contract-qa 실측). 지어낸 실패보다 이쪽이 나쁘다.
+   */
+  it('결과 없이 끝난 도구도 닫는다 — 안 닫으면 스피너가 영영 돈다', () => {
     const frames = replayFrames('ses_1', [
       {
         info: { id: 'msg_t', role: 'assistant' },
         parts: [{ id: 'prt_t', type: 'tool', callID: 'c1', tool: 'bash', state: { status: 'running' } }],
       },
     ])
-    const body = chunks(frames)
-    expect(body.some((c) => c['messageType'] === ChunkType.TOOL_CALL)).toBe(true)
-    expect(body.some((c) => c['messageType'] === ChunkType.TOOL_RESULT)).toBe(false)
+    const result = chunks(frames).find((c) => c['messageType'] === ChunkType.TOOL_RESULT)
+    expect(result).toBeDefined()
+    // 성공했다고 하지 않는다 — 무슨 일이 있었는지를 문구로 남긴다
+    expect(result).toMatchObject({ success: false, error: '결과가 기록되기 전에 대화가 끝났습니다' })
   })
 
   /**
