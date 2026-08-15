@@ -1068,6 +1068,26 @@ body {
   cursor: default;
 }
 
+/* 응답 중에는 같은 자리가 중지 버튼이 된다 (↑ → 빨간 원 안의 흰 네모).
+   자리·크기는 .composer__send 그대로 — 버튼이 움직이면 누르려던 손이 빗나간다. */
+.composer__send--stop {
+  background: var(--dc-status-error);
+}
+
+.composer__send--stop:disabled {
+  /* 「중단중…」 — 눌린 티는 남기되(연해짐) 자리는 지킨다 */
+  background: var(--dc-status-error);
+  border: none;
+  opacity: 0.55;
+}
+
+.composer__stop-square {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  background: #ffffff;
+}
+
 .approval-card button {
   padding: 8px 14px;
   border-radius: var(--dc-radius-sm);
@@ -1203,27 +1223,12 @@ body {
   cursor: default;
 }
 
-.turn-cancel {
-  margin: 0 12px 6px;
-  padding: 3px 12px;
-  border-radius: var(--dc-radius-pill);
-  border: 1px solid var(--dc-status-error);
-  background: none;
-  color: var(--dc-status-error);
-  font-size: 12px;
-  cursor: pointer;
-}
-
-/* 「중단중…」 — 응답이 올 때까지 다시 못 누른다 (.new-chat:disabled 와 같은 값) */
-.turn-cancel:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-
-/* 중단 신호에 응답이 없어 상한을 넘긴 자리. 버튼 옆에 붙는다 */
+/* 중단 신호에 응답이 없어 상한을 넘긴 자리. 컴포저 위에 붙는다
+   (「중단」 알약은 전송 버튼 자리의 중지 버튼으로 옮겨졌다 — .composer__send--stop) */
 .turn-cancel-stalled {
   color: var(--dc-text-muted);
   font-size: 12px;
+  margin: 0 12px 6px;
 }
 
 /* ── 턴 리뷰 카드 (V2) ───────────────────────── */

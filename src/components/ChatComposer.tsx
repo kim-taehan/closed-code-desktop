@@ -1,5 +1,6 @@
 import { useEffect, useState, type DragEvent } from 'react'
-import { TurnControls } from './TurnControls'
+import { useCancelRequest } from './TurnControls'
+import { ComposerQueue } from './ComposerQueue'
 import { ContextUsageBar } from './ContextUsageBar'
 import { WorkingDirBar } from './WorkingDirBar'
 import type { WorkingDirPayload } from '../../shared/ipc/channels'
@@ -73,6 +74,7 @@ export function ChatComposer(props: ChatComposerProps) {
     props.activeTab !== 'chat' && isRealFilePath(props.activeTab) ? props.activeTab : null
   const queue = useSendQueue(props.project?.id ?? null, props.isStreaming)
   const history = useInputHistory(props.project?.id ?? null)
+  const cancel = useCancelRequest(props.isStreaming)
   const [skills, setSkills] = useState(false)
   // `/` 로 부를 수 있는 opencode 항목. 전송 때 템플릿을 전개하려면 팝업만이 아니라
   // 여기서도 목록을 들고 있어야 한다 — 손으로 쳐서 Enter 한 것도 같은 길로 온다.
@@ -146,7 +148,6 @@ export function ChatComposer(props: ChatComposerProps) {
     // 개발자 모드 이스터에그 — 정확 일치 시 로컬 응답으로 끝나고 runtime 으로 보내지 않는다
     if (props.onDevPhrase?.(text)) return
 
-
     // 문서를 보며 물으면 그 문서를 함께 보낸다 —
     // 화면에 띄워 놓고 "이거 고쳐줘" 라고 하는 것이 자연스럽다.
     const viewing =
@@ -212,29 +213,16 @@ export function ChatComposer(props: ChatComposerProps) {
       onDrop={dropFiles}
       style={dragOver ? { outline: '2px dashed var(--dc-accent)', outlineOffset: -2 } : undefined}
     >
-      <TurnControls busy={props.isStreaming} onCancel={() => void window.davis.cancelChat()} />
+      {/* 「중단」 알약이 있던 자리 — 버튼은 전송 버튼(↑→■)으로 옮겨졌고 (Composer.tsx),
+          여기 남는 것은 상한을 넘겼을 때의 안내뿐이다. 말없이 되돌리면 사용자는
+          자기가 잘못 눌렀다고 여긴다 (TurnControls.tsx 의 근거 그대로). */}
+      {cancel.stalled && <span className="turn-cancel-stalled">중단 신호에 응답이 없습니다. 다시 눌러 보세요.</span>}
 
       <WorkingDirBar workingDir={props.workingDir} />
 
       <ContextUsageBar turnMetas={props.turnMetas} />
 
-      {queue.pending > 0 && (
-        <div className="composer-queue">
-          <div className="composer-queue__head">
-            <span>대기 중 {queue.pending}개</span>
-            <button type="button" className="composer-queue__restore" onClick={restoreQueue}>
-              입력창으로 되돌리기
-            </button>
-          </div>
-          <ul className="composer-queue__list">
-            {queue.queries.map((query, index) => (
-              <li key={index} className="composer-queue__item" title={query}>
-                {query}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+      <ComposerQueue pending={queue.pending} queries={queue.queries} onRestore={restoreQueue} />
 
       <AttachmentChips
         items={props.attachments.items}
@@ -253,8 +241,17 @@ export function ChatComposer(props: ChatComposerProps) {
         onSubmit={submit}
         disabled={!props.ready}
         insert={insert}
+        focusKey={`${props.project?.id ?? ''}:${props.activeTab}`}
         history={history.entries}
         onHistoryRecord={history.record}
+        {...(props.isStreaming
+          ? {
+              stop: {
+                pending: cancel.pending,
+                onPress: () => cancel.request(() => void window.davis.cancelChat()),
+              },
+            }
+          : {})}
         {...(viewingFile ? { viewing: baseName(viewingFile) } : {})}
         left={
           <ComposerAdd

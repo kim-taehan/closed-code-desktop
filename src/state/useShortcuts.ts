@@ -56,7 +56,7 @@ export interface ShortcutHandlers {
    */
   onShellDown: () => void
   onShellUp: () => void
-  /** Esc — 응답 중단. 중단 버튼(TurnControls)이 이미 "응답 중단 (Esc)" 로 광고하는 그 키다. */
+  /** Esc — 응답 중단. 중지 버튼(응답 중의 전송 버튼, Composer.tsx)이 "응답 중단 (Esc)" 로 광고하는 그 키다. */
   onCancelTurn: () => void
   /** ⌘/Ctrl+Enter — 활성 턴 리뷰 전체 적용 */
   onAcceptReview: () => void

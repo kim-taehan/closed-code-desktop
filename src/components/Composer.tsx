@@ -5,6 +5,8 @@ import { openArgAtCaret, replaceSlashContext, skillAtCaret } from '../state/comp
 import { findSlashCommand, type SlashChoice } from '../state/slashCommands'
 import { wantsHistoryNav } from '../state/composerArrowKeys'
 import { useAutoGrow, useDoubleEscape } from './composerHooks'
+import { useComposerFocus } from '../state/composerFocus'
+import { ComposerSendButton } from './ComposerSendButton'
 import { MentionPopup } from './MentionPopup'
 import { SlashPopup } from './SlashPopup'
 
@@ -33,10 +35,20 @@ export interface ComposerProps {
   right?: React.ReactNode
   /** 지금 보고 있는 문서. 보내면 함께 붙는다는 것을 알린다. */
   viewing?: string
+  /**
+   * 커서를 이 입력창으로 가져올 순간의 표식. **값이 아니라 바뀌었다는 사실만 본다** —
+   * 프로젝트를 열거나 탭을 바꾸면 달라진다 (`composerFocus.ts` 가 임자를 먼저 살핀다).
+   */
+  focusKey?: string
   /** 위/아래로 되짚을 이전 입력. 최근 것이 앞(index 0). */
   history?: string[]
   /** 전송한 입력을 히스토리에 기록한다. */
   onHistoryRecord?: (text: string) => void
+  /**
+   * 응답 중 전송 버튼을 중지 버튼으로 바꾼다. 값이 있으면 ↑ 대신 빨간 네모가 뜨고
+   * 누르면 `onPress` 가 간다. **Enter 전송(대기열 쌓기)은 그대로 산다** — 버튼만 바뀐다.
+   */
+  stop?: { pending: boolean; onPress: () => void }
 }
 
 export function Composer({
@@ -46,8 +58,10 @@ export function Composer({
   left,
   right,
   viewing,
+  focusKey = '',
   history = [],
   onHistoryRecord,
+  stop,
 }: ComposerProps) {
   const [value, setValue] = useState('')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -139,6 +153,9 @@ export function Composer({
   }, [insert?.nonce])
 
   useAutoGrow(textareaRef, value, MAX_HEIGHT_PX)
+  // 위 `insert` 의 focus() 와 겹치지 않는다 — 저쪽은 "글을 넣었으니 이어 치게",
+  // 이쪽은 "화면이 바뀌었으니 바로 칠 수 있게" 다. 둘 다 임자가 없을 때만 잡는다.
+  useComposerFocus(textareaRef, focusKey)
 
   function submit() {
     const text = value.trim()
@@ -269,16 +286,7 @@ export function Composer({
         </div>
         <div className="composer__slot composer__slot--end">
           {right}
-          <button
-            type="button"
-            className="composer__send"
-            onClick={submit}
-            disabled={disabled || !value.trim()}
-            title="전송 (Enter)"
-            aria-label="전송"
-          >
-            ↑
-          </button>
+          <ComposerSendButton stop={stop} disabled={disabled} canSend={!!value.trim()} onSend={submit} />
         </div>
       </div>
     </div>
