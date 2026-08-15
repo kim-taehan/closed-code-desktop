@@ -116,6 +116,12 @@ function toChat(session: OpencodeSession): Record<string, unknown> {
  */
 async function addChat(deps: HistoryDeps, emit: (frame: Frame) => void): Promise<string | null> {
   const reused = deps.emptySession
+  // ⚠️ **지금은 닿지 않는 가지다. 닿으면 「새 대화」 버튼이 에러 없이 죽는다.**
+  // 봉투를 아무것도 안 내므로 위층 `requestNewChat()` 은 응답을 영영 못 받는다.
+  // 안 닿는 근거는 **순서 하나뿐이다**: `directory` 는 `onWorkspaceSync` 만이 채우는데,
+  // 그 프레임(`WORKSPACE_STATE=READY`)이 나가야 핸드셰이크가 ready 가 되고, 그제서야
+  // `primeOnFirstReady` 가 이걸 부른다 (contract-qa 가 사슬 전체를 밟아 확인했다).
+  // **프라이밍 순서를 건드리는 사람은 이 줄을 먼저 보라** — 조용히 죽는 부류다.
   if (!reused && !deps.directory) return null
   const chatId = reused ?? (await deps.client.createSession({ directory: deps.directory ?? '' })).id
   emit({
