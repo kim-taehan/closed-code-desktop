@@ -61,6 +61,23 @@ export function withPromptContext(query: string, data: Record<string, unknown>):
   return `${query}\n\n${OPEN}\n${lines.join('\n')}\n${CLOSE}`
 }
 
+/**
+ * 붙였던 꼬리표를 떼어낸다 — **이력 재생 전용이다** (`historyReplay.ts`).
+ *
+ * 재생은 opencode 에 저장된 프롬프트를 그대로 읽는데, 거기에는 위 `withPromptContext` 가
+ * 붙인 블록까지 들어 있다. 그대로 그리면 **사용자가 치지도 않은 `<attached_context>` 줄이
+ * 자기 말풍선 안에 뜬다** (실측: `"@README.md  이 파일 열어줘\n\n<attached_context>\nfile: …"`).
+ * davis 는 이 문제가 없었다 — 컨텍스트를 runtime 이 따로 받아 질문에 섞지 않았다.
+ *
+ * 붙이는 쪽과 떼는 쪽이 갈리면 형식이 조용히 어긋나므로 **같은 파일에 둔다.**
+ * 꼬리에 붙은 것 하나만 뗀다 — 사용자가 본문에 같은 낱말을 쓴 경우는 건드리지 않는다.
+ */
+export function stripPromptContext(query: string): string {
+  if (!query.endsWith(CLOSE)) return query
+  const start = query.lastIndexOf(`\n\n${OPEN}\n`)
+  return start < 0 ? query : query.slice(0, start)
+}
+
 function rangeOf(editor: ActiveEditorWire): string {
   const start = editor.selection?.start_offset
   const end = editor.selection?.end_offset

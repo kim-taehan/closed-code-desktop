@@ -12,8 +12,22 @@
 // 표가 있었다. 지금은 정확히 거꾸로다 — 그 줄을 되살리면 승인이 다시 404 로 죽는다.
 
 import { opencodeAuthHeaders } from './auth'
+import { fetchConfig, fetchProviders, type OpencodeConfig, type ProvidersResponse } from './configApi'
+import {
+  deleteSession,
+  listSessions,
+  renameSession,
+  sessionMessages,
+  type OpencodeMessage,
+  type OpencodeSession,
+} from './historyApi'
 import { abortTurn, replyPermissionLegacy, replyQuestionLegacy, sendPrompt } from './legacyChat'
 import { addMcpServer, mcpStatus, setMcpEnabled } from './mcpApi'
+
+// 설정 계열(`configApi.ts`)과 이력 계열(`historyApi.ts`)은 파일이 갈렸지만 타입은 여기서
+// 계속 내보낸다 — 부르는 쪽(`models.ts` 등)에 "클라이언트가 주는 것" 으로 남는 편이 맞다.
+export type { OpencodeConfig, ProvidersResponse } from './configApi'
+export type { OpencodeMessage, OpencodeSession } from './historyApi'
 
 export interface OpencodeClientOptions {
   baseUrl: string
@@ -26,12 +40,6 @@ export interface OpencodeClientOptions {
 export interface ModelRef {
   id: string
   providerID: string
-}
-
-/** `GET /config/providers` 응답. `default` 는 프로바이더별 기본 모델 id 다. */
-export interface ProvidersResponse {
-  providers: { id: string; name?: string; models?: Record<string, unknown> }[]
-  default?: Record<string, string>
 }
 
 export interface CreateSessionInput {
@@ -66,31 +74,6 @@ export interface McpRemoteConfig {
 export interface McpStatusEntry {
   status?: string
   error?: string
-}
-
-/**
- * `GET /config` 중 우리가 읽는 것.
- *
- * **`mcp` 절이 여기에만 있다** — `GET /mcp` 는 상태만 주고 주소도 local/remote 도 안 준다
- * (실측). 다이얼로그가 "remote · http://…" 를 그리려면 두 표면을 합쳐야 한다.
- */
-export interface OpencodeConfig {
-  model?: string
-  mcp?: Record<string, { type?: string; url?: string; command?: unknown; enabled?: boolean }>
-}
-
-/**
- * 설정 계열 질의(`/config`·`/config/providers`)에 프로젝트 신원을 싣는다.
- *
- * ⚠️ **이 헬퍼를 다른 표면으로 넓히지 말 것.** `addMcpServer` 는 질의 이름이 같은데도
- * 일부러 따로 조립한다 — 표면마다 이름이 갈리고(pty 는 `location[directory]=`), 한쪽 규칙이
- * 헬퍼를 타고 넘어가면 두 표면이 조용히 같이 틀어진다 (`addMcpServer` 주석).
- *
- * 디렉토리를 모를 때(세션 전)는 붙이지 않는다 — 그때는 서버 전역 설정이 답이다.
- */
-function withDirectory(path: string, directory: string | null): string {
-  if (directory === null || directory === '') return path
-  return `${path}?directory=${encodeURIComponent(directory)}`
 }
 
 export class OpencodeClient {
@@ -140,10 +123,19 @@ export class OpencodeClient {
   }
 
   private async post<T>(path: string, body: unknown): Promise<T> {
+    return this.request<T>('POST', path, body)
+  }
+
+  /**
+   * POST 와 같은 규칙에 메서드만 갈아 끼운다 — 이력 삭제·제목 변경이 **DELETE·PATCH 로만**
+   * 있어서 열었다 (`historyApi.ts` 머리말: 신규 세대에는 그 둘이 아예 없다).
+   * 본문이 없으면 싣지 않는다 — DELETE 에 빈 본문을 실으면 거절하는 서버가 있다.
+   */
+  private async request<T>(method: string, path: string, body?: unknown): Promise<T> {
     const response = await this.fetchImpl(`${this.baseUrl}${path}`, {
-      method: 'POST',
+      method,
       headers: this.headers,
-      body: JSON.stringify(body),
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     })
     if (!response.ok) {
       throw new Error(`opencode ${path} 실패: HTTP ${response.status} ${await response.text()}`)
@@ -187,39 +179,39 @@ export class OpencodeClient {
     }
   }
 
-  /**
-   * 설정된 프로바이더와 그 모델 목록.
-   *
-   * ⚠️ **`/api` 가 아니라 `/config/providers` 다** — 그래서 `{data:...}` 래핑도 없다.
-   * `/api/config/providers` 는 없다 (실측 1.17.18, `curl /doc`).
-   *
-   * **없는데 404 가 아니다.** 그 주소는 **200 에 웹 UI HTML** 을 준다 (SPA 폴백).
-   * `response.ok` 가 참이라 여기서 안 끊기고 JSON 파싱에서야 터진다 — 상태 코드로는
-   * 못 가린다. README 실측 함정 11.
-   *
-   * ⚠️ **`?directory=` 를 실어야 그 프로젝트의 `opencode.json` 을 읽는다** (2026-08-14 실측).
-   * 서버 하나로 프로젝트가 여럿일 때 답이 갈린다 — 같은 서버에서 없이 부르면 프로바이더 3개,
-   * `directory=projX` 로 부르면 4개(그 프로젝트에만 있는 것 하나가 더 온다).
-   * **틀려도 200 이다** — 질의 이름을 못 알아들으면 그냥 무시하고 전역 설정을 준다.
-   */
+  /** 설정된 프로바이더와 그 모델 목록 (실측과 `?directory=` 함정은 `configApi.ts`). */
   async providers(directory: string | null): Promise<ProvidersResponse> {
-    return this.get<ProvidersResponse>(withDirectory('/config/providers', directory))
+    return fetchProviders((path) => this.get(path), directory)
+  }
+
+  /** 서버 설정 — 여기서 필요한 것은 기본 모델 하나다 (실측은 `configApi.ts`). */
+  async config(directory: string | null): Promise<OpencodeConfig> {
+    return fetchConfig((path) => this.get(path), directory)
   }
 
   /**
-   * 서버 설정. 여기서 필요한 것은 기본 모델(`model`) 하나다.
+   * 이 프로젝트의 대화 목록 (이력 다이얼로그 — 번역은 `chatHistory.ts`).
    *
-   * ⚠️ **모델을 주지 않고 세션을 만들면 응답에 `model` 이 없다** (실측 1.17.18 — 줘서
-   * 만들면 있다). 그 세션의 기본이 무엇인지는 이 설정값으로만 알 수 있고, 모르면
-   * 스위처에서 오버라이드를 풀었을 때 되돌아갈 자리가 없다.
-   *
-   * ⚠️ **여기도 `?directory=` 가 필요하다** (2026-08-14 실측). 프로젝트가 자기
-   * `opencode.json` 에 `"model"` 을 정해 두면 없이 부를 때와 값이 다르다 — 전역
-   * `davis-litellm/glm-5.2` 대 프로젝트 `projonly/only-here`. 안 실으면 오버라이드를
-   * 풀었을 때 **그 프로젝트가 정한 기본이 아닌 전역 모델로** 되돌아간다.
+   * ⚠️ **`directory` 를 빼면 서버가 아는 세션이 전부 온다** — 다른 프로젝트 것까지
+   * (실측·사유는 `historyApi.ts` 머리말).
    */
-  async config(directory: string | null): Promise<OpencodeConfig> {
-    return this.get<OpencodeConfig>(withDirectory('/config', directory))
+  async listSessions(directory: string | null): Promise<OpencodeSession[]> {
+    return listSessions((path) => this.get(path), directory)
+  }
+
+  /** 대화 한 건의 전체 내용. **레거시에만 있다** — 신규는 이벤트 로그를 준다 (`historyApi.ts`). */
+  async sessionMessages(sessionId: string): Promise<OpencodeMessage[]> {
+    return sessionMessages((path) => this.get(path), sessionId)
+  }
+
+  /** 대화를 지운다. 신규 세대에는 DELETE 자체가 없다 (`historyApi.ts`). */
+  async deleteSession(sessionId: string, directory: string | null): Promise<void> {
+    await deleteSession((method, path, body) => this.request(method, path, body), sessionId, directory)
+  }
+
+  /** 대화 제목을 바꾼다 (`/rename`). 신규 세대에는 PATCH 가 없다 (`historyApi.ts`). */
+  async renameSession(sessionId: string, directory: string | null, title: string): Promise<void> {
+    await renameSession((method, path, body) => this.request(method, path, body), sessionId, directory, title)
   }
 
   /**

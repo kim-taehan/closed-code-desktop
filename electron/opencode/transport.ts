@@ -3,12 +3,13 @@ import { Action, AuthState, Kind, PermissionMode } from '../../shared/protocol/k
 import { parseInbound } from '../../shared/protocol/envelope'
 import { HandlerSet, type CloseInfo, type Transport, type Unsubscribe } from '../ws/transport'
 import { OpencodeClient } from './client'
+import { chatHistoryFrame } from './chatHistory'
+import { sendChatRequest } from './chatRequest'
 import { failureFrames } from './failFrames'
 import { replyApproval, replyUserAnswer } from './replies'
-import { SessionModel, toModelRef } from './models'
+import { SessionModel } from './models'
 import { applyPermissionMode } from './agents'
 import { mcpConfigFrame } from './mcpConfig'
-import { withPromptContext } from './promptContext'
 import { SseStream } from './sse'
 import { translate, type TranslateContext } from './translate'
 import { syncWorkspace } from './workspace'
@@ -40,6 +41,8 @@ export class OpencodeTransport implements Transport {
   /** 세션이 선 프로젝트 디렉토리. MCP 질의가 프로젝트별이라 여기서도 붙잡는다 (`mcpConfig.ts`). */
   private directory: string | null = null
   private streamId: string | null = null
+  /** 지금 세션에 아직 아무 말도 안 걸었는가. 「새 대화」가 세션을 또 만들지 않는 근거 (`chatHistory.ts`). */
+  private emptySession = false
   /** 이 턴에 interrupt 를 보냈는가. `step.failed` 를 취소로 읽는 유일한 근거다. */
   private cancelling = false
   private started = false
@@ -120,10 +123,8 @@ export class OpencodeTransport implements Transport {
   private async dispatch(kind: string, action: string, data: Record<string, unknown>): Promise<void> {
     try {
       if (kind === Kind.AUTH && action === Action.AUTH_REQUEST) return this.onAuthRequest()
-      if (kind === Kind.WORKSPACE && action === Action.WORKSPACE_SYNC) {
-        return await this.onWorkspaceSync(data)
-      }
-      if (kind === Kind.CHAT && action === Action.CHAT_REQUEST) return await this.onChatRequest(data)
+      if (kind === Kind.WORKSPACE && action === Action.WORKSPACE_SYNC) return await this.onWorkspaceSync(data)
+      if (kind === Kind.CHAT && action === Action.CHAT_REQUEST) return this.onChatRequest(data)
       if (kind === Kind.CHAT && action === Action.STREAM_CANCEL) return await this.onCancel()
       if (kind === Kind.CHAT && action === Action.TOOL_APPROVAL_RESPONSE) {
         if (this.sessionId) await replyApproval(this.client, this.sessionId, data)
@@ -133,18 +134,15 @@ export class OpencodeTransport implements Transport {
         if (this.sessionId) await replyUserAnswer(this.client, this.sessionId, data)
         return
       }
-      if (kind === Kind.LLM_CONFIG && action === Action.LLM_CONFIG_STATUS) {
-        return await this.onLlmStatus()
-      }
-      if (kind === Kind.WORKSPACE && action === Action.SET_PERMISSION_MODE) {
-        return await this.onPermissionMode(data)
-      }
+      if (kind === Kind.LLM_CONFIG && action === Action.LLM_CONFIG_STATUS) return await this.onLlmStatus()
+      if (kind === Kind.WORKSPACE && action === Action.SET_PERMISSION_MODE) return await this.onPermissionMode(data)
       if (kind === Kind.MCP_CONFIG) {
         // 커넥터 다이얼로그. 번역과 실측 근거는 `mcpConfig.ts` 가 정본이다.
         const frame = await mcpConfigFrame(this.client, this.directory, action, data)
         if (frame) this.emit(frame)
         return
       }
+      if (kind === Kind.CHAT_HISTORY) return await this.onChatHistory(action, data)
       // 나머지(ping/pong…)는 opencode 에 대응이 없다. 조용히 버린다.
     } catch (error) {
       this.fail(kind, error)
@@ -178,18 +176,15 @@ export class OpencodeTransport implements Transport {
     if (result.session) {
       this.sessionId = result.session.id
       this.directory = result.session.directory
+      // 방금 만든 세션이다 — 곧 뒤따르는 「새 대화」 요청은 이걸 그대로 쓴다 (`chatHistory.ts`)
+      this.emptySession = true
       this.model.adopt(result.session.model, result.session.directory)
     }
     this.emit(result.frame)
   }
 
-  /**
-   * chat_request → prompt.
-   *
-   * **`prompt` 를 await 하지 않는다.** 이 호출은 턴이 끝나야 돌아오므로 await 하면
-   * 그동안 도착하는 취소·승인 프레임을 처리할 수 없다. 화면 갱신은 SSE 가 한다.
-   */
-  private async onChatRequest(data: Record<string, unknown>): Promise<void> {
+  /** chat_request → prompt. 조립·모델 오버라이드와 그 근거는 `chatRequest.ts` 가 정본이다. */
+  private onChatRequest(data: Record<string, unknown>): void {
     const sessionId = this.sessionId
     if (!sessionId) {
       this.emit({
@@ -199,23 +194,37 @@ export class OpencodeTransport implements Transport {
       })
       return
     }
-    // 붙인 문서·보는 파일은 글로 번역해 함께 보낸다 — 안 하면 사라진다 (`promptContext.ts`)
-    const query = withPromptContext(typeof data['query'] === 'string' ? data['query'] : '', data)
     this.streamId = randomUUID()
     // 새 턴은 취소 기억 없이 시작한다. 앞 턴의 중단이 종료 이벤트를 못 받고 끝났을 때
     // (프롬프트 접수 직후 interrupt 는 opencode 가 아무 이벤트도 안 낸다 — 실측)
     // 플래그가 남아 다음 턴의 진짜 실패를 취소로 삼켜 버린다.
     this.cancelling = false
+    this.emptySession = false // 이 세션엔 이제 말을 걸었다 — 「새 대화」는 새 세션을 받아야 한다
     this.emit({ kind: Kind.CHAT, action: Action.STREAM_START, data: {}, streamId: this.streamId })
+    sendChatRequest(this.client, this.model, sessionId, data).catch((error: unknown) =>
+      this.fail(Kind.CHAT, error),
+    )
+  }
 
-    // 모델 오버라이드는 **보내기 직전에** 세션에 건다. davis 는 요청마다 실어 보냈고
-    // runtime 이 기억하지 않았지만, opencode 의 모델은 세션에 남는다 — 그래서 오버라이드가
-    // 빠진 요청에서는 기본 모델로 되돌린다. 안 되돌리면 한 번 고른 모델이 영영 붙는다.
-    const requested = typeof data['model'] === 'string' ? toModelRef(data['model']) : null
-    this.model
-      .apply(sessionId, requested)
-      .then(() => this.client.prompt(sessionId, query))
-      .catch((error: unknown) => this.fail(Kind.CHAT, error))
+  /**
+   * 대화 이력. 번역과 실측 근거는 `chatHistory.ts` 가 정본이다.
+   *
+   * **여기서만 할 수 있는 일이 하나 있다: 세션 갈아타기.** 과거 대화를 열거나 새 대화를
+   * 시작하면 다음 프롬프트가 갈 곳이 바뀐다 — 그 자리를 아는 것은 어댑터뿐이다.
+   * 지운 대화가 지금 열려 있던 것이면 세션 id 를 놓는다. 그대로 두면 다음 프롬프트가
+   * 없어진 세션으로 나가고, 증상은 채팅이 404 로 죽는 것뿐이다.
+   */
+  private async onChatHistory(action: string, data: Record<string, unknown>): Promise<void> {
+    const removed = action === Action.CHAT_HISTORY_REMOVE ? data['chat_id'] : null
+    // 「새 대화」가 재사용해도 되는 세션만 넘긴다 — 말을 건 뒤에는 없다
+    const empty = this.emptySession ? this.sessionId : null
+    const deps = { client: this.client, directory: this.directory, emptySession: empty }
+    const next = await chatHistoryFrame(deps, action, data, (frame) => this.emit(frame))
+    if (next) {
+      this.sessionId = next
+      // 불러온 대화는 이미 말이 오간 것이다 — 「새 대화」가 그걸 재사용하면 안 된다
+      this.emptySession = action === Action.CHAT_HISTORY_ADD
+    } else if (removed === this.sessionId) this.sessionId = null
   }
 
   /** 모델 스위처가 목록을 물었다 (davis 는 status → models 두 왕복이었다 — `models.ts`). */
@@ -229,19 +238,11 @@ export class OpencodeTransport implements Transport {
 
   /** 권한 모드 → 에이전트. **걸린 값을 되돌려 보낸다** (`agents.ts` 머리말). */
   private async onPermissionMode(data: Record<string, unknown>): Promise<void> {
+    const mode = data['mode']
     if (this.sessionId) {
-      this.permissionMode = await applyPermissionMode(
-        this.client,
-        this.sessionId,
-        data['mode'],
-        this.permissionMode,
-      )
+      this.permissionMode = await applyPermissionMode(this.client, this.sessionId, mode, this.permissionMode)
     }
-    this.emit({
-      kind: Kind.WORKSPACE,
-      action: Action.PERMISSION_MODE_CHANGED,
-      data: { mode: this.permissionMode },
-    })
+    this.emit({ kind: Kind.WORKSPACE, action: Action.PERMISSION_MODE_CHANGED, data: { mode: this.permissionMode } })
   }
 
   /**

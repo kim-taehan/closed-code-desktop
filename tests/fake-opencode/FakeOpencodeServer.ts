@@ -1,4 +1,5 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
+import { FakeHistoryStore } from './fakeHistory'
 import { FakePtyStore } from './fakePty'
 import { turnScript } from './turnScript'
 
@@ -35,18 +36,17 @@ export interface FakeOpencodeOptions {
   gapMs?: number
 }
 
-let sessionCounter = 0
-
 export class FakeOpencodeServer {
   private server: Server | null = null
   private port = 0
   private clients = new Set<ServerResponse>()
-  private directories = new Map<string, string>()
 
   /** 받은 요청 기록 — 테스트가 "무엇을 보냈나"를 확인한다 */
   readonly calls: Array<{ method: string; url: string; body: unknown }> = []
   /** 셸 드로어가 쓰는 `/api/pty` (`fakePty.ts`). 격리는 디렉토리로 갈린다 — 실물과 같다. */
   readonly pty = new FakePtyStore()
+  /** 대화 이력 표면 (`fakeHistory.ts`). 세션 자체를 여기가 들고 있다 — 실물도 한 자원이다. */
+  readonly history = new FakeHistoryStore()
 
   constructor(private readonly options: FakeOpencodeOptions = {}) {}
 
@@ -93,6 +93,13 @@ export class FakeOpencodeServer {
 
     if (request.method === 'POST' && url === '/api/session') return this.createSession(body, response)
 
+    // 이력은 **레거시 `/session` 이다** — 만드는 길(`/api/session`)과 세대가 다른데도 같은
+    // 세션을 가리킨다 (실측). 프롬프트(`/session/:id/prompt_async`)보다 뒤에 두면 안 된다는
+    // 제약은 없다 — 저쪽은 POST 이고 여기는 GET/DELETE/PATCH 만 받는다 (`matches`).
+    if (this.history.matches(request.method ?? 'GET', url)) {
+      return this.history.handle(request.method ?? 'GET', url, body, response)
+    }
+
     const prompt = /^\/session\/([^/]+)\/prompt_async$/.exec(url)
     if (request.method === 'POST' && prompt) return this.prompt(prompt[1]!, body, response)
 
@@ -132,10 +139,8 @@ export class FakeOpencodeServer {
   }
 
   private createSession(body: unknown, response: ServerResponse): void {
-    sessionCounter += 1
-    const id = `ses_fake${sessionCounter}`
     const location = (body as { location?: { directory?: string } } | undefined)?.location
-    this.directories.set(id, location?.directory ?? '')
+    const id = this.history.create(location?.directory ?? '')
     send(response, 200, { data: { id, projectID: 'global' } })
   }
 
@@ -147,7 +152,7 @@ export class FakeOpencodeServer {
     response.writeHead(204)
     response.end()
 
-    const context: PromptContext = { sessionID, text, directory: this.directories.get(sessionID) ?? '' }
+    const context: PromptContext = { sessionID, text, directory: this.history.directoryOf(sessionID) }
     const events = (this.options.turn ?? turnScript)(context)
     const gap = this.options.gapMs ?? 0
     events.forEach((event, index) => {
