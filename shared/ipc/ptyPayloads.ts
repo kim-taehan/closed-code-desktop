@@ -7,7 +7,11 @@
 // (설계 `docs/superpowers/specs/2026-08-16-run-and-logs-design.md` §5).
 //
 // **탭 하나가 pty 하나이고, `name` 이 그 둘을 잇는 열쇠다.** 셸 칸의 이름은 `shell`
-// (`src/state/drawerTabs.ts` 의 `SHELL_PANE`), 그 밖은 화면이 짓는다.
+// (`shared/pty/paneNames.ts` 의 `SHELL_PANE`), 그 밖은 화면이 짓는다.
+//
+// 그 값이 `src/state/drawerTabs.ts` 에 있다고 여기 적혀 있었다 — 화면·main·도구 검사가
+// 세 벌로 들고 있던 시절이다. 이 주석이 이미 `shared/` 를 가리키고 있던 것이
+// 합쳐도 된다는 근거가 됐다.
 //
 // projectId 는 **나가는 프레임과 떠나는 프레임에만** 있다. 들어오는 요청은 여전히 main 이
 // 활성 프로젝트로 푼다 (`electron/pty/drawerBridge.ts`) — 사용자가 키를 치는 칸은 언제나

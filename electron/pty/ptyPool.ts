@@ -4,6 +4,7 @@ import { OutputBuffer, type OutputSnapshot } from './outputBuffer'
 import { paneKey, PaneQueue } from './paneQueue'
 import type { PaneOpenResult, PtyPoolOptions } from './poolSurface'
 import { PtySocket } from './socket'
+import { SHELL_PANE } from '../../shared/pty/paneNames'
 
 // **프로젝트마다 pty 여럿, 이름으로 관리한다.**
 //
@@ -52,11 +53,9 @@ import { PtySocket } from './socket'
 /** 우리가 만든 pty 를 알아보는 이름. 앱을 껐다 켜도 이걸로 되찾는다. */
 export const DRAWER_TITLE = 'closed-code-desktop 드로어'
 
-/**
- * 셸 칸의 이름. 화면 쪽 정본은 `src/state/drawerTabs.ts` 이고 여기서는 **되찾기 규칙**이
- * 이 값에 걸린다 (위 표의 `dispose` 줄).
- */
-export const SHELL_PANE = 'shell'
+// 셸 칸의 이름은 `shared/pty/paneNames.ts` 가 정본이다 — 여기서는 **되찾기 규칙**이 이 값에
+// 걸린다(위 표의 `dispose` 줄). 값이 화면과 갈리면 그 규칙이 조용히 풀린다.
+export { SHELL_PANE }
 
 /**
  * 서버에 붙일 제목. 되찾기가 이 문자열의 완전 일치로 돈다.

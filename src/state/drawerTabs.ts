@@ -1,3 +1,5 @@
+import { SHELL_PANE } from '../../shared/pty/paneNames'
+
 // 드로어의 탭 목록 — **탭 하나가 pty 하나다** (설계 2026-08-16 §1 A안).
 //
 // 순수 함수로 빼 둔 이유는 `drawerKeys.ts`·`composerArrowKeys.ts` 와 같다: 이름이 붙을 만한
@@ -8,15 +10,12 @@
 // 프로세스는 살아 있어 *"탭이 없어졌으니 서버도 죽은 줄"* 로 읽힌다. 그래서 이 표는
 // **프로젝트마다 따로** 산다 — 옮겼다 돌아오면 그대로다.
 
-/**
- * 셸 칸의 이름. main 쪽 정본은 `electron/pty/ptyPool.ts` 의 같은 이름이고,
- * 거기서는 **되찾기 규칙**이 이 값에 걸린다 (앱을 껐다 켜도 남기는 유일한 칸).
- *
- * 값을 한 벌로 합치지 않는다 — 렌더러가 electron/ 을 import 하지 않는다.
- * 두 벌이 갈리면 셸 칸이 매번 새로 뜨는 것으로 드러나고, `multiplex.test.ts` 의
- * 「되찾기는 이름별로 갈린다」가 main 쪽을 잠근다.
- */
-export const SHELL_PANE = 'shell'
+// 셸 칸의 이름은 `shared/pty/paneNames.ts` 가 정본이다. 여기서 다시 내보내는 것은
+// 이 파일을 읽는 화면 코드가 그대로 쓰던 자리라서다.
+//
+// **예전에는 여기에 값이 따로 있었다.** *"렌더러가 electron/ 을 import 하지 않는다"* 가
+// 안 합친 근거였는데, 그 근거는 `shared/` 를 배제하지 않는다 (합친 이유는 그쪽 머리말).
+export { SHELL_PANE }
 
 /** 못 닫는 칸. 셸은 드로어 그 자체라 ✕ 가 없다 — 접는 것(⌘↑)과 다른 일이 아니다. */
 export const PERMANENT_PANES: readonly string[] = [SHELL_PANE]
