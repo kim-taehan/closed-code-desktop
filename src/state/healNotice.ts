@@ -1,4 +1,6 @@
 import { STEP_LABEL, type PipelineState, type ServerOwnership } from './doctorPipeline'
+// 창 안내와 **같은 문장**을 쓴다 — 사본을 두면 한쪽만 고쳐 반쪽이 낡는다 (아래 ②의 주석)
+import { ADOPT_ADVICE } from './connectionDoctor'
 
 // 자가 복구가 **화면에 뭐라고 말하나.** 순수 함수라 화면 없이 단언한다.
 //
@@ -73,15 +75,18 @@ export function healNotice(
     // ⚠️ **"이미 떠 있는 다른 서버는 그대로 둡니다" 였다 — 크래시 경로에서 거짓이다.**
     // 뿌리 수정이 죽은 자식을 표에서 지운 뒤라 `owns(null)=false` 가 되고, 크래시 사다리는
     // **언제나** 이 갈래로 온다(QA 실측 2026-08-16). 그때 「다른 서버」는 없다.
-    // 같은 문장이 `connectionDoctor.ts` 에도 있었고 **그쪽만 먼저 고쳐 반쪽이 낡아 있었다** —
-    // 배너가 창 안내보다 훨씬 자주 보이는데도 그랬다. 문장을 고칠 때는 사본을 전수로 찾는다.
+    //
+    // 그 고침이 **한쪽만 내려가 반쪽이 낡았다** — 여기와 `connectionDoctor.ts` 에 리터럴이
+    // 두 벌이었고, 배너가 창 안내보다 훨씬 자주 보이는데 낡은 쪽이 배너였다.
+    // *"문장을 고칠 때는 사본을 전수로 찾는다"* 고 적어 뒀는데, **기억에 기대는 규칙이라
+    // 같은 조건이 그대로 남는다.** 그래서 사본을 없앴다 — 이제 한 벌이고, 배너만 꼬리를 붙인다.
     case 'heal-restart-server':
       return {
         stage: 'banner',
         headline:
           ownership === 'ours'
             ? '재연결이 실패했습니다. 이제 이 프로젝트의 서버를 다시 띄웁니다…'
-            : '이 프로젝트용 서버를 새로 띄웁니다 — 우리가 띄우지 않은 서버는 건드리지 않습니다…',
+            : `${ADOPT_ADVICE}…`,
         ...detailOf(state),
       }
 
