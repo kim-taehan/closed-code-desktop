@@ -46,8 +46,12 @@ export interface DoctorIssue {
 // 지금은 앱이 띄우고(`serverPool`), 현장 사용자에게는 터미널이 없다 — 그 문장은 이제
 // **못 따라 할 지시**라서 「고치기」 버튼으로 바꿨다. 남은 안내는 아래 둘뿐이다.
 const RESTART_ADVICE = '이 프로젝트의 서버를 접었다 다시 띄웁니다'
+// **"이미 떠 있는 다른 서버는 그대로 둡니다" 였다.** 크래시 경로에서 거짓이다 —
+// 뿌리 수정이 죽은 자식을 표에서 지운 뒤라 `owns(null)=false` 가 되고, 이 문장이
+// **지배적으로** 그 경우에 나온다 (QA 실측 2026-08-16: 크래시 사다리에서 ownership 은
+// 언제나 `theirs`). 그때 「다른 서버」는 없다. 두 경우에 다 참인 문장으로 고쳐 쓴다.
 const ADOPT_ADVICE =
-  '이 프로젝트용 서버를 새로 띄웁니다 — 이미 떠 있는 다른 서버는 그대로 둡니다'
+  '이 프로젝트용 서버를 새로 띄웁니다 — 우리가 띄우지 않은 서버는 건드리지 않습니다'
 
 /** 세션이 대화 가능한 상태인가 (doctorPipeline 의 치유 성공 판정도 이것을 쓴다) */
 export function sessionUp(status: ProjectStatus): boolean {

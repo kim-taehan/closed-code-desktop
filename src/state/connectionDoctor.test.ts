@@ -37,13 +37,15 @@ describe('diagnoseIssues — 세션의 시각', () => {
   //
   // 한때 버튼이 둘로 갈렸다(재시작/갈아타기). **조치는 하나로 접혔고 안내만 갈린다** —
   // `pool.stop` 이 우리 자식만 끄므로 한 조치가 두 경우를 다 덮는다 (설계 §1 정정).
-  it('서버가 죽고 주인을 모르면 남의 서버를 살려 둔다고 안내한다', () => {
+  it('서버가 죽고 주인을 모르면 남의 것은 안 건드린다고 안내한다', () => {
     const [issue] = diagnoseIssues('ready', diag(false, '연결 거부'))
     expect(issue?.layer).toBe('opencode 서버')
     expect(issue?.cause).toBe('연결 거부')
     expect(issue?.fix).toBe('restart-server')
-    // 남의 서버를 살려 둔다는 사실이 안내에 그대로 있어야 한다 (설계 §6 미결 1)
-    expect(issue?.advice).toContain('그대로 둡니다')
+    // 남의 프로세스를 안 건드린다는 사실이 안내에 그대로 있어야 한다 (설계 §6 미결 1).
+    // **"이미 떠 있는 다른 서버는 그대로 둡니다" 였다** — 크래시 경로에서는 「다른 서버」가
+    // 없어 거짓이었다. 그 경우가 이 문구의 지배적 경우다 (QA 실측 2026-08-16).
+    expect(issue?.advice).toContain('건드리지 않습니다')
   })
 
   // ⭐ 조치는 같고 **말이 갈린다** — 앞은 있던 것을 접었다 띄우고, 뒤는 없던 것을 세운다
