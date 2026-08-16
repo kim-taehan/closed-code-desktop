@@ -14,7 +14,7 @@ import { desktopMcpPorts, type DesktopMcpDeps } from './appWiring'
 vi.mock('electron', () => ({ ipcMain: { on: () => {}, removeListener: () => {} } }))
 
 const settings: DesktopMcpDeps['settings'] = () => Promise.resolve({ desktopMcp: false } as never)
-/** 여기서 겨누는 것은 포트 넷의 세대다 — 서버 주소는 쓰이지 않는다 */
+/** 여기서 겨누는 것은 포트들의 세대다 — 서버 주소는 쓰이지 않는다 */
 const serverUrl: DesktopMcpDeps['serverUrl'] = () => null
 
 function registryOf(projects: { id: string; root: string }[], activeId: string | null) {

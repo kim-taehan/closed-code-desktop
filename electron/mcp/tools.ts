@@ -24,7 +24,6 @@ export interface McpToolPorts {
   rootOf(projectId: string): string | null
   /** 지금 앞에 나와 있는 프로젝트 (`ProjectRegistry.active`) */
   focusedProjectId(): string | null
-  /** 편집기에서 보고 있는 파일 — 렌더러가 알려 준 마지막 값 (`ActiveFileTracker`) */
   /** 화면에 파일을 연다. 창이 없어 못 보냈으면 false */
   openInView(projectId: string, target: OpenTarget): boolean
   /**
@@ -46,9 +45,15 @@ export interface McpToolPorts {
   /**
    * 실행 목록을 두는 앱 저장소 폴더 (`~/Library/Application Support/.../run-lists`).
    *
-   * **경로를 여기서 짓지 않고 받는다** — `app.getPath('userData')` 를 아는 것은 `main.ts`
-   * 하나이고(`extensions/hostPorts.ts` 의 `userDataDir` 과 같은 규칙), 그래야 이 파일의
-   * 시험이 electron 을 안 물어 온다.
+   * **경로를 여기서 짓지 않고 받는다** — 이 폴더를 짓는 것은 `run/runListDir.ts` 하나이고
+   * (`extensions/hostPorts.ts` 의 `userDataDir` 과 같은 규칙), 그래야 이 파일의 시험이
+   * electron 을 안 물어 온다.
+   *
+   * **여기는 함수로 받고 `ipc/runListHandlers.ts` 는 이미 부른 문자열(`dir`)로 받는다.**
+   * 같은 폴더를 보는 두 배선인데 모양이 갈린 것은 배선 시점이 달라서다 — 이쪽은 포트 표를
+   * 짤 때(`mcp/appWiring.ts`) 함수를 그대로 얹고, 저쪽은 핸들러를 등록할 때
+   * (`ipc/projectBridge.ts`) 한 번 불러 넣는다. **둘이 같은 폴더를 봐야 한다**
+   * (`runListDir.ts` 머리말, `ipc/runListWiring.test.ts`).
    */
   runListDir(): string
   /**
@@ -68,7 +73,7 @@ export function createToolRunner(ports: McpToolPorts): RunProjectTool {
     // 탭을 닫는다고 지워지지 않는다). 그때 아무 파일도 건드리지 않는다.
     if (root === null) throw new Error('닫힌 프로젝트입니다')
 
-    // **뒤에 있는 프로젝트에는 아무것도 못 한다** — 도구 둘이 같은 규칙을 쓴다.
+    // **뒤에 있는 프로젝트에는 아무것도 못 한다** — 화면을 건드리는 도구들이 같은 규칙을 쓴다.
     // 이 앱은 프로젝트를 옮길 때 파일 탭을 비우고(`src/state/useOpenFiles.ts`), 셸 칸도
     // 앞에 나와 있는 프로젝트의 것 하나뿐이다(`useShellDrawer`). 뒤에서 해 봐야 사용자가
     // 돌아오는 순간 사라지거나 남의 프로젝트 화면에 나타난다.

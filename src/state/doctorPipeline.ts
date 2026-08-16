@@ -103,9 +103,14 @@ export function initPipeline(sessionOk: boolean): PipelineState {
 /**
  * state.next 의 실행 결과를 먹여 다음 상태를 얻는다. sessionOk 는 호출 시점의 세션 상태.
  *
- * `ownership` 은 ②로 내려갈 때만 읽는다 — **기본값이 `theirs`** 인 것이 안전 장치다.
- * 안 넘기면 「남의 서버」로 보고 갈아타기를 고르므로, 배선을 빠뜨려도 남의 프로세스를
- * 끄는 쪽으로는 틀리지 않는다.
+ * `ownership` 은 ②로 내려갈 때만 읽는다. **여기에 안전 장치는 없다** — 조치는 하나이고
+ * `ownership` 은 로그 문장만 가른다 (`startServerHeal`). 남의 프로세스를 안 끄는 방어는
+ * 이 층이 아니라 `serverPool.stop` 의 사정거리(우리 표의 자식만 접는다)가 진다.
+ *
+ * **예전 주석은 여기에 fail-safe 가 있다고 적혀 있었다** — *"기본값이 `theirs` 라 안 넘기면
+ * 「남의 서버」로 보고 갈아타기를 고른다"*. 그 「갈아타기」 칸은 `9090c7c` 로 없어졌고,
+ * 배선을 빠뜨렸을 때 기본값이 지켜 주는 것은 로그 문장뿐이다. 이 함수를 읽고 방어를
+ * 기대하면 틀린다.
  */
 export function advance(
   state: PipelineState,

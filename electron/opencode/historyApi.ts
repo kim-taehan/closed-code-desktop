@@ -106,7 +106,12 @@ export async function deleteSession(
   await request('DELETE', sessionPath(`/${encodeURIComponent(sessionId)}`, directory))
 }
 
-/** 대화 제목을 바꾼다 (`/rename`). 본문은 `{title}` 하나면 된다 (`/doc` 의 `session.update`). */
+/**
+ * 대화 제목을 바꾼다 — `PATCH /session/:id`. 본문은 `{title}` 하나면 된다 (`/doc` 의 `session.update`).
+ *
+ * **`/rename` 엔드포인트가 아니다.** davis 에는 그 이름의 문이 따로 있었고 주석이 그대로
+ * 따라왔다 — opencode 는 세션 갱신 하나로 받는다.
+ */
 export async function renameSession(
   request: Requester,
   sessionId: string,

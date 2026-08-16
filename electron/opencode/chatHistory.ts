@@ -204,7 +204,10 @@ async function removeChat(
   return null
 }
 
-/** 제목 변경 (`/rename`). 화면은 이미 낙관적으로 바꿔 뒀고, 여기 응답이 정본으로 덮는다. */
+/**
+ * 제목 변경 (`PATCH /session/:id` — `/rename` 엔드포인트가 아니다, `historyApi.renameSession`).
+ * 화면은 이미 낙관적으로 바꿔 뒀고, 여기 응답이 정본으로 덮는다.
+ */
 async function renameChat(
   deps: HistoryDeps,
   data: Record<string, unknown>,

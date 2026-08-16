@@ -37,9 +37,12 @@ export interface DesktopMcpDeps {
 }
 
 /**
- * 앱 상태를 읽는 포트 넷. **따로 내보내는 이유는 시험 때문이다** —
- * 낡은 세대를 보는지는 이 넷을 직접 두들겨야 알 수 있고, `DesktopMcp` 안을 들추면
+ * 앱 상태를 읽는 포트 전부. **따로 내보내는 이유는 시험 때문이다** —
+ * 낡은 세대를 보는지는 이 포트들을 직접 두들겨야 알 수 있고, `DesktopMcp` 안을 들추면
  * private 에 기대는 시험이 된다.
+ *
+ * (**개수를 적지 않는다.** 「넷」이라고 적혀 있었고 그 사이 여덟이 됐다 — 포트를 더할 때마다
+ * 이 줄을 고칠 사람은 없다.)
  */
 export function desktopMcpPorts(deps: DesktopMcpDeps): McpToolPorts {
   return {

@@ -15,7 +15,14 @@ import { diskFingerprint } from '../run/runManifestDisk'
 export interface RunListHandlerDeps {
   /** 열린 프로젝트의 루트. 닫힌(또는 모르는) 프로젝트면 null */
   rootOf(projectId: string): string | null
-  /** 실행 목록 저장소 폴더 (`main.ts` 가 `userData` 에서 짓는다) */
+  /**
+   * 실행 목록 저장소 폴더 (`run/runListDir.ts` 가 `userData` 에서 짓는다).
+   *
+   * **여기는 이미 부른 문자열로 받고 `mcp/tools.ts` 는 함수(`runListDir()`)로 받는다** —
+   * 배선 시점이 달라서다. 이쪽은 핸들러를 등록할 때(`ipc/projectBridge.ts`) 한 번 부르고,
+   * 저쪽은 포트 표를 짤 때(`mcp/appWiring.ts`) 함수를 그대로 얹는다.
+   * **둘이 같은 폴더를 봐야 한다** (`ipc/runListWiring.test.ts`).
+   */
   dir: string
 }
 
