@@ -70,6 +70,7 @@ import {
   type SessionStatePayload,
   type TurnEvent,
 } from '../shared/ipc/channels'
+import type { ServerStatusPayload } from '../shared/ipc/diagnosticsTypes'
 import type { McpState } from '../shared/protocol/mcpConfig'
 import type { LlmModelStatePayload } from '../shared/protocol/llmConfig'
 import type { UserNotification } from '../shared/protocol/notification'
@@ -167,17 +168,13 @@ const bridge: DesktopBridge = {
     ipcRenderer.invoke(Channel.MODEL_CHECK) as Promise<{ ok: boolean; message: string }>,
   pingServer: () =>
     ipcRenderer.invoke(Channel.SERVER_PING) as Promise<{ ok: boolean; detail: string }>,
-  serverStatus: () =>
-    ipcRenderer.invoke(Channel.SERVER_STATUS) as Promise<{
-      running: boolean
-      url: string | null
-      pid: number | null
-    }>,
+  // `ours` 는 **main 이 `pidStore` 로 낸 판정**이다 — 렌더러는 다시 재지 않는다
+  serverStatus: () => ipcRenderer.invoke(Channel.SERVER_STATUS) as Promise<ServerStatusPayload>,
   controlServer: (payload: { action: 'start' | 'restart' | 'stop' }) =>
     ipcRenderer.invoke(Channel.SERVER_CONTROL, payload) as Promise<{
       ok: boolean
       error?: string
-      status: { running: boolean; url: string | null; pid: number | null }
+      status: ServerStatusPayload
     }>,
   reconnectProject: () => ipcRenderer.invoke(Channel.SESSION_RECONNECT) as Promise<void>,
   restartRuntime: () => ipcRenderer.invoke(Channel.RUNTIME_RESTART) as Promise<void>,

@@ -32,13 +32,21 @@ describe('diagnoseIssues — 세션의 시각', () => {
     expect(diagnoseIssues('ready', diag(true))).toEqual([])
   })
 
-  // 우리가 띄운 프로세스가 아니라 재시작 버튼을 줄 수 없다 — 안내만 준다
-  it('서버가 죽으면 원인과 안내를 주되 조치 버튼은 안 준다', () => {
+  // **「조치 버튼은 안 준다」 였다** — *"우리가 띄운 프로세스가 아니라 재시작 버튼을 줄 수
+  // 없다"*. 서버를 우리가 띄우게 되면서(`c09cac8`) 그 전제가 뒤집혔다. 대신 **갈래가 생겼다**:
+  // 우리 것이면 재시작, 아니면 갈아타기. **모르면 갈아타기다** — 남의 것은 안 끈다.
+  it('서버가 죽고 주인을 모르면 갈아타기 버튼을 준다', () => {
     const [issue] = diagnoseIssues('ready', diag(false, '연결 거부'))
     expect(issue?.layer).toBe('opencode 서버')
     expect(issue?.cause).toBe('연결 거부')
-    expect(issue?.fix).toBeUndefined()
-    expect(issue?.advice).toContain('opencode serve')
+    expect(issue?.fix).toBe('adopt-server')
+    // 남의 서버를 살려 둔다는 사실이 안내에 그대로 있어야 한다 (설계 §6 미결 1)
+    expect(issue?.advice).toContain('그대로 둡니다')
+  })
+
+  it('우리가 띄운 서버면 재시작 버튼을 준다', () => {
+    const [issue] = diagnoseIssues('ready', diag(false, '연결 거부'), undefined, 'ours')
+    expect(issue?.fix).toBe('restart-server')
   })
 
   it('서버 detail 이 비면 기본 문장을 쓴다', () => {
@@ -110,11 +118,19 @@ describe('stepIssues — 파이프라인이 직접 본 것', () => {
     expect(stepIssues(state)).toEqual([])
   })
 
-  it('server 실패는 원인과 `opencode serve` 안내를 준다', () => {
+  // **`opencode serve` 안내였다.** 현장 사용자에게는 터미널이 없어 못 따라 할 지시다 —
+  // 앱이 띄우게 된 뒤로는 버튼이 그 자리를 대신한다 (`connectionDoctor.ts` 의 지운 상수).
+  it('server 실패는 원인과 조치 버튼을 준다', () => {
     const [issue] = stepIssues(afterServerFail('응답이 없습니다 (5000ms 초과)'))
     expect(issue?.layer).toBe('opencode 서버')
     expect(issue?.cause).toBe('응답이 없습니다 (5000ms 초과)')
-    expect(issue?.advice).toContain('opencode serve')
+    expect(issue?.fix).toBe('adopt-server')
+    expect(issue?.advice).not.toContain('opencode serve')
+  })
+
+  it('server 실패의 버튼도 주인 판정을 따른다', () => {
+    const [issue] = stepIssues(afterServerFail('응답이 없습니다'), 'ours')
+    expect(issue?.fix).toBe('restart-server')
   })
 
   // 모델 문제의 다음 행동은 재연결이 아니라 **설정 파일**이다

@@ -6,6 +6,8 @@ import { ConnectionTest } from './ConnectionTest'
 import { ExtensionAskText } from './ExtensionAskText'
 import { useExtensionAskText } from '../state/useExtensionAskText'
 import { useDoctorGate } from '../state/useDoctorGate'
+import { useAutoHeal } from '../state/useAutoHeal'
+import { HealBanner } from './HealBanner'
 import type { ProjectRecord } from '../../shared/projects/projectRecord'
 import type { McpState } from '../../shared/protocol/mcpConfig'
 import type { ProjectStatus } from '../state/projectStatus'
@@ -40,11 +42,18 @@ export interface AppDialogsProps {
 export function AppDialogs(props: AppDialogsProps) {
   // 확장이 사람에게 묻는 창. 스스로 구독하므로 부르는 쪽이 넘길 것이 없다.
   const askText = useExtensionAskText()
-  // 연결에 실패한 프로젝트를 열면 진단을 **스스로 띄운다** (프로젝트당 한 번).
+  // 세션이 깨지면 **스스로 사다리를 탄다** (설계 2026-08-16).
+  // 배지를 눌러 연 팝업이 떠 있는 동안에는 시작하지 않는다 — 그 창도 같은 사다리를 몰기
+  // 때문에 겹치면 조치가 두 번 나간다.
+  // (게이트가 연 창은 **이미 돈 사다리를 그리기만** 하므로 겹칠 것이 없다.)
+  const heal = useAutoHeal(props.project?.id, props.status, { enabled: !props.testingOpen })
+  // 사다리가 **다 실패한** 프로젝트만 진단을 스스로 띄운다 (프로젝트당 한 번).
   // 판정이 여기 있는 이유는 `status`·`project` 가 이미 여기 오기 때문이다 — App 은 안 고친다.
-  const gate = useDoctorGate(props.project?.id, props.status)
+  const gate = useDoctorGate(props.project?.id, heal.failed)
   return (
     <>
+      {/* 상태줄·배너. 창이 뜨기 전 단계의 표시라 다이얼로그들과 같은 자리에 산다 */}
+      <HealBanner notice={heal.notice} />
 
       {props.palette === 'quickOpen' && (
         <QuickOpen onOpen={props.onOpenFile} onClose={props.onClosePalette} />
@@ -83,6 +92,12 @@ export function AppDialogs(props: AppDialogsProps) {
             ? // 프로젝트가 있을 때만 연결 열을 연다 — 서버가 프로젝트마다 하나라
               // 열린 것이 없으면 보여 줄 주소도 다시 붙을 곳도 없다
               { fix: true }
+            : {})}
+          {...(gate.open && !props.testingOpen && heal.result
+            ? // 게이트가 연 창은 **이미 돈 사다리를 그린다** — 여기서 또 돌면 서버 재시작이
+              // 한 번 더 나가고 그것이 재시작 루프다 (설계 §2). 배지를 눌러 연 창
+              // (`testingOpen`)은 사용자가 새로 재라는 뜻이라 주지 않는다.
+              { initial: heal.result }
             : {})}
           onClose={() => {
             // 어느 쪽으로 열렸든 닫는 손짓은 하나다 — 둘 다 내려야 한 번에 닫힌다

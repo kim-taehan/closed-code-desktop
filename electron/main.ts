@@ -155,6 +155,7 @@ async function createWindow(): Promise<void> {
       // 진단·설정 조회는 **활성 프로젝트의 서버**에 묻는다. 없으면 null 이고, 그 자리는
       // "아직 안 뜬 것" 과 "못 띄운 것" 을 구별하지 않는다 — 둘 다 물을 곳이 없다.
       activeServerUrl: () => opencodeServers.urlOf(registry.active?.id),
+      // 「다시 시작」·「서버 시작」이 여기서 갈리고, Doctor 사다리 ②의 갈래도 같은 값을 쓴다
       serverStatus: () => opencodeServers.statusOf(registry.active?.id),
       // 사용자가 「연결」 팝업에서 직접 시작·다시 시작·종료한다 (설계 2026-08-14)
       onServerControl: async (action) => {

@@ -64,6 +64,23 @@ export class ServerPidStore {
     this.write([...this.list().filter((kept) => kept.pid !== record.pid), record])
   }
 
+  /**
+   * **그 PID 가 우리가 띄운 opencode 서버로 지금 살아 있나.** Doctor 사다리 ②의 갈래가
+   * 이 한 물음으로 갈린다 (재시작이냐 갈아타기냐 — 설계 2026-08-16 §1).
+   *
+   * 회수(`reap`)와 **같은 두 겹**을 쓴다: 기록에 있고 + 명령줄이 우리가 띄운 그 모양인가.
+   * 죽이기 직전에만 물어보던 것을 "죽여도 되나" 를 미리 묻는 자리에서도 쓰는 것이라,
+   * 판정 기준이 갈리지 않게 `isOurServer` 하나를 공유한다.
+   *
+   * **모르면 false 다** — 기록이 없든, 프로세스가 죽었든, 그 번호를 남이 물려받았든
+   * 전부 "우리 것이 아니다" 로 답한다. 안전한 쪽으로 틀린다.
+   */
+  owns(pid: number | null): boolean {
+    if (pid === null) return false
+    const record = this.list().find((kept) => kept.pid === pid)
+    return record !== undefined && isOurServer(record)
+  }
+
   /** 곱게 거둔 것은 지운다. 안 지우면 다음 실행이 남의 PID 를 들여다본다. */
   forget(pid: number): void {
     this.write(this.list().filter((record) => record.pid !== pid))

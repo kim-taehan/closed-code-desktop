@@ -100,7 +100,7 @@ describe('IPC 배선', () => {
         onReconnect: async () => {},
         onRestartRuntime: () => Promise.resolve(),
         activeServerUrl: () => null,
-        serverStatus: () => ({ running: false, url: null, pid: null }),
+        serverStatus: () => ({ running: false, url: null, pid: null, ours: false }),
         onServerControl: () => Promise.resolve(),
       },
       settings,

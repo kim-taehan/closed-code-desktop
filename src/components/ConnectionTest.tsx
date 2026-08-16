@@ -18,11 +18,22 @@ export interface ConnectionTestProps {
   intro?: string
   /** Doctor 인라인 수정 폼 재료 — 있으면 주소·키를 이 팝업 안에서 바로 고친다 */
   fix?: ConnectionDoctorProps['fix']
+  /** 자가 복구가 이미 돌고 실패한 사다리 — 주면 창이 **다시 돌리지 않는다** */
+  initial?: ConnectionDoctorProps['initial']
   /** 진단이 초록으로 끝났다 — 자동 게이트(`useDoctorGate`)가 이걸로 스스로 닫는다 */
   onHealthy?: () => void
 }
 
-export function ConnectionTest({ status, projectPath, failure, onClose, intro, fix, onHealthy }: ConnectionTestProps) {
+export function ConnectionTest({
+  status,
+  projectPath,
+  failure,
+  onClose,
+  intro,
+  fix,
+  initial,
+  onHealthy,
+}: ConnectionTestProps) {
   return (
     <div className="dc-modal" role="dialog" aria-label="프로젝트 연결" onClick={onClose}>
       {/* 좌우 두 열(설정 | 자가 진단)이 들어가는 유일한 팝업이라 카드가 넓다 */}
@@ -42,6 +53,7 @@ export function ConnectionTest({ status, projectPath, failure, onClose, intro, f
           status={status}
           failure={failure}
           {...(fix ? { fix } : {})}
+          {...(initial ? { initial } : {})}
           {...(onHealthy ? { onHealthy } : {})}
         />
       </div>

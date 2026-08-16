@@ -1,25 +1,21 @@
 import { useEffect, useRef, useState } from 'react'
 import type { DiagnosticsPayload } from '../../shared/ipc/channels'
 import type { ProjectStatus } from '../state/projectStatus'
-import { diagnoseIssues, sessionUp, stepIssues, type DoctorFix } from '../state/connectionDoctor'
-import {
-  advance,
-  initPipeline,
-  type CheckOutcome,
-  type DoctorCommand,
-  type PipelineState,
-} from '../state/doctorPipeline'
-import { awaitHealthy, probeModels, probeRuntime, probeServer } from '../state/connectionProbe'
+import { diagnoseIssues, stepIssues, type DoctorFix } from '../state/connectionDoctor'
+import type { PipelineState, ServerOwnership } from '../state/doctorPipeline'
+import { currentOwnership, driveDoctor } from '../state/doctorDriver'
 import { ConnectionFixForm } from './ConnectionFixForm'
 import { DoctorSteps, IssueList, mergeIssues } from './DoctorSteps'
 
-// 연결 진단·복구(Doctor) — 오토힐링 파이프라인의 드라이버.
+// 연결 진단·복구(Doctor) — 오토힐링 파이프라인을 **화면에서** 구동하는 자리.
 //
-// 열면 곧바로 순차 진단(opencode 서버 ping → 모델 조회 → 연결 상태)을 돌리고,
-// 세션만 문제면 재연결로 자동 치유를 시도한다. **여기서 부르는 조치는 재연결 하나뿐이다**
-// (`RUN`) — 서버를 접었다 다시 띄우는 길(`restartRuntime`)은 생겼지만, 사다리에 얹으려면
-// 그 판정을 doctorPipeline 이 낼 수 있어야 한다. 아직 없다.
-// 전이 판단은 전부 doctorPipeline(순수 머신)이 하고, 여기는 부작용 실행과 그리기만 한다.
+// 열면 곧바로 순차 진단(opencode 서버 ping → 모델 조회 → 연결 상태)을 돌리고, 문제가 있으면
+// 사다리를 탄다: 재연결 → 서버 되살리기 → 재연결 (설계 2026-08-16 §1).
+// **부작용을 부르는 코드는 여기 없다** — `state/doctorDriver.ts` 로 뗐다. 자가 복구
+// (`useAutoHeal`)가 팝업이 안 열린 상태에서도 같은 사다리를 타야 했기 때문이다.
+// *"여기서 부르는 조치는 재연결 하나뿐이다"* 라고 적혀 있던 자리이고, 같은 주석이
+// *"서버를 접었다 다시 띄우는 길은 생겼지만 판정을 doctorPipeline 이 못 낸다"* 고
+// 예고해 뒀다 — 그 판정이 생겨서(`ServerStatusPayload.ours`) 사다리가 붙었다.
 //
 // 화면은 좌우 두 열이다: **왼쪽 = 이 프로젝트의 연결, 오른쪽 = 앱이 확인한 것(자가 진단)**.
 // 왼쪽이 한때 "내가 바꾸는 것" 이었다 — 서버 주소를 사용자가 넣던 시절이다.
@@ -38,6 +34,15 @@ export interface ConnectionDoctorProps {
    */
   fix?: boolean
   /**
+   * **이미 다 돌고 실패한 사다리.** 자가 복구가 최종 실패해 이 창이 저절로 열린 경우다
+   * (설계 §3 의 2단 승격 마지막 칸).
+   *
+   * 주면 **처음에 다시 돌지 않는다.** 여기서 또 돌면 서버 재시작이 한 번 더 나가고,
+   * 그것이 곧 설계가 막으려는 **재시작 루프**다 (§2 「자동으로 한 번만」).
+   * 다시 타는 것은 사용자가 「연결 시도」·「다시 진단」을 누를 때뿐이다.
+   */
+  initial?: PipelineState
+  /**
    * 진단이 초록(healthy/healed)으로 끝났다 — **자동 게이트가 스스로 닫는 신호**다
    * (`src/state/useDoctorGate.ts`). 배지를 눌러 연 팝업은 이걸로 안 닫힌다 — 그쪽은
    * `App` 이 `testingOpen` 을 쥐고 있다.
@@ -48,20 +53,24 @@ export interface ConnectionDoctorProps {
   onHealthy?: () => void
 }
 
+/** 수동 「고치기」 버튼이 부르는 것. 사다리가 자동으로 부르는 것과 **같은 조치**다. */
 const RUN: Record<DoctorFix, () => Promise<unknown>> = {
   reconnect: () => window.davis.reconnectProject(),
+  // 우리가 띄운 서버를 접었다 다시 띄운다
+  'restart-server': () => window.davis.controlServer({ action: 'restart' }),
+  // 남의 서버는 **그대로 두고** 이 프로젝트용을 새로 띄운다 — `start` 는 아무것도 안 끈다
+  'adopt-server': () => window.davis.controlServer({ action: 'start' }),
 }
 
-/** 재연결 재확인 (1초 × N). 떠 있는 서버에 붙는 것뿐이라 길게 기다릴 이유가 없다. */
-const RECONNECT_TRIES = 3
-
-export function ConnectionDoctor({ status, failure, fix, onHealthy }: ConnectionDoctorProps) {
-  const [pipeline, setPipeline] = useState<PipelineState | null>(null)
+export function ConnectionDoctor({ status, failure, fix, initial, onHealthy }: ConnectionDoctorProps) {
+  const [pipeline, setPipeline] = useState<PipelineState | null>(initial ?? null)
   const [lastDiag, setLastDiag] = useState<DiagnosticsPayload | null>(null)
   /** 올리면 파이프라인이 처음부터 다시 돈다 ("다시 진단"·수동 조치 뒤) */
   const [round, setRound] = useState(0)
   const [busy, setBusy] = useState<DoctorFix | null>(null)
   const [note, setNote] = useState<string | null>(null)
+  /** 이슈 목록의 버튼이 「다시 시작」이냐 「갈아타기」냐 — main 이 낸 판정을 그대로 쓴다 */
+  const [ownership, setOwnership] = useState<ServerOwnership>('theirs')
   /** 사용자가 "중지" 를 눌렀다 — 재시작·재연결이 오래 걸릴 때 손을 뗄 수 있어야 한다 */
   const [halted, setHalted] = useState(false)
   const haltRef = useRef(false)
@@ -70,66 +79,35 @@ export function ConnectionDoctor({ status, failure, fix, onHealthy }: Connection
   statusRef.current = status
   const onHealthyRef = useRef(onHealthy)
   onHealthyRef.current = onHealthy
+  /** 첫 회전을 건너뛸지 — 이미 돈 사다리를 받았으면 그것을 그리기만 한다 */
+  const preRun = useRef(initial !== undefined)
 
   useEffect(() => {
+    if (preRun.current) {
+      preRun.current = false
+      return
+    }
     let stopped = false
     // 새 회전은 언제나 처음부터 — 앞 회전에서 눌린 중지를 물려받지 않는다
     haltRef.current = false
     setHalted(false)
 
-    async function pingRuntime(): Promise<CheckOutcome> {
-      const { outcome, diag } = await probeRuntime()
-      if (!stopped) setLastDiag(diag)
-      // 이 단계는 "지금 연결됐나" 를 답한다 — 런타임 ping 에 세션 상태를 붙여 보여준다
-      if (!outcome.ok) return outcome
-      return {
-        ...outcome,
-        detail: `${outcome.detail} · 세션 ${sessionUp(statusRef.current) ? '연결됨' : '끊김'}`,
-      }
-    }
-
-    /**
-     * 치유 액션 뒤 재확인 (공용 awaitHealthy) — 살아나는 즉시 통과.
-     * 재연결은 이미 떠 있는 런타임에 붙는 것뿐이라 3초면 충분하다 (사용자 지시).
-     * 재시작은 프로세스가 다시 뜨는 시간이 필요해 그대로 15초를 기다린다.
-     */
-    function recheck(tries: number): Promise<CheckOutcome> {
-      return awaitHealthy(() => statusRef.current, {
-        tries,
+    void (async () => {
+      const state = await driveDoctor({
+        getStatus: () => statusRef.current,
+        onState: (next) => {
+          if (!stopped) setPipeline(next)
+        },
         onDiag: (diag) => {
           if (!stopped) setLastDiag(diag)
         },
-        // 중지를 누르면 재확인 폴링도 즉시 그만둔다
         shouldStop: () => stopped || haltRef.current,
       })
-    }
-
-    async function run(command: DoctorCommand): Promise<CheckOutcome> {
-      switch (command) {
-        // 저장된 주소로 본다 — 실제 세션이 쓰는 값이 살아 있는지를 확인해야 한다.
-        case 'server':
-          return probeServer()
-        case 'model':
-          return probeModels()
-        case 'session':
-          return pingRuntime()
-        case 'heal-reconnect':
-          await window.davis.reconnectProject()
-          return recheck(RECONNECT_TRIES)
-      }
-    }
-
-    void (async () => {
-      let state = initPipeline(sessionUp(statusRef.current))
-      setPipeline(state)
-      while (state.next !== null && !stopped && !haltRef.current) {
-        const outcome = await run(state.next)
-        if (stopped) return
-        state = advance(state, outcome, sessionUp(statusRef.current))
-        setPipeline(state)
-      }
+      if (stopped) return
+      // 이슈 목록의 버튼을 고르려면 지금 서버가 우리 것인지가 필요하다
+      setOwnership(await currentOwnership())
       // 초록으로 끝났다 — 최초 등록 게이트가 이 신호로 자동 닫힘한다
-      if (!stopped && !haltRef.current && (state.verdict === 'healthy' || state.verdict === 'healed')) {
+      if (!haltRef.current && (state.verdict === 'healthy' || state.verdict === 'healed')) {
         onHealthyRef.current?.()
       }
     })()
@@ -142,11 +120,11 @@ export function ConnectionDoctor({ status, failure, fix, onHealthy }: Connection
   }, [round])
 
   /** 수동 재시도 (사다리가 못 고친 뒤). 조치가 끝나면 파이프라인을 다시 돌린다. */
-  async function apply(fix: DoctorFix) {
-    setBusy(fix)
+  async function apply(pick: DoctorFix) {
+    setBusy(pick)
     setNote(null)
     try {
-      await RUN[fix]()
+      await RUN[pick]()
       setRound((value) => value + 1)
     } finally {
       setBusy(null)
@@ -157,7 +135,13 @@ export function ConnectionDoctor({ status, failure, fix, onHealthy }: Connection
   const running = !halted && (pipeline === null || pipeline.next !== null)
   const verdict = pipeline?.verdict ?? null
   // 런타임의 시각(diagnoseIssues) + 파이프라인 자체 판정(직접 ping·라이선스)을 합친다
-  const issues = verdict === 'manual' && pipeline ? mergeIssues(diagnoseIssues(status, lastDiag, failure), stepIssues(pipeline)) : []
+  const issues =
+    verdict === 'manual' && pipeline
+      ? mergeIssues(
+          diagnoseIssues(status, lastDiag, failure, ownership),
+          stepIssues(pipeline, ownership),
+        )
+      : []
 
   return (
     <div className={`dc-doctor${fix ? '' : ' dc-doctor--single'}`}>
@@ -239,4 +223,3 @@ export function ConnectionDoctor({ status, failure, fix, onHealthy }: Connection
     </div>
   )
 }
-

@@ -1,19 +1,35 @@
 import type { DiagnosticsPayload } from '../../shared/ipc/channels'
 import type { ProjectStatus } from './projectStatus'
-import type { DoctorStep, DoctorStepId, PipelineState } from './doctorPipeline'
+import type { DoctorStep, DoctorStepId, PipelineState, ServerOwnership } from './doctorPipeline'
 
 // 연결 진단·복구(Doctor)의 판정 로직.
 //
 // "어디가 끊겼는지" 에 따라 고치는 법이 다르다:
-//   opencode 서버가 없음 → **우리가 못 고친다.** `opencode serve` 안내
-//   모델 설정이 없음     → 설정 파일 안내
-//   세션만 끊김          → 재연결 (**우리가 할 수 있는 유일한 조치**)
+//   opencode 서버가 없음 → **우리가 띄운다.** 우리 것이면 다시 시작, 아니면 갈아타기
+//   모델 설정이 없음     → 설정 파일 안내 (**우리가 못 고치는 유일한 층**)
+//   세션만 끊김          → 재연결
 //
-// davis 때 있던 재시작·재설치는 없다 — 런타임을 우리가 띄우지 않기 때문이다.
+// **이 자리에 *"davis 때 있던 재시작·재설치는 없다 — 런타임을 우리가 띄우지 않기 때문이다"*
+// 라고 적혀 있었다.** 커밋 `c09cac8` 이후 그 전제가 뒤집혔다: opencode 서버는 **프로젝트마다
+// 우리가 띄운다**(`electron/opencode/serverPool.ts`). 그래서 재시작이 돌아왔다.
+// 재설치는 여전히 없다 — 실행 파일은 우리가 설치하지 않는다 (`binary.ts`).
+//
 // 순수 함수라 화면 없이 단언한다.
 
-/** 한 번에 실행 가능한 복구 액션. opencode 에서는 재연결 하나뿐이다. */
-export type DoctorFix = 'reconnect'
+/**
+ * 한 번에 실행 가능한 복구 액션.
+ *
+ * **`'reconnect'` 하나뿐이었다** (위 머리말의 뒤집힌 전제와 같은 뿌리다).
+ * 지금은 서버를 되살리는 둘이 더 있고, **그 둘은 서로 다른 것을 한다**:
+ *
+ * | | 무엇을 | 남의 프로세스 |
+ * |---|---|---|
+ * | `restart-server` | 우리가 띄운 그 서버를 접었다 다시 띄운다 | 손대지 않는다 (우리 표의 자식만 접는다) |
+ * | `adopt-server` | 이 프로젝트용 서버를 **새로** 띄운다 | **살려 둔다** — 끄지 않는다 |
+ *
+ * 갈래는 `ServerStatusPayload.ours` 하나로 정해지고, **모르면 `adopt` 다.**
+ */
+export type DoctorFix = 'reconnect' | 'restart-server' | 'adopt-server'
 
 export interface DoctorIssue {
   layer: 'opencode 서버' | '모델' | '세션'
@@ -25,7 +41,18 @@ export interface DoctorIssue {
   advice?: string
 }
 
-const SERVE_ADVICE = '`opencode serve --port 4096` 로 서버를 띄우고, 연결 설정의 주소를 확인하세요'
+// **`SERVE_ADVICE` 가 여기 있었다** — *"`opencode serve --port 4096` 로 서버를 띄우고,
+// 연결 설정의 주소를 확인하세요"*. 사용자가 터미널에서 서버를 치던 시절의 안내다.
+// 지금은 앱이 띄우고(`serverPool`), 현장 사용자에게는 터미널이 없다 — 그 문장은 이제
+// **못 따라 할 지시**라서 「고치기」 버튼으로 바꿨다. 남은 안내는 아래 둘뿐이다.
+const RESTART_ADVICE = '이 프로젝트의 서버를 접었다 다시 띄웁니다'
+const ADOPT_ADVICE =
+  '이 프로젝트용 서버를 새로 띄웁니다 — 이미 떠 있는 다른 서버는 그대로 둡니다'
+
+/** ②의 두 조치 중 어느 버튼을 줄 것인가. **모르면 갈아타기다** (남의 것을 안 끈다) */
+export function serverFixFor(ownership: ServerOwnership): DoctorFix {
+  return ownership === 'ours' ? 'restart-server' : 'adopt-server'
+}
 
 /** 세션이 대화 가능한 상태인가 (doctorPipeline 의 치유 성공 판정도 이것을 쓴다) */
 export function sessionUp(status: ProjectStatus): boolean {
@@ -47,6 +74,7 @@ export function diagnoseIssues(
   status: ProjectStatus,
   result: DiagnosticsPayload | null,
   failure?: string,
+  ownership: ServerOwnership = 'theirs',
 ): DoctorIssue[] {
   const issues: DoctorIssue[] = []
   const serverDown = result !== null && !result.runtime.ok
@@ -55,8 +83,10 @@ export function diagnoseIssues(
     issues.push({
       layer: 'opencode 서버',
       cause: result.runtime.detail || 'opencode 서버에 닿지 못했습니다',
-      // 재시작 버튼을 주지 않는다 — 사용자가 띄운 남의 프로세스라 우리가 죽였다 살릴 수 없다.
-      advice: SERVE_ADVICE,
+      // **재시작 버튼을 준다.** 예전에는 안 줬고 근거가 이랬다 — *"사용자가 띄운 남의
+      // 프로세스라 우리가 죽였다 살릴 수 없다."* 우리가 띄우게 되면서 절반이 거짓이 됐다:
+      // 우리 것이면 죽였다 살릴 수 있고, **남의 것이면 여전히 못 한다** — 그래서 갈아타기다.
+      ...serverIssueFix(ownership),
     })
   }
 
@@ -71,8 +101,10 @@ export function diagnoseIssues(
           : failure || '세션을 준비하지 못했습니다',
         // 서버가 죽어 있는 동안엔 재연결 버튼을 주지 않는다 — 눌러도 같은 자리에서 또 실패한다.
         // 고칠 수 없는 버튼은 없느니만 못하다.
+        // 서버가 죽어 있는 동안엔 재연결 버튼을 주지 않는다 — 눌러도 같은 자리에서 또 실패한다.
+        // 그 자리의 조치는 위 「opencode 서버」 이슈가 이미 들고 있다.
         ...(serverDown ? {} : { fix: 'reconnect' as const }),
-        advice: serverDown ? SERVE_ADVICE : '연결 설정의 서버 주소를 확인하고 다시 연결하세요',
+        ...(serverDown ? {} : { advice: '연결 설정의 서버 주소를 확인하고 다시 연결하세요' }),
       })
     } else if (status === 'idle') {
       // 미연결도 이슈다 — 화면엔 세션 ✗ 로 보이는데 "정상" 이라 하면 모순이다.
@@ -96,7 +128,10 @@ export function diagnoseIssues(
  * diagnoseIssues 는 세션의 시각만 알아서, desktop 직접 ping 실패와 모델 미설정을 모른다.
  * 이 둘은 여기서 안내로 바꾼다 (현재 회전 기준).
  */
-export function stepIssues(state: PipelineState): DoctorIssue[] {
+export function stepIssues(
+  state: PipelineState,
+  ownership: ServerOwnership = 'theirs',
+): DoctorIssue[] {
   const issues: DoctorIssue[] = []
 
   const server = lastStep(state.steps, 'server')
@@ -104,7 +139,7 @@ export function stepIssues(state: PipelineState): DoctorIssue[] {
     issues.push({
       layer: 'opencode 서버',
       cause: server.detail || 'opencode 서버에 닿지 못했습니다',
-      advice: SERVE_ADVICE,
+      ...serverIssueFix(ownership),
     })
   }
 
@@ -126,10 +161,20 @@ function lastStep(steps: DoctorStep[], id: DoctorStepId): DoctorStep | undefined
   return [...steps].reverse().find((step) => step.id === id)
 }
 
+/** 서버 이슈에 붙일 조치 + 그 조치가 무엇을 하는지 한 줄 */
+function serverIssueFix(ownership: ServerOwnership): { fix: DoctorFix; advice: string } {
+  const fix = serverFixFor(ownership)
+  return { fix, advice: fix === 'restart-server' ? RESTART_ADVICE : ADOPT_ADVICE }
+}
+
 export const FIX_LABEL: Record<DoctorFix, string> = {
   reconnect: '재연결',
+  'restart-server': '서버 다시 시작',
+  'adopt-server': '우리 서버로 갈아타기',
 }
 
 export const FIX_PROGRESS: Record<DoctorFix, string> = {
   reconnect: '재연결 중…',
+  'restart-server': '서버를 다시 띄우는 중…',
+  'adopt-server': '서버를 띄우는 중…',
 }

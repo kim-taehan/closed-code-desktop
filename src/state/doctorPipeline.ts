@@ -12,42 +12,49 @@
 // davis 시절엔 **Admin 서버 ping → 라이선스 검증 → 런타임 ping** 이었다. opencode 에는
 // 중앙 서버도 라이선스도 없고, 키·사용량·모델 접근 제어는 LLM 프록시가 맡는다.
 //
-// 치유는 **재연결 하나뿐이다.** davis 때는 런타임을 우리가 띄웠으니 재시작·재설치까지
-// 사다리를 태울 수 있었지만, opencode 서버는 사용자가 직접 띄운 남의 프로세스다 —
-// 우리가 죽였다 살릴 수 없다. 그래서 재연결로 안 되면 곧장 수동 안내로 간다.
+// 치유는 **세 칸 사다리다** (설계 2026-08-16):
 //
-// 머신은 순수하다: 부작용(ping·재연결)은 next 로 시키기만 하고,
-// 드라이버(ConnectionDoctor)가 실행해 결과를 advance 로 돌려준다. 화면 없이 단언한다.
+//   ① heal-reconnect                          세션만 다시 붙인다
+//   ② heal-restart-server / heal-adopt-server  서버를 되살린다 (우리 것이냐로 갈린다)
+//   ③ heal-reconnect                           서버를 되살렸다고 세션이 저절로 붙지는 않는다
+//
+// **이 자리에 "치유는 재연결 하나뿐이다" 가 적혀 있었다.** 근거는 *"opencode 서버는
+// 사용자가 직접 띄운 남의 프로세스라 우리가 죽였다 살릴 수 없다"* 였고, 그것은
+// **커밋 `c09cac8`("프로젝트마다 opencode 서버를 우리가 띄운다") 이전까지만 참이었다.**
+// 지금은 `serverPool` 이 띄우고 `pidStore` 가 우리 PID 를 안다 — 그래서 사다리가 돌아왔다.
+// 다만 **남의 서버는 여전히 못 죽인다**: 우리 것이 아니면 재시작이 아니라 갈아타기다.
+//
+// 머신은 순수하다: 부작용(ping·재연결·서버 조작)은 next 로 시키기만 하고,
+// 드라이버(`doctorDriver.ts`)가 실행해 결과를 advance 로 돌려준다. 화면 없이 단언한다.
 
-/**
- * 진단 단계의 순서. **단계를 더할 때 고치는 자리는 여기 하나다.**
- *
- * 원래는 순서가 세 곳에 손으로 나열돼 있었다 — 초기 목록·`server` 실패 시 막을 대상·
- * `model` 실패 시 막을 대상. **타입이 그 셋을 맞춰 주지 않는다.** 4번째 단계를 더하고
- * 막을 목록만 안 고쳐도 타입체크와 기존 테스트가 **전부 초록**이고, 증상은 조용하다:
- * *"실패했는데 뒤 단계가 `·` 로 영원히 남는다."*
- *
- * `drawerKeys.ts` 에서 밟은 것과 같은 결이다 — 거기서도 예외를 손으로 세다가 목록이
- * **태어날 때 이미 낡아 있었고**, 고친 방향은 나열이 아니라 유도였다.
- *
- * 패킹(`06_pack_opencode.md`)이 들어오면 단계가 는다 (포트 선택·기동 대기·프로세스 생사).
- * 그때 이 배열 한 줄이 된다.
- */
-export const DIAG_ORDER = ['server', 'model', 'session'] as const
+import {
+  DIAG_ORDER,
+  LOG_LABEL,
+  blockedAfter,
+  setStep,
+  stepStatus,
+  serverHealFor,
+  type DiagStepId,
+  type DoctorStep,
+  type DoctorStepId,
+  type ServerOwnership,
+} from './doctorSteps'
 
-/** 배열에서 유도한다 — 배열과 union 이 갈리는 자리를 없앤다 */
-export type DiagStepId = (typeof DIAG_ORDER)[number]
-export type HealStepId = 'heal-reconnect'
-export type DoctorStepId = DiagStepId | HealStepId
-
-export type StepStatus = 'pending' | 'running' | 'ok' | 'fail' | 'blocked'
-
-export interface DoctorStep {
-  id: DoctorStepId
-  status: StepStatus
-  /** 화면에 그대로 보여줄 한 줄 (결과가 나온 뒤에만) */
-  detail?: string
-}
+// 단계의 **어휘**(있는 칸·이름표·배열 도구)는 `doctorSteps.ts` 로 갈랐다 (300줄 상한).
+// 부르는 쪽이 두 파일을 알 이유는 없어 여기서 그대로 다시 내보낸다.
+export {
+  DIAG_ORDER,
+  STEP_LABEL,
+  blockedAfter,
+  isHealStep,
+  serverHealFor,
+  type DiagStepId,
+  type DoctorStep,
+  type DoctorStepId,
+  type HealStepId,
+  type ServerOwnership,
+  type StepStatus,
+} from './doctorSteps'
 
 /** 드라이버가 실행할 부작용. heal-* 은 액션 후 재확인(서버 ping + 세션)까지 포함한다. */
 export type DoctorCommand = DoctorStepId
@@ -72,19 +79,6 @@ export interface PipelineState {
 
 const BLOCKED_DETAIL = '앞 단계가 실패해 확인할 수 없습니다'
 
-/**
- * 어떤 단계가 실패했을 때 「앞 단계가 실패해 확인할 수 없습니다」로 칠할 단계들 —
- * **그 뒤에 오는 것 전부.**
- *
- * `order` 를 인자로 받는 이유는 시험하기 위해서다. 단계가 늘어도 유도가 도는지는
- * **가짜 4번째 단계를 넣어 봐야** 알 수 있는데, 상수를 직접 읽으면 그 시험을 못 한다.
- * (`doctorPipeline.ts` 머리주석의 *"화면 없이 단언한다"* 와 같은 결이다.)
- */
-export function blockedAfter(order: readonly DiagStepId[], failedId: DiagStepId): DiagStepId[] {
-  const index = order.indexOf(failedId)
-  return index < 0 ? [] : order.slice(index + 1)
-}
-
 function freshDiagSteps(): DoctorStep[] {
   return DIAG_ORDER.map((id, index) => ({ id, status: index === 0 ? 'running' : 'pending' }))
 }
@@ -107,8 +101,19 @@ export function initPipeline(sessionOk: boolean): PipelineState {
   }
 }
 
-/** state.next 의 실행 결과를 먹여 다음 상태를 얻는다. sessionOk 는 호출 시점의 세션 상태. */
-export function advance(state: PipelineState, outcome: CheckOutcome, sessionOk: boolean): PipelineState {
+/**
+ * state.next 의 실행 결과를 먹여 다음 상태를 얻는다. sessionOk 는 호출 시점의 세션 상태.
+ *
+ * `ownership` 은 ②로 내려갈 때만 읽는다 — **기본값이 `theirs`** 인 것이 안전 장치다.
+ * 안 넘기면 「남의 서버」로 보고 갈아타기를 고르므로, 배선을 빠뜨려도 남의 프로세스를
+ * 끄는 쪽으로는 틀리지 않는다.
+ */
+export function advance(
+  state: PipelineState,
+  outcome: CheckOutcome,
+  sessionOk: boolean,
+  ownership: ServerOwnership = 'theirs',
+): PipelineState {
   if (state.next === null) return state
   const command = state.next
   const done = setStep(state.steps, command, outcome.ok ? 'ok' : 'fail', outcome.detail)
@@ -122,12 +127,18 @@ export function advance(state: PipelineState, outcome: CheckOutcome, sessionOk: 
   switch (command) {
     case 'server':
       if (!outcome.ok) {
-        // 서버에 못 닿으면 모델도 세션도 볼 것이 없다 — 여기서 멈춘다
-        return finishDiagnosis(
+        // 서버에 못 닿으면 모델도 세션도 볼 것이 없다 — **진단은** 여기서 멈춘다.
+        // 그리고 곧장 사다리 ②로 간다: ①(재연결)은 건너뛴다. 서버가 죽은 채로 재연결하면
+        // 같은 자리에서 또 실패하기 때문이고, 그 근거는 `connectionDoctor.ts` 에도 있다.
+        //
+        // **예전에는 여기서 `manual` 로 끝나며 "`opencode serve` 를 치세요" 라고 안내했다.**
+        // 서버가 남의 프로세스이던 시절의 유일한 답이었다 — 지금은 우리가 되살릴 수 있다.
+        return startServerHeal(
           withLog(
             { ...base, steps: blockRest(done, 'server') },
             '서버 실패 → 이후 단계는 진행하지 않습니다',
           ),
+          ownership,
         )
       }
       return { ...base, steps: setStep(done, 'model', 'running'), next: 'model' }
@@ -151,17 +162,65 @@ export function advance(state: PipelineState, outcome: CheckOutcome, sessionOk: 
       if (outcome.ok) {
         return withLog({ ...base, next: null, verdict: 'healed' }, '자동 복구 완료 — 연결이 살아났습니다')
       }
-      // 사다리가 없다 — opencode 서버는 우리가 띄운 것이 아니라 재시작할 수단이 없다
+      // **③이 실패했다 — 사다리의 끝이다.** 서버까지 되살려 놓고도 안 붙었으면 우리가 더
+      // 할 것이 없다. 여기서 ②로 돌아가면 그것이 곧 설계가 막으려는 **재시작 루프**다
+      // (실패 조건이 그대로인데 무거운 조치를 반복한다).
+      //
+      // 예전에는 ①의 실패가 곧 사다리의 끝이었다 — *"서버는 우리가 띄운 것이 아니라
+      // 재시작할 수단이 없다"* 가 근거였고, `serverPool` 이 생기며 거짓이 됐다.
+      if (serverHealTried(state.steps)) {
+        return withLog(
+          { ...base, next: null, verdict: 'manual' },
+          '서버를 되살린 뒤에도 연결되지 않았습니다 — 아래 진단을 확인하세요',
+        )
+      }
+      return startServerHeal(base, ownership)
+
+    // ② — 서버를 되살렸다. **성공해도 끝이 아니다**: 세션은 저절로 안 붙는다.
+    // 이 칸이 없으면 "서버는 초록인데 대화는 여전히 안 되는" 상태로 끝난다 (설계 §1).
+    case 'heal-restart-server':
+    case 'heal-adopt-server':
+      if (!outcome.ok) {
+        return withLog(
+          { ...base, next: null, verdict: 'manual' },
+          '서버를 되살리지 못했습니다 — 아래 사유를 확인하세요',
+        )
+      }
       return withLog(
-        { ...base, next: null, verdict: 'manual' },
-        '재연결 실패 — `opencode serve` 상태를 확인하세요',
+        {
+          ...base,
+          steps: [...base.steps, { id: 'heal-reconnect', status: 'running' }],
+          next: 'heal-reconnect',
+        },
+        '서버가 떴습니다 → 세션을 다시 붙입니다',
       )
   }
 }
 
+/** ②를 이미 한 번 밟았나. **자동 사다리의 1회 상한이 이 물음에서 나온다** */
+function serverHealTried(steps: DoctorStep[]): boolean {
+  return steps.some((step) => step.id === 'heal-restart-server' || step.id === 'heal-adopt-server')
+}
+
+/** ②를 붙인다. 갈래는 `ownership` 하나로 갈린다 — 다른 근거를 섞지 않는다. */
+function startServerHeal(state: PipelineState, ownership: ServerOwnership): PipelineState {
+  const id = serverHealFor(ownership)
+  return withLog(
+    { ...state, steps: [...state.steps, { id, status: 'running' }], next: id },
+    ownership === 'ours'
+      ? '우리가 띄운 서버입니다 → 서버를 다시 띄웁니다'
+      : // 남의 것이거나 **모르는** 경우다. 남의 프로세스는 그대로 두고 우리 것을 새로 띄운다.
+        '우리가 띄운 서버가 아닙니다 → 이 프로젝트만 우리 서버로 옮깁니다',
+  )
+}
+
 /**
  * 진단이 끝났다. 전부 정상이면 판정을 내고,
- * 세션만 문제면 재연결을 한 번 시도하고, 서버·모델이 막혔으면 수동 안내로 끝낸다.
+ * 세션만 문제면 사다리 ①(재연결)로 가고, 모델이 막혔으면 수동 안내로 끝낸다.
+ *
+ * **여기 「서버가 막혔으면 수동 안내」 갈래가 있었다.** 서버 실패가 이제 `advance` 에서
+ * 곧장 사다리 ②로 빠지므로 이 함수까지 내려오지 않는다 — 도달할 수 없는 갈래라 지웠다.
+ * 그 갈래가 하던 말(*"주소와 `opencode serve` 를 확인하세요"*)은 지금은 틀린 안내이기도 하다.
  */
 function finishDiagnosis(state: PipelineState): PipelineState {
   const serverOk = stepStatus(state.steps, 'server') === 'ok'
@@ -172,13 +231,9 @@ function finishDiagnosis(state: PipelineState): PipelineState {
     return withLog({ ...state, next: null, verdict: 'healthy' }, '진단 완료 — 모든 계층 정상')
   }
 
-  // 서버·모델이 막힌 상태의 재연결은 절대 안 통한다 — 값을 고치라는 안내로 직행한다.
-  if (!serverOk) {
-    return withLog(
-      { ...state, next: null, verdict: 'manual' },
-      'opencode 서버에 닿지 못했습니다 — 주소와 `opencode serve` 를 확인하세요',
-    )
-  }
+  // 모델이 막힌 상태의 재연결은 절대 안 통한다 — 값을 고치라는 안내로 직행한다.
+  // **모델은 사다리를 안 탄다**: 우리가 못 고치는 층이고, 모델을 몰래 바꾸는 것은
+  // 조용히 다른 답을 내놓는 일이라 더 위험하다 (설계 §1·§6).
   if (!modelOk) {
     return withLog(
       { ...state, next: null, verdict: 'manual' },
@@ -203,32 +258,4 @@ function resultLine(command: DoctorCommand, outcome: CheckOutcome): string {
 
 function withLog(state: PipelineState, ...lines: string[]): PipelineState {
   return { ...state, log: [...state.log, ...lines] }
-}
-
-function setStep(steps: DoctorStep[], id: DoctorStepId, status: StepStatus, detail?: string): DoctorStep[] {
-  // 재진단으로 같은 id 가 두 벌일 수 있다 — 항상 마지막(현재 회전) 것만 고친다
-  const last = steps.map((step) => step.id).lastIndexOf(id)
-  return steps.map((step, index) =>
-    index === last ? { ...step, status, ...(detail === undefined ? {} : { detail }) } : step,
-  )
-}
-
-function stepStatus(steps: DoctorStep[], id: DoctorStepId): StepStatus | undefined {
-  const last = steps.map((step) => step.id).lastIndexOf(id)
-  return steps[last]?.status
-}
-
-export const STEP_LABEL: Record<DoctorStepId, string> = {
-  server: 'opencode 서버 확인',
-  model: '모델 확인',
-  session: '연결 상태 확인',
-  'heal-reconnect': '재연결',
-}
-
-/** 로그 문장용 — 단계 표시(STEP_LABEL)보다 행위에 가깝게 쓴다 */
-const LOG_LABEL: Record<DoctorCommand, string> = {
-  server: 'opencode 서버 ping',
-  model: '모델 조회',
-  session: '연결 상태 확인',
-  'heal-reconnect': '프로젝트 재연결',
 }

@@ -137,3 +137,52 @@ describe('OpencodeServerPool', () => {
     expect(pool.urlOf('a')).toBeNull()
   })
 })
+
+// **`statusOf().ours` 가 Doctor 사다리 ②의 갈래를 정한다** (설계 2026-08-16 §1).
+//
+// `running`(우리 표에 있나)과 다른 물음이라 따로 잠근다 — 표에 있어도 그 PID 가 죽었거나
+// 남이 물려받았으면 거짓이어야 한다. **여기서 참으로 굳으면 남의 서버에 재시작이 나간다.**
+describe('statusOf — running 과 ours 는 다른 물음이다', () => {
+  /** `pidStore` 흉내. `owns` 만 쓰므로 나머지는 안 채운다 */
+  function poolWithOwns(owns: (pid: number | null) => boolean) {
+    return new OpencodeServerPool({
+      start: () =>
+        Promise.resolve({
+          url: 'http://127.0.0.1:55640',
+          pid: 4242,
+          bin: '/bin/opencode',
+          stop: () => Promise.resolve(),
+        }),
+      pids: { owns, add: () => {}, forget: () => {} } as never,
+    })
+  }
+
+  it('안 띄운 프로젝트는 둘 다 거짓이다', () => {
+    expect(poolWithOwns(() => true).statusOf('없는프로젝트')).toEqual({
+      running: false,
+      url: null,
+      pid: null,
+      ours: false,
+    })
+  })
+
+  it('표에 있고 그 PID 가 우리 것이면 ours 다', async () => {
+    const pool = poolWithOwns((pid) => pid === 4242)
+    await pool.urlFor('a', '/p/alpha')
+    expect(pool.statusOf('a')).toMatchObject({ running: true, pid: 4242, ours: true })
+  })
+
+  // ⭐ 프로세스가 죽었거나 그 번호를 남이 물려받은 경우 — **표는 그대로다**
+  it('표에 있어도 그 PID 가 우리 것이 아니면 ours 는 거짓이다', async () => {
+    const pool = poolWithOwns(() => false)
+    await pool.urlFor('a', '/p/alpha')
+    expect(pool.statusOf('a')).toMatchObject({ running: true, ours: false })
+  })
+
+  // 흔적 저장소가 아예 없는 구성(시험용 풀)에서도 **모르면 거짓이다**
+  it('pidStore 가 없으면 ours 는 거짓이다', async () => {
+    const { pool } = fakePool()
+    await pool.urlFor('a', '/p/alpha')
+    expect(pool.statusOf('a')).toMatchObject({ running: true, ours: false })
+  })
+})

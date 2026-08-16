@@ -1,6 +1,7 @@
 import { findOpencodeBinary, notFoundMessage } from './binary'
 import { startOpencodeServer, type SpawnedServer } from './serverProcess'
 import type { ServerPidStore } from './pidStore'
+import type { ServerStatusPayload } from '../../shared/ipc/diagnosticsTypes'
 
 // **프로젝트마다 opencode 서버 하나.** 이 파일이 "이 앱은 사용자가 띄운 서버에 붙는다" 를 끝낸다.
 //
@@ -136,11 +137,17 @@ export class OpencodeServerPool {
    * `running` 이 거짓이라는 것은 **"우리 표에 없다"** 는 뜻이다. 그 자리에 남의 서버가
    * 떠 있을 수는 있지만 그건 우리가 죽일 수 있는 것이 아니다 — 화면은 그 차이를 말해야 한다
    * (「다시 시작」이 아니라 「서버 시작」).
+   *
+   * `ours` 는 **표를 믿지 않고 한 겹 더 본다** — 그 PID 가 지금도 우리가 띄운
+   * `opencode serve` 로 살아 있나 (`pidStore.owns`). 표에 있어도 프로세스가 죽었거나 그
+   * 번호를 남이 물려받았으면 거짓이다. Doctor 사다리 ②가 이 값으로 갈리고(설계 2026-08-16 §1),
+   * **모르면 거짓이라 갈아타기로 간다** — 남의 프로세스를 끄는 쪽으로는 틀리지 않는다.
    */
-  statusOf(projectId: string | null | undefined): { running: boolean; url: string | null; pid: number | null } {
+  statusOf(projectId: string | null | undefined): ServerStatusPayload {
     const server = projectId === null || projectId === undefined ? undefined : this.servers.get(projectId)
-    if (server === undefined) return { running: false, url: null, pid: null }
-    return { running: true, url: server.url, pid: server.pid ?? null }
+    if (server === undefined) return { running: false, url: null, pid: null, ours: false }
+    const pid = server.pid ?? null
+    return { running: true, url: server.url, pid, ours: this.options.pids?.owns(pid) ?? false }
   }
 
   /**

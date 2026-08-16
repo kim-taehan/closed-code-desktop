@@ -75,6 +75,41 @@ describe('우리 것인가', () => {
   })
 })
 
+// **Doctor 사다리 ②의 갈래가 이 물음 하나로 정해진다** (설계 2026-08-16 §1):
+// 참이면 재시작(우리 것을 접었다 띄운다), 거짓이면 갈아타기(남의 것은 그대로 둔다).
+// 회수(`reap`)와 **같은 두 겹**을 쓴다 — 판정 기준이 갈리면 "죽여도 되나" 와
+// "죽였다" 가 서로 다른 답을 내게 된다.
+describe('owns — 그 PID 가 지금도 우리 것인가', () => {
+  it('기록에 없는 pid 는 우리 것이 아니다', () => {
+    const pids = store()
+    pids.add(recordOf(process.pid, process.execPath))
+    expect(pids.owns(999_999)).toBe(false)
+  })
+
+  // **모르면 거짓이다** — pid 를 아예 모르는 자리(서버를 안 띄웠다)도 여기로 온다
+  it('pid 가 null 이면 우리 것이 아니다', () => {
+    expect(store().owns(null)).toBe(false)
+  })
+
+  // 기록에 있어도 명령줄이 안 맞으면 거짓이다. 이 시험 프로세스 자신이 그 경우다 —
+  // 살아 있지만 `opencode serve` 가 아니다. **PID 재사용이 정확히 이 모양으로 온다.**
+  it('기록에 있어도 명령줄이 우리 것이 아니면 거짓이다', () => {
+    const pids = store()
+    pids.add(recordOf(process.pid, '/opt/bin/opencode'))
+    expect(pids.owns(process.pid)).toBe(false)
+  })
+
+  it.skipIf(process.platform === 'win32')('살아 있고 명령줄이 맞으면 참이다', async () => {
+    const ours = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 30000) /* serve */'])
+    spawned.push(ours)
+    await new Promise((done) => setTimeout(done, 300))
+
+    const pids = store()
+    pids.add(recordOf(ours.pid!, process.execPath))
+    expect(pids.owns(ours.pid!)).toBe(true)
+  }, 20_000)
+})
+
 describe('reap — 지난 실행이 남긴 것', () => {
   // 진짜 프로세스로 잰다. `ps` 파싱과 kill 이 실제로 도는지는 가짜로는 못 본다.
   it.skipIf(process.platform === 'win32')('명령줄이 맞는 프로세스만 죽인다', async () => {

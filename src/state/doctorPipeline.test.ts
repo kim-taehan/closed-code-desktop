@@ -85,15 +85,17 @@ describe('순서 — 통과하면 다음으로 넘어간다', () => {
 describe('blocked — 앞 단계가 실패하면 뒤는 확인하지 않는다', () => {
   const BLOCKED = '앞 단계가 실패해 확인할 수 없습니다'
 
-  it('server 실패 → model·session 이 둘 다 blocked 가 되고 거기서 멈춘다', () => {
+  // **「거기서 멈춘다」 였다** — 서버가 죽으면 `verdict: 'manual'` 로 끝났다.
+  // 이제 **진단만** 멈추고 사다리 ②로 내려간다 (설계 2026-08-16): 서버를 우리가 띄우므로
+  // 되살릴 수 있다. blocked 로 칠하는 부분은 그대로다 — 확인 못 한 것은 여전히 확인 못 했다.
+  it('server 실패 → model·session 이 둘 다 blocked 가 되고 진단은 거기서 멈춘다', () => {
     const state = advance(initPipeline(true), bad('연결 거부'), true)
 
     expect(statusOf(state, 'server')).toBe('fail')
     expect(statusOf(state, 'model')).toBe('blocked')
     expect(statusOf(state, 'session')).toBe('blocked')
-    // 멈춘다 — 나머지를 계속 돌리지 않는다
-    expect(state.next).toBeNull()
-    expect(state.verdict).toBe('manual')
+    // 진단 단계는 더 안 돈다 — 다음은 치유 칸이다
+    expect(state.next).toBe('heal-adopt-server')
   })
 
   it('server 실패 시 blocked 단계에 사유가 붙는다', () => {
@@ -148,11 +150,13 @@ describe('판정 (verdict)', () => {
     expect(state.next).toBe('heal-reconnect')
   })
 
-  // 서버가 죽은 채로 재연결하면 같은 자리에서 또 실패한다 — 시도하지 않는다
-  it('server 가 죽었으면 재연결을 시도하지 않고 곧장 manual 이다', () => {
+  // 서버가 죽은 채로 재연결하면 같은 자리에서 또 실패한다 — 시도하지 않는다.
+  // **「곧장 manual 이다」 였다.** 지금은 ①을 건너뛰고 ②(서버 되살리기)로 간다 —
+  // 재연결을 안 한다는 핵심은 그대로이고, 그 다음에 할 것이 생겼을 뿐이다.
+  it('server 가 죽었으면 재연결을 건너뛰고 곧장 서버 되살리기로 간다', () => {
     const state = advance(initPipeline(false), bad('연결 거부'), false)
     expect(ids(state)).not.toContain('heal-reconnect')
-    expect(state.verdict).toBe('manual')
+    expect(state.next).toBe('heal-adopt-server')
   })
 
   it('model 이 없으면 재연결을 시도하지 않고 곧장 manual 이다', () => {
@@ -162,29 +166,8 @@ describe('판정 (verdict)', () => {
   })
 })
 
-// **치유 사다리가 하나뿐이다.** davis 는 재연결 → 재시작 → 재설치 3단이었는데,
-// opencode 서버는 사용자가 띄운 남의 프로세스라 우리가 죽였다 살릴 수 없다.
-describe('치유 — 사다리가 heal-reconnect 하나로 끝난다', () => {
-  function toHeal(): PipelineState {
-    return runAll(false, [ok('4096 응답'), ok('ollama-local (1)'), bad('세션 끊김')])
-  }
-
-  it('재연결이 성공하면 healed 로 끝난다', () => {
-    const state = advance(toHeal(), ok('서버·세션이 살아났습니다'), true)
-    expect(state.verdict).toBe('healed')
-    expect(state.next).toBeNull()
-    expect(statusOf(state, 'heal-reconnect')).toBe('ok')
-  })
-
-  // 여기가 사다리의 끝이다 — 다음 조치를 만들지 않는다
-  it('재연결이 실패해도 다음 치유를 붙이지 않고 manual 로 끝난다', () => {
-    const state = advance(toHeal(), bad('재확인 시간 안에 연결되지 않았습니다'), false)
-    expect(state.verdict).toBe('manual')
-    expect(state.next).toBeNull()
-    expect(statusOf(state, 'heal-reconnect')).toBe('fail')
-    expect(ids(state).filter((id) => id.startsWith('heal-'))).toEqual(['heal-reconnect'])
-  })
-})
+// **치유 사다리는 `doctorLadder.test.ts` 로 갈랐다** (300줄 상한). 이 파일은 진단만 본다 —
+// 무엇이 깨졌나까지가 여기이고, 그럼 무엇을 하나부터가 저기다.
 
 describe('로그', () => {
   it('시작 줄로 연다', () => {

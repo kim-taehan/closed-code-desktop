@@ -1973,6 +1973,56 @@ body {
   background: color-mix(in srgb, var(--dc-status-error) 10%, transparent);
 }
 
+/* ── 자가 복구 알림 (2단 승격) ─────────────────────────
+   상태줄과 배너가 **같은 자리**를 쓴다 — 승격은 색과 무게로만 드러난다.
+   자리가 갈리면 ①에서 ②로 넘어가는 순간 화면이 튀고, 그 튐이 곧
+   "무슨 일이 났나" 를 읽는 것을 방해한다. (설계 2026-08-16 §3) */
+.dc-heal {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px;
+  padding: 6px 10px;
+  border-radius: var(--dc-radius-sm);
+  font-size: 12.5px;
+}
+
+/* ① — 조용하다. 가볍게 복구되면 사용자는 거의 모르고 지나간다 */
+.dc-heal--line {
+  color: var(--dc-text-muted);
+  border: 1px solid transparent;
+}
+
+/* ② 이상 — 무거운 조치는 시선을 가져온다 */
+.dc-heal--banner {
+  color: var(--dc-text);
+  border: 1px solid var(--dc-accent);
+  background: color-mix(in srgb, var(--dc-accent) 10%, transparent);
+  padding: 8px 10px;
+}
+
+.dc-heal__body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.dc-heal__text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 근거 — 왜 그렇게 됐나. 예고보다 작게 둔다 (축은 예고다) */
+.dc-heal__detail {
+  color: var(--dc-text-muted);
+  font-size: 11.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* ── 런처 (첫 실행 화면·"+") ─────────────────────────── */
 
 /* 세로 가운데 한 줄 골격. 런처가 2단으로 떠난 뒤로는 첫 목록 대기 화면

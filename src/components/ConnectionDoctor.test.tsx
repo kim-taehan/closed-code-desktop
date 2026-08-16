@@ -2,6 +2,7 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ConnectionDoctor } from './ConnectionDoctor'
+import { advance, initPipeline } from '../state/doctorPipeline'
 
 // 드라이버 — 순수 머신(`doctorPipeline`)에 **부작용을 실제로 먹이는** 자리.
 //
@@ -16,6 +17,10 @@ const davis = {
   checkModels: vi.fn(),
   diagnose: vi.fn(),
   reconnectProject: vi.fn(),
+  // 사다리 ②가 부르는 것들. **`serverStatus.ours` 가 갈래를 정한다** — main 이 `pidStore`
+  // 로 낸 판정이고, 화면은 그것을 다시 재지 않는다.
+  serverStatus: vi.fn(),
+  controlServer: vi.fn(),
 }
 
 /** 셋 다 통과하는 평범한 성공 */
@@ -25,9 +30,22 @@ function allGood() {
   davis.diagnose.mockResolvedValue({ runtime: { ok: true, detail: '정상' } })
 }
 
+/** 서버 주인 판정. 기본은 **남의 것** — 모르면 그쪽으로 본다 */
+function ownedByUs(ours: boolean) {
+  davis.serverStatus.mockResolvedValue({ running: ours, url: 'http://127.0.0.1:4096', pid: ours ? 42 : null, ours })
+}
+
 beforeEach(() => {
   for (const fn of Object.values(davis)) fn.mockReset()
   davis.reconnectProject.mockResolvedValue(undefined)
+  // **기본을 깔아 둔다.** 사다리가 ③까지 내려가면 재확인이 `diagnose` 를 부르는데,
+  // 안 깔면 `undefined` 를 읽다 터지고 증상이 "아무것도 안 그려진다" 로만 보인다.
+  davis.diagnose.mockResolvedValue({ runtime: { ok: false, detail: '응답 없음' } })
+  ownedByUs(false)
+  davis.controlServer.mockResolvedValue({
+    ok: true,
+    status: { running: true, url: 'http://127.0.0.1:4096', pid: 42, ours: true },
+  })
   ;(window as unknown as { davis: unknown }).davis = davis
 })
 
@@ -70,14 +88,17 @@ describe('열면 곧바로 진단이 돈다', () => {
 })
 
 describe('실패 — 5상이 화면에 그대로 나온다', () => {
-  it('서버가 죽으면 ✗ 하나에 – 둘이고, 뒤 단계는 부르지 않는다', async () => {
+  // **표식이 셋이었다** — 서버가 죽으면 거기서 끝났기 때문이다. 이제 그 뒤에 치유 칸이
+  // 붙으므로 **앞 셋만** 본다. 진단 세 칸의 모양은 그대로다.
+  it('서버가 죽으면 ✗ 하나에 – 둘이고, 뒤 진단 단계는 부르지 않는다', async () => {
     davis.pingServer.mockResolvedValue({ ok: false, detail: '연결 거부' })
     renderDoctor()
 
-    await vi.waitFor(() => expect(marks()).toEqual(['✗', '–', '–']))
-    // 서버가 죽었으면 모델·세션은 볼 것이 없다
+    await vi.waitFor(() => expect(marks().slice(0, 3)).toEqual(['✗', '–', '–']))
+    // 서버가 죽었으면 모델은 볼 것이 없다.
+    // **`diagnose` 는 여기서 뺐다** — 치유 ③의 재확인이 그것을 부르기 때문에 이제
+    // "안 불린다" 가 거짓이다. 진단 단계로서 안 돌았다는 것은 위 `–` 두 개가 말한다.
     expect(davis.checkModels).not.toHaveBeenCalled()
-    expect(davis.diagnose).not.toHaveBeenCalled()
   })
 
   it('blocked 단계에는 「앞 단계가 실패해 확인할 수 없습니다」가 붙는다', async () => {
@@ -92,18 +113,27 @@ describe('실패 — 5상이 화면에 그대로 나온다', () => {
   // 사유는 **두 곳**에 나온다 — 단계 줄의 detail 과 아래 이슈 목록의 cause.
   // 일부러 둘 다 본다: 단계만 보면 "어디가" 는 알아도 "무엇을 하라" 가 없고,
   // 이슈만 보면 어느 단계에서 났는지가 없다.
+  // 사다리를 끝까지 태운 뒤에야 이슈 목록이 나온다 — 재확인 폴링(1초 × 3)이 두 번 낀다
   it('사유가 단계 줄과 이슈 목록 양쪽에 나오고, 이슈에는 다음 행동이 붙는다', async () => {
     davis.pingServer.mockResolvedValue({ ok: false, detail: '연결 거부' })
+    // 사다리를 다 타는 동안 서버는 계속 죽어 있다 — 두 곳이 같은 사유를 말해야 한다
+    davis.diagnose.mockResolvedValue({ runtime: { ok: false, detail: '연결 거부' } })
     renderDoctor()
 
-    await vi.waitFor(() => expect(document.querySelector('.dc-doctor__item')).toBeTruthy())
+    await vi.waitFor(() => expect(document.querySelector('.dc-doctor__item')).toBeTruthy(), {
+      timeout: 8000,
+    })
+
 
     expect(document.querySelector('.dc-doctor__step-detail')?.textContent).toBe('연결 거부')
     expect(document.querySelector('.dc-doctor__cause')?.textContent).toBe('연결 거부')
-    expect(document.querySelector('.dc-doctor__advice')?.textContent).toContain('opencode serve')
-  })
+    // 안내가 *"`opencode serve` 로 서버를 띄우세요"* 였다 — 현장 사용자에게 터미널이 없어
+    // 못 따라 할 지시였고, 앱이 서버를 띄우게 되면서 조치 문장으로 바뀌었다
+    expect(document.querySelector('.dc-doctor__advice')?.textContent).toContain('그대로 둡니다')
+  }, 10000)
 
   // 모델 실패는 서버 실패와 다르다 — 서버는 ✓ 로 남고 세션만 – 다
+  // 모델은 **사다리를 안 탄다** — 우리가 못 고치는 층이라 치유 칸이 안 붙는다 (설계 §1)
   it('모델이 없으면 ✓ ✗ – 이고 세션은 부르지 않는다', async () => {
     davis.pingServer.mockResolvedValue({ ok: true, detail: '4096 응답' })
     davis.checkModels.mockResolvedValue({ ok: false, message: '설정된 모델이 없습니다' })
@@ -111,6 +141,8 @@ describe('실패 — 5상이 화면에 그대로 나온다', () => {
 
     await vi.waitFor(() => expect(marks()).toEqual(['✓', '✗', '–']))
     expect(davis.diagnose).not.toHaveBeenCalled()
+    expect(davis.controlServer).not.toHaveBeenCalled()
+    expect(davis.reconnectProject).not.toHaveBeenCalled()
   })
 
   it('실패로 끝나면 onHealthy 를 부르지 않는다', async () => {
@@ -119,7 +151,7 @@ describe('실패 — 5상이 화면에 그대로 나온다', () => {
 
     await vi.waitFor(() => expect(marks()[0]).toBe('✗'))
     expect(onHealthy).not.toHaveBeenCalled()
-  })
+  }, 10000)
 })
 
 describe('자동 치유 — 세션만 죽었을 때', () => {
@@ -136,13 +168,50 @@ describe('자동 치유 — 세션만 죽었을 때', () => {
     expect(labels).toEqual(['opencode 서버 확인', '모델 확인', '연결 상태 확인', '재연결'])
   })
 
-  // 서버가 죽어 있으면 재연결해 봐야 같은 자리에서 또 실패한다
-  it('서버가 죽었으면 재연결을 시도하지 않는다', async () => {
+  // 서버가 죽어 있으면 재연결해 봐야 같은 자리에서 또 실패한다 — ①을 건너뛰고 ②로 간다
+  // 사다리가 어떤 IPC 를 부르는지는 `state/doctorDriver.test.ts` 가 통째로 잠근다.
+  // 여기서는 **화면에서 구동해도 그 길로 간다**는 것만 본다.
+  it('서버가 죽었으면 재연결 대신 서버부터 되살린다', async () => {
     davis.pingServer.mockResolvedValue({ ok: false, detail: '연결 거부' })
     renderDoctor({ status: 'disconnected' })
 
-    await vi.waitFor(() => expect(marks()[0]).toBe('✗'))
+    await vi.waitFor(() => expect(davis.controlServer).toHaveBeenCalled())
+    expect(davis.controlServer).toHaveBeenCalledWith({ action: 'start' })
+    // ①은 안 돈다 — 다만 ③의 재연결은 곧바로 뒤따르므로 "안 불렸다" 가 아니라
+    // **서버 조작이 먼저다**를 본다 (`doctorDriver.test.ts` 와 같은 이유)
+    expect(davis.controlServer.mock.invocationCallOrder[0]).toBeLessThan(
+      davis.reconnectProject.mock.invocationCallOrder[0] ?? Number.MAX_SAFE_INTEGER,
+    )
+  })
+})
+
+// 자동 복구가 이미 사다리를 다 타고 실패해서 창이 열린 경우 — **다시 타지 않는다.**
+// 여기서 또 돌면 서버 재시작이 한 번 더 나가고, 그것이 곧 설계가 막으려는 재시작 루프다.
+describe('이미 돈 사다리를 받으면 다시 돌지 않는다', () => {
+  /** 다 돌고 멈춘 파이프라인 — 모델 실패로 끝낸다 (사다리를 안 타는 유일한 층) */
+  function finished() {
+    return advance(
+      advance(initPipeline(false), { ok: true, detail: '4096 응답' }, false),
+      { ok: false, detail: '설정된 모델이 없습니다' },
+      false,
+    )
+  }
+
+  it('initial 을 주면 진단 IPC 를 하나도 부르지 않는다', async () => {
+    render(<ConnectionDoctor status="error" initial={finished()} />)
+
+    await vi.waitFor(() => expect(document.querySelector('.dc-doctor__step')).toBeTruthy())
+    expect(davis.pingServer).not.toHaveBeenCalled()
+    expect(davis.controlServer).not.toHaveBeenCalled()
     expect(davis.reconnectProject).not.toHaveBeenCalled()
+  })
+
+  it('「다시 진단」을 누르면 그때 돈다', async () => {
+    allGood()
+    render(<ConnectionDoctor status="error" initial={finished()} />)
+
+    fireEvent.click(await screen.findByText('다시 진단'))
+    await vi.waitFor(() => expect(davis.pingServer).toHaveBeenCalled())
   })
 })
 
