@@ -63,14 +63,14 @@ describe('승격 — 어디에 보이나', () => {
   it('②의 문구는 주인에 따라 갈린다 — 칸은 같다', () => {
     const state = advance(atReconnect(), bad('재연결 실패'), false, 'theirs')
     expect(state.next).toBe('heal-restart-server')
-    expect(healNotice(state, 'theirs')?.headline).toContain('그대로 둡니다')
+    expect(healNotice(state, 'theirs')?.headline).toContain('건드리지 않습니다')
     expect(healNotice(state, 'ours')?.headline).toContain('재연결이 실패했습니다')
   })
 
   // **모르면 「남의 것」 쪽 문장이다** — 그 문장이 "죽었거나 남의 것" 을 함께 덮는다
   it('주인을 안 넘기면 살려 둔다는 쪽으로 말한다', () => {
     const state = advance(atReconnect(), bad('재연결 실패'), false)
-    expect(healNotice(state)?.headline).toContain('그대로 둡니다')
+    expect(healNotice(state)?.headline).toContain('건드리지 않습니다')
   })
 
   // ③은 **조치가 아니라 검산이다.** "붙이는 중" 이라고 하면 하지도 않는 일을 알리는 것이 된다
