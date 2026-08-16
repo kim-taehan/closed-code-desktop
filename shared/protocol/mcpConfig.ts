@@ -52,7 +52,7 @@ export interface McpServerStatus {
   /**
    * 이 서버가 주는 도구 이름.
    *
-   * **우리 서버(`open-code-desktop`)에만 채운다.** opencode 는 `GET /mcp` 에 도구를 안 싣고,
+   * **우리 서버(`closed-code-desktop`)에만 채운다.** opencode 는 `GET /mcp` 에 도구를 안 싣고,
    * 남의 서버 도구를 알아낼 표면이 없다 — 모르는 것을 지어내지 않는다.
    */
   tools: string[]

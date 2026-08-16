@@ -17,7 +17,7 @@ const STATUS = {
   // connect 를 부르고 disconnect 를 안 하면 이 모양으로 **남는다** (contract-qa 실측).
   // 다른 항목은 둘이 일치해서, 이것이 없으면 「꺼짐」의 근거를 `enabled` 로 바꿔도 전부 초록이다.
   divergent: { status: 'failed', error: 'MCP error -32000: Connection closed' },
-  'open-code-desktop': { status: 'connected' },
+  'closed-code-desktop': { status: 'connected' },
 }
 
 // `GET /config?directory=` 의 `.mcp` 절. **우리 서버는 여기 없다** —
@@ -96,14 +96,14 @@ describe('mcpConfigFrame', () => {
 
   // 설정 쪽을 기준으로 돌면 우리 서버가 목록에서 통째로 빠진다 — 상태 맵이 기준인 이유다
   it('설정에 없는 우리 서버도 목록에 남고, 도구 목록이 그 표식이 된다', async () => {
-    const ours = (await stateOf()).servers.find((s) => s.serverName === 'open-code-desktop')
+    const ours = (await stateOf()).servers.find((s) => s.serverName === 'closed-code-desktop')
     expect(ours?.status).toBe('connected')
     expect(ours?.transport).toBe('unknown')
-    expect(ours?.tools).toEqual(['open_file', 'current_view'])
+    expect(ours?.tools).toEqual(['open_file'])
   })
 
   it('남의 서버 도구는 지어내지 않는다', async () => {
-    expect((await stateOf()).servers.every((s) => s.serverName === 'open-code-desktop' || s.tools.length === 0)).toBe(true)
+    expect((await stateOf()).servers.every((s) => s.serverName === 'closed-code-desktop' || s.tools.length === 0)).toBe(true)
   })
 
   it('순서는 opencode 가 준 그대로다 — 이름순으로 고치지 않는다', async () => {

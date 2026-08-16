@@ -49,7 +49,7 @@ describe.skipIf(!LIVE)('live opencode', () => {
     // opencode 가 초기 스캔에서 멈추고, 증상이 "어댑터가 이벤트를 못 받는다" 로 보인다
     // (실제로 이걸로 한참 헤맸다). 어댑터 계약 검증에는 작은 디렉터리면 충분하다.
     const workspacePath = mkdtempSync(join(tmpdir(), 'oc-live-'))
-    writeFileSync(join(workspacePath, 'sample.txt'), 'hello from open-code-desktop\n')
+    writeFileSync(join(workspacePath, 'sample.txt'), 'hello from closed-code-desktop\n')
 
     const handshake = new Handshake(transport, {
       workspacePath,

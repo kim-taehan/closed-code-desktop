@@ -17,6 +17,7 @@ import { fetchCommands } from '../opencode/commandList'
 import { disposeInstance, readOpencodeConfig, writeOpencodeConfig } from '../settings/opencodeConfig'
 import type { SettingsStore } from '../settings/settingsStore'
 import type { AppSettings } from '../../shared/settings/appSettings'
+import type { ServerControlPayload, ServerStatusPayload } from '../../shared/ipc/diagnosticsTypes'
 import type { ProjectRecord } from '../../shared/projects/projectRecord'
 import type { ProjectRegistry } from '../projects/projectRegistry'
 
@@ -44,6 +45,15 @@ export interface ProjectBridgeListener {
    * 만들어 내면 안 된다 (`serverPool.urlOf` 주석).
    */
   activeServerUrl(): string | null
+  /** 활성 프로젝트의 서버 상태. 「다시 시작」과 「서버 시작」이 여기서 갈린다 */
+  serverStatus(): ServerStatusPayload
+  /**
+   * 활성 프로젝트의 서버를 시작·다시 시작·종료한다.
+   *
+   * 셋을 한 메서드로 받는 이유: 셋 다 **같은 대상(활성 프로젝트의 서버)** 에 대한 조작이고
+   * 부르는 화면도 하나다. 나누면 배선이 셋이 되는데 갈라서 얻는 것이 없다.
+   */
+  onServerControl(action: 'start' | 'restart' | 'stop'): Promise<void>
 }
 
 // 프로젝트 목록 IPC 만 책임진다. 세션 배선은 SessionBridge 가 따로 한다.
@@ -67,6 +77,8 @@ const HANDLED_CHANNELS = [
   Channel.SETTINGS_SET,
   Channel.MODEL_CHECK,
   Channel.SERVER_PING,
+  Channel.SERVER_STATUS,
+  Channel.SERVER_CONTROL,
   Channel.SESSION_RECONNECT,
   Channel.RUNTIME_RESTART,
   Channel.ATTACH_PICK,
@@ -182,6 +194,29 @@ export class ProjectBridge {
       return { ok: result.ok, message: result.detail }
     })
     ipcMain.handle(Channel.SERVER_PING, () => pingOpencode(this.serverUrl()))
+    ipcMain.handle(Channel.SERVER_STATUS, () => this.listener.serverStatus())
+    // 서버 조작. **실패를 삼키지 않는다** — 실행 파일을 못 찾았다는 사유가 여기로 온다.
+    ipcMain.handle(Channel.SERVER_CONTROL, async (_event, payload: ServerControlPayload) => {
+      if (this.registry.active === null) {
+        return { ok: false, error: '열린 프로젝트가 없습니다', status: this.listener.serverStatus() }
+      }
+      try {
+        await this.listener.onServerControl(payload.action)
+        const status = this.listener.serverStatus()
+        // **떠 있어야 성공이다.** 조작이 예외 없이 끝나도 서버가 없으면 실패다
+        // (시작·다시 시작에서 spawn 이 조용히 못 붙는 경우).
+        if (payload.action !== 'stop' && !status.running) {
+          return { ok: false, error: '서버가 뜨지 않았습니다 — 로그를 확인하세요', status }
+        }
+        return { ok: true, status }
+      } catch (error) {
+        return {
+          ok: false,
+          error: error instanceof Error ? error.message : String(error),
+          status: this.listener.serverStatus(),
+        }
+      }
+    })
     // 파일 읽기/쓰기/OS 열기/디렉토리 — 300줄 상한 때문에 등록만 갈라냈다
     registerFsHandlers(this.fs)
   }

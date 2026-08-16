@@ -1,7 +1,6 @@
-import { app, BrowserWindow, ipcMain, nativeImage, powerMonitor, protocol } from 'electron'
+import { app, BrowserWindow, ipcMain, powerMonitor, protocol } from 'electron'
 import { installAppMenu } from './appMenu'
 import * as path from 'node:path'
-import { existsSync } from 'node:fs'
 import { Channel, type TaskNoticePayload } from '../shared/ipc/channels'
 import { showTaskDone } from './notify/taskNotifier'
 import { SessionBridge } from './ipc/bridge'
@@ -14,7 +13,9 @@ import { GitBridge } from './ipc/gitBridge'
 import { ExtensionBridge } from './ipc/extensionBridge'
 import { captureConsole, logStore } from './logs/logStore'
 import { OpencodeServerPool } from './opencode/serverPool'
+import { ServerPidStore } from './opencode/pidStore'
 import { installQuitGuard } from './app/quitGuard'
+import { applyDockIcon } from './app/dockIcon'
 import type { ExtensionService } from './extensions/service'
 import { launchExtensionHost } from './extensions/appLaunch'
 import { ExtensionViewHost, VIEW_SCHEME } from './extensions/viewHost'
@@ -32,13 +33,25 @@ protocol.registerSchemesAsPrivileged([
 const extensionViews = new ExtensionViewHost()
 
 /**
+ * 우리가 띄운 서버의 흔적. **훅이 안 도는 종료(SIGKILL·크래시·전원 차단)의 그물이다** —
+ * 왜 이 방법인지(그리고 stdin 을 물리는 방법이 왜 안 되는지)는 `opencode/pidStore.ts` 머리말.
+ *
+ * `app.getPath('userData')` 는 ready 이전에도 답한다 (앱 이름에서 유도되는 값이라 그렇다).
+ * 여기서 잡아 두는 이유는 아래 풀이 모듈 수명이기 때문이다.
+ */
+const serverPids = new ServerPidStore(path.join(app.getPath('userData'), 'opencode-servers.json'))
+
+/**
  * 프로젝트마다 하나씩 띄우는 opencode 서버 (`opencode/serverPool.ts`).
  *
  * **앱 수명이다.** 창 수명(SessionBridge)에 매달면 macOS 에서 창을 닫았다 되살릴 때마다
  * 서버가 통째로 새로 뜬다. 회수는 창이 사라질 때(`window-all-closed` → `bridge.dispose`)와
  * 앱이 끝날 때 두 곳에서 한다 — 둘 다 **표에 있는 자식만** 죽인다.
  */
-const opencodeServers = new OpencodeServerPool({ log: (line) => logStore.add('desktop', line) })
+const opencodeServers = new OpencodeServerPool({
+  pids: serverPids,
+  log: (line) => logStore.add('desktop', line),
+})
 
 // vite dev 서버를 쓸 때만 설정된다. 없으면 빌드 산출물을 로드한다.
 const DEV_SERVER_URL = process.env['DAVIS_DEV_SERVER_URL']
@@ -110,7 +123,6 @@ async function createWindow(): Promise<void> {
     settings: () => settings.load(),
     registry: () => projectRegistry,
     window: () => mainWindow,
-    activeFile: () => extensionIpc?.currentActiveFile() ?? null,
     // 등록은 **그 프로젝트의 서버**에 한다 — 여기가 갈리는 것이 격리의 전부다
     serverUrl: (projectId) => opencodeServers.urlOf(projectId),
   })
@@ -141,6 +153,13 @@ async function createWindow(): Promise<void> {
       // 진단·설정 조회는 **활성 프로젝트의 서버**에 묻는다. 없으면 null 이고, 그 자리는
       // "아직 안 뜬 것" 과 "못 띄운 것" 을 구별하지 않는다 — 둘 다 물을 곳이 없다.
       activeServerUrl: () => opencodeServers.urlOf(registry.active?.id),
+      serverStatus: () => opencodeServers.statusOf(registry.active?.id),
+      // 사용자가 「연결」 팝업에서 직접 시작·다시 시작·종료한다 (설계 2026-08-14)
+      onServerControl: async (action) => {
+        const active = registry.active
+        if (active === null || bridge === null) return
+        await bridge.controlServer(action, active)
+      },
     },
     settings,
   )
@@ -200,23 +219,12 @@ async function createWindow(): Promise<void> {
   }
 }
 
-/**
- * 독 아이콘을 브랜드 것으로 바꾼다 (dev 한정).
- *
- * 패키징하면 electron-builder 가 build/icon.icns 를 심지만, 개발 중 `electron .`
- * 로 띄우면 기본 원자 아이콘이 뜬다. macOS 에서만 dock 이 있다.
- */
-function applyDockIcon(): void {
-  if (process.platform !== 'darwin' || !app.dock) return
-  const iconPath = path.join(__dirname, '../../build/icon.png')
-  if (!existsSync(iconPath)) return
-  const image = nativeImage.createFromPath(iconPath)
-  if (!image.isEmpty()) app.dock.setIcon(image)
-}
-
 void app.whenReady().then(async () => {
   // 창을 만들기 전에 건다 — 기동 중에 찍히는 것이 로그의 앞부분이라 놓치면 안 된다
   captureConsole()
+  // 지난 실행이 곱게 못 끝났으면(강제 종료·크래시) 그때 띄운 서버가 남아 있다.
+  // **적어 둔 PID 만** 본다 — 명령줄까지 대조해 남의 프로세스는 손대지 않는다 (`pidStore.ts`).
+  serverPids.reap((line) => logStore.add('desktop', line))
   // 기본 메뉴의 Close Window(⌘W)가 renderer 의 탭 닫기를 가로채지 않게 커스텀 메뉴를 세운다
   installAppMenu()
   applyDockIcon()

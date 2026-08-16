@@ -72,13 +72,13 @@ describe('resolveSlashSubmission — MCP 프롬프트', () => {
   // 실측: MCP 항목은 `template` 이 문자열이 아니라 `{}` 로 온다 (본문은 서버가 `prompts/get`
   // 으로 풀고 목록에는 없다). 빈 템플릿을 전개하면 **인자만 남아** 엉뚱한 질문이 나간다.
   const MCP: CommandSummaryPayload[] = [
-    { name: 'open-code-desktop:open', description: '파일을 화면에 연다', source: 'mcp', template: '' },
+    { name: 'closed-code-desktop:open', description: '파일을 화면에 연다', source: 'mcp', template: '' },
   ]
 
   it('전개하지 않고 친 줄을 그대로 보낸다 — 인자만 남기지 않는다', () => {
-    expect(resolveSlashSubmission('/open-code-desktop:open src/a.ts', MCP)).toEqual({
+    expect(resolveSlashSubmission('/closed-code-desktop:open src/a.ts', MCP)).toEqual({
       kind: 'prompt',
-      text: '/open-code-desktop:open src/a.ts',
+      text: '/closed-code-desktop:open src/a.ts',
     })
   })
 })

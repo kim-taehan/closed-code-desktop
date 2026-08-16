@@ -32,7 +32,6 @@ describe('desktopMcpPorts — 창보다 오래 사는 배선', () => {
       serverUrl,
       registry: () => registry,
       window: () => null,
-      activeFile: () => null,
     })
 
     expect(ports.rootOf('A')).toBe('/old/A')
@@ -45,27 +44,6 @@ describe('desktopMcpPorts — 창보다 오래 사는 배선', () => {
     expect(ports.rootOf('A')).toBeNull()
     expect(ports.rootOf('B')).toBe('/new/B')
     expect(ports.focusedProjectId()).toBe('B')
-  })
-
-  // **이것이 누출의 형태였다.** 낡은 겹이 관문(`focused`)을 통과시키고 신선한 겹
-  // (`activeFile`)이 값을 실어 나른다. 두 겹이 같은 세대를 보면 관문에서 끊긴다 —
-  // `tools.ts` 는 `focused` 가 거짓이면 `activeFile()` 을 아예 안 읽는다.
-  it('활성 판정과 파일 값이 같은 세대를 본다', () => {
-    let registry = registryOf([{ id: 'A', root: '/old/A' }], 'A')
-    const ports = desktopMcpPorts({
-      settings,
-      serverUrl,
-      registry: () => registry,
-      window: () => null,
-      // 새 창의 렌더러가 알려 준 값 — 언제나 "지금" 것이다
-      activeFile: () => ({ path: 'B/secret.ts' }),
-    })
-
-    registry = registryOf([{ id: 'B', root: '/new/B' }], 'B')
-
-    expect(ports.focusedProjectId()).not.toBe('A')
-    // 값 자체는 신선한 것이 맞다 — 문제는 관문이었지 이쪽이 아니었다
-    expect(ports.activeFile()).toEqual({ path: 'B/secret.ts' })
   })
 
   it('창이 갈리면 새 창으로 보낸다', () => {
@@ -82,7 +60,6 @@ describe('desktopMcpPorts — 창보다 오래 사는 배선', () => {
       serverUrl,
       registry: () => null,
       window: () => window,
-      activeFile: () => null,
     })
 
     expect(ports.openInView('A', { path: 'a.ts' })).toBe(true)
@@ -97,16 +74,4 @@ describe('desktopMcpPorts — 창보다 오래 사는 배선', () => {
     expect(sent).toEqual(['old', 'new'])
   })
 
-  // 렌더러가 보낸 모양이 아니면 null 이다 — 「경로 없는 파일」과 「안 보고 있다」를
-  // 구분하지 못하게 만들지 않는다 (`extensionActiveFile.ts` 의 판단을 그대로 탄다).
-  it('활성 파일은 모양을 확인해서 넘긴다', () => {
-    const ports = desktopMcpPorts({
-      settings,
-      serverUrl,
-      registry: () => null,
-      window: () => null,
-      activeFile: () => ({ nope: 1 }),
-    })
-    expect(ports.activeFile()).toBeNull()
-  })
 })

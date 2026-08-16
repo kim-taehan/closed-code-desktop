@@ -160,7 +160,7 @@ export function resolveSlashSubmission(
   const remote = opencodeCommands.find((item) => item.name === parsed.name)
   if (!remote) return null
   // 스킬과 **MCP 프롬프트**는 전개하지 않는다. MCP 는 `template` 이 아예 문자열이 아니라
-  // `{}` 로 온다 (실측: `open-code-desktop:open` — 본문은 서버가 `prompts/get` 으로
+  // `{}` 로 온다 (실측: `closed-code-desktop:open` — 본문은 서버가 `prompts/get` 으로
   // 풀어 주는 것이고 목록에는 안 실린다). 빈 템플릿을 전개하면 **사용자가 친 인자만 남아**
   // 엉뚱한 질문이 나가므로, 손대지 않고 그 줄을 그대로 보낸다.
   if (remote.source !== 'command' || remote.template === '') {

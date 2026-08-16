@@ -23,6 +23,7 @@ function fakePool() {
       const server: Fake = {
         url: `http://127.0.0.1:${port++}`,
         pid: 1000 + started.length,
+        bin: '/bin/opencode',
         stopped: 0,
         stop: () => {
           server.stopped += 1
@@ -124,6 +125,7 @@ describe('OpencodeServerPool', () => {
     resolveStart!({
       url: 'http://127.0.0.1:55640',
       pid: 1,
+      bin: '/bin/opencode',
       stop: () => {
         stopped += 1
         return Promise.resolve()

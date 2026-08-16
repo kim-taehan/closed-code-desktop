@@ -15,7 +15,6 @@ describe('createToolRunner', () => {
   const portsWith = (over: Partial<McpToolPorts> = {}): McpToolPorts => ({
     rootOf: (id) => (id === 'A' ? rootA : id === 'B' ? rootB : null),
     focusedProjectId: () => 'A',
-    activeFile: () => null,
     openInView: openInView as unknown as McpToolPorts['openInView'],
     ...over,
   })
@@ -63,17 +62,6 @@ describe('createToolRunner', () => {
 
     expect(openInView).not.toHaveBeenCalled()
     expect(answer).toContain('열지 못했습니다')
-  })
-
-  it('current_view 는 앞에 나와 있을 때만 보고 있는 파일을 말한다', async () => {
-    const activeFile = () => ({ path: 'src/a.ts', line: 7 })
-    const focused = createToolRunner(portsWith({ activeFile }))
-    expect(await focused('A', 'current_view', {})).toContain('src/a.ts')
-
-    // 뒤에 있는 프로젝트에 대해 이 값을 말하면 **남의 프로젝트 경로를 흘리는 것**이다 —
-    // `ActiveFileTracker` 는 앱 단위 값이라 지금 보고 있는 프로젝트 것만 들어 있다.
-    const behind = createToolRunner(portsWith({ activeFile, focusedProjectId: () => 'B' }))
-    expect(await behind('A', 'current_view', {})).not.toContain('src/a.ts')
   })
 
   it('모르는 도구는 거절한다', async () => {

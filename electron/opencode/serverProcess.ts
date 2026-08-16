@@ -23,6 +23,13 @@ export interface SpawnedServer {
   /** stdout 에서 읽어낸 주소. 끝에 `/` 는 없다 */
   url: string
   pid: number | undefined
+  /**
+   * 우리가 실행한 파일 경로.
+   *
+   * 주소·pid 와 함께 흔적으로 남긴다 (`pidStore.ts`) — 다음 실행이 유령을 거둘 때
+   * **그 PID 의 명령줄이 이 경로인지**를 보고 남의 프로세스와 가른다.
+   */
+  bin: string
   /** SIGTERM → (안 죽으면) SIGKILL. 이미 죽었으면 아무 일도 안 한다 */
   stop(): Promise<void>
 }
@@ -133,7 +140,9 @@ export function startOpencodeServer(options: StartServerOptions): Promise<Spawne
       for (const line of lines) {
         const url = parseListeningUrl(line)
         if (url === null) continue
-        finish(() => resolve({ url, pid: child.pid, stop: () => stop(child, () => exited) }))
+        finish(() =>
+          resolve({ url, pid: child.pid, bin: options.binPath, stop: () => stop(child, () => exited) }),
+        )
         return
       }
     }

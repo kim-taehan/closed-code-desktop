@@ -171,6 +171,36 @@ export class SessionBridge {
     await session.start()
   }
 
+  /**
+   * 사용자가 「연결」 팝업에서 서버를 직접 조작한다 (설계 2026-08-14).
+   *
+   * **현장 사용자에게는 터미널이 없다.** 앱이 유일한 통제 수단이라 띄우기만이 아니라
+   * 다시 시작·종료까지 여기로 온다.
+   *
+   * ⚠️ **재시작 뒤 MCP 재등록이 반드시 따라붙는다.** 등록은 opencode instance 수명이라
+   * 새로 뜬 서버에는 없다 (`mcp/register.ts` 실측). 여기서는 그것을 따로 부르지 않고
+   * **`closeProject` → `activate` 순서로 얻는다** — 닫을 때 `onSessionLost` 가 등록 표시를
+   * 비우고, 새 세션이 ready 가 되면 `onSessionReady` 가 다시 등록한다. 빠뜨리면 증상이
+   * "연결은 됐는데 도구가 없다" 로만 나타난다.
+   */
+  async controlServer(action: 'start' | 'restart' | 'stop', project: ProjectRecord): Promise<void> {
+    if (action === 'stop') {
+      await this.closeProject(project.id)
+      // **끊겼다는 말을 화면에 해 준다.** 세션을 접기만 하면 마지막 상태(ready)가 그대로
+      // 남아, 사용자가 방금 끈 서버를 화면은 살아 있다고 말한다.
+      this.push(Channel.SESSION_STATE, project.id, {
+        handshake: { stage: 'idle' },
+        connection: 'closed',
+      } satisfies SessionStatePayload)
+      return
+    }
+    // start 도 restart 도 같은 길이다 — 떠 있으면 접고, 없으면 그냥 띄운다.
+    // 「시작」과 「다시 시작」을 가르는 것은 화면이고(무엇이 일어날지 말해야 한다),
+    // 여기서 갈라 봐야 같은 코드가 둘이 된다.
+    if (action === 'restart') await this.closeProject(project.id)
+    await this.activate(project)
+  }
+
   /** 절전 복귀 — 열려 있다고 믿는 소켓을 전부 다시 붙인다 (ProjectSession.wakeFromSleep) */
   wakeAll(): void {
     for (const session of this.sessions.values()) session.wakeFromSleep()

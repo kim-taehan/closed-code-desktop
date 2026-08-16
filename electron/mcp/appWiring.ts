@@ -1,7 +1,6 @@
 import type { BrowserWindow } from 'electron'
 import { Channel } from '../../shared/ipc/channels'
 import type { AppSettings } from '../../shared/settings/appSettings'
-import { toActiveFile } from '../ipc/extensionActiveFile'
 import { logStore } from '../logs/logStore'
 import type { ProjectRegistry } from '../projects/projectRegistry'
 import { DesktopMcp } from './desktopMcp'
@@ -24,8 +23,6 @@ export interface DesktopMcpDeps {
   registry: () => ProjectRegistry | null
   /** 지금 창. 창과 함께 새로 생긴다 */
   window: () => BrowserWindow | null
-  /** 렌더러가 알려 준 마지막 활성 파일 (`ExtensionBridge.currentActiveFile`) */
-  activeFile: () => unknown
   /** 그 프로젝트의 opencode 서버 주소 (`opencode/serverPool.ts`). 안 떴으면 null */
   serverUrl: (projectId: string) => string | null
 }
@@ -40,8 +37,6 @@ export function desktopMcpPorts(deps: DesktopMcpDeps): McpToolPorts {
     // **열린 프로젝트만** 안다. 탭을 닫으면 그 순간 아무 파일도 못 건드린다.
     rootOf: (id) => deps.registry()?.openProjects.find((p) => p.id === id)?.root ?? null,
     focusedProjectId: () => deps.registry()?.active?.id ?? null,
-    // 값의 주인은 렌더러다 — main 이 짐작하지 않는다 (`extensionActiveFile.ts` 머리말).
-    activeFile: () => toActiveFile(deps.activeFile()),
     // 겉봉(ProjectScoped)을 씌워 보낸다 — 화면은 지금 보고 있는 프로젝트 것만 받는다
     openInView: (projectId, target) => {
       const window = deps.window()

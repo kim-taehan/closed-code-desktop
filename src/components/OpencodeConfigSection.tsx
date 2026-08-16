@@ -145,7 +145,7 @@ export function OpencodeConfigSection() {
  * 지금 서버가 실제로 쓰는 값.
  *
  * MCP 는 설정 파일이 아니라 `GET /mcp` 에서 온다 — **파일에 없는데 붙어 있는 것**이 있기
- * 때문이다(이 앱이 런타임으로 넣는 `open-code-desktop`). 파일만 보면 그게 안 보인다.
+ * 때문이다(이 앱이 런타임으로 넣는 `closed-code-desktop`). 파일만 보면 그게 안 보인다.
  */
 function Effective({
   state,

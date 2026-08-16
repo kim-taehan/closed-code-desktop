@@ -18,7 +18,7 @@
 //   - `subtask: true` — 별도 에이전트로 도는 명령. 우리는 지금 대화에서 그냥 돈다
 //   - 명령이 지정한 `agent`·`model` — 팝업에 태그로 보여만 주고 세션에 걸지는 않는다
 
-// **위치 인자(`$1`·`$2`)도 opencode 의 규칙이다** — MCP 프롬프트 `open-code-desktop:open` 의
+// **위치 인자(`$1`·`$2`)도 opencode 의 규칙이다** — MCP 프롬프트 `closed-code-desktop:open` 의
 // `hints` 가 `["$1","$2"]` 로 오고, 스킬 `customize-opencode` 의 본문에도 `$1` 이 있다.
 // 다만 **우리가 전개하는 갈래(source: 'command')의 템플릿에는 아직 하나도 없어서** 넣지
 // 않았다. 그런 템플릿을 만나면 여기에 더한다.

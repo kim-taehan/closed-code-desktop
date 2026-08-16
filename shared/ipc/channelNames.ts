@@ -130,6 +130,15 @@ export const Channel = {
   MODEL_CHECK: 'model:check',
   /** renderer → main: opencode 서버가 떠 있는지 (Doctor 1단계) */
   SERVER_PING: 'server:ping',
+  /**
+   * renderer → main: **이 프로젝트의 서버를 우리가 띄웠나** (주소·pid 포함).
+   *
+   * ping 과 다른 물음이다. ping 은 *"그 주소가 응답하나"* 이고 이쪽은 *"우리 것인가"* 다 —
+   * 「다시 시작」을 줄지 「서버 시작」을 줄지가 여기서 갈린다. 우리 것이 아니면 못 죽인다.
+   */
+  SERVER_STATUS: 'server:status',
+  /** renderer → main: 서버 시작·다시 시작·종료. 현장 사용자에게는 터미널이 없다 */
+  SERVER_CONTROL: 'server:control',
   /** renderer → main: 지금 프로젝트만 다시 붙는다 */
   SESSION_RECONNECT: 'session:reconnect',
   /** renderer → main: runtime 프로세스를 새로 띄우고 전부 다시 붙는다 */

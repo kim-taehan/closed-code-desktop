@@ -32,7 +32,7 @@ const EXCHANGE: OpencodeMessage[] = [
         id: 'prt_t1',
         type: 'tool',
         callID: 'call_00_ET_COUN10f433lZtJolero58610',
-        tool: 'open-code-desktop_open_file',
+        tool: 'closed-code-desktop_open_file',
         state: {
           status: 'completed',
           input: { path: 'README.md' },
@@ -105,7 +105,7 @@ describe('replayFrames', () => {
     const call = body.find((c) => c['messageType'] === ChunkType.TOOL_CALL)
     const result = body.find((c) => c['messageType'] === ChunkType.TOOL_RESULT)
     expect(call).toMatchObject({
-      toolName: 'open-code-desktop_open_file',
+      toolName: 'closed-code-desktop_open_file',
       toolCallId: 'call_00_ET_COUN10f433lZtJolero58610',
       // 인자는 라이브에 없고 재생에만 있다 — 없으면 도구 행이 이름만 남는다 (`toolFrames` 주석)
       toolArgs: { path: 'README.md' },

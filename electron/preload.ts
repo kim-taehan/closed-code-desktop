@@ -166,6 +166,18 @@ const bridge: DesktopBridge = {
     ipcRenderer.invoke(Channel.MODEL_CHECK) as Promise<{ ok: boolean; message: string }>,
   pingServer: () =>
     ipcRenderer.invoke(Channel.SERVER_PING) as Promise<{ ok: boolean; detail: string }>,
+  serverStatus: () =>
+    ipcRenderer.invoke(Channel.SERVER_STATUS) as Promise<{
+      running: boolean
+      url: string | null
+      pid: number | null
+    }>,
+  controlServer: (payload: { action: 'start' | 'restart' | 'stop' }) =>
+    ipcRenderer.invoke(Channel.SERVER_CONTROL, payload) as Promise<{
+      ok: boolean
+      error?: string
+      status: { running: boolean; url: string | null; pid: number | null }
+    }>,
   reconnectProject: () => ipcRenderer.invoke(Channel.SESSION_RECONNECT) as Promise<void>,
   restartRuntime: () => ipcRenderer.invoke(Channel.RUNTIME_RESTART) as Promise<void>,
   listCommands: () => ipcRenderer.invoke(Channel.COMMAND_LIST) as Promise<CommandListPayload>,

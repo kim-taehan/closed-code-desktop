@@ -1,5 +1,3 @@
-import type { ActiveFileNotice } from '../../shared/ipc/extensionPayloads'
-import { describeView } from './currentView'
 import { openTargetOf, type OpenTarget } from './openFile'
 import type { RunProjectTool } from './server'
 
@@ -17,7 +15,6 @@ export interface McpToolPorts {
   /** 지금 앞에 나와 있는 프로젝트 (`ProjectRegistry.active`) */
   focusedProjectId(): string | null
   /** 편집기에서 보고 있는 파일 — 렌더러가 알려 준 마지막 값 (`ActiveFileTracker`) */
-  activeFile(): ActiveFileNotice | null
   /** 화면에 파일을 연다. 창이 없어 못 보냈으면 false */
   openInView(projectId: string, target: OpenTarget): boolean
 }
@@ -30,10 +27,6 @@ export function createToolRunner(ports: McpToolPorts): RunProjectTool {
     if (root === null) throw new Error('닫힌 프로젝트입니다')
 
     const focused = ports.focusedProjectId() === projectId
-
-    if (name === 'current_view') {
-      return describeView({ focused, activeFile: focused ? ports.activeFile() : null })
-    }
 
     if (name !== 'open_file') throw new Error(`모르는 도구입니다: ${name}`)
 

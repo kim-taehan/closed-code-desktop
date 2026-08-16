@@ -16,6 +16,9 @@ import type {
   HistoryRenamePayload,
   HistoryStatePayload,
   ModelCheckResultPayload,
+  ServerControlPayload,
+  ServerControlResultPayload,
+  ServerStatusPayload,
   PermissionModePayload,
   WorkingDirPayload,
   PickedAttachment,
@@ -144,6 +147,10 @@ export interface DesktopBridge extends GitHistoryBridge, ExtensionRegistryBridge
   checkModels(): Promise<ModelCheckResultPayload>
   /** desktop 이 **그 프로젝트의** opencode 서버에 직접 닿는지 확인한다 (진단 2단계) */
   pingServer(): Promise<ServerPingResultPayload>
+  /** 이 프로젝트의 서버를 우리가 띄웠나 — 「다시 시작」과 「서버 시작」이 여기서 갈린다 */
+  serverStatus(): Promise<ServerStatusPayload>
+  /** 서버 시작·다시 시작·종료. 현장 사용자에게는 터미널이 없다 */
+  controlServer(payload: ServerControlPayload): Promise<ServerControlResultPayload>
   /** 지금 프로젝트만 다시 붙는다. 서버는 살려 둔다 */
   reconnectProject(): Promise<void>
   /** 우리가 띄운 서버를 접고 다시 띄운 뒤 열려 있는 프로젝트를 전부 되살린다 */

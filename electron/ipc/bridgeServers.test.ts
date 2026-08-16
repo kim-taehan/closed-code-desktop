@@ -60,6 +60,7 @@ describe('SessionBridge — 서버 수명', () => {
         const started: SpawnedServer = {
           url: server.baseUrl,
           pid: 1000 + roots.length,
+          bin: '/bin/opencode',
           stop: () => {
             stops[root] = (stops[root] ?? 0) + 1
             return Promise.resolve()
@@ -68,7 +69,14 @@ describe('SessionBridge — 서버 수명', () => {
         return Promise.resolve(started)
       },
     })
-    return { bridge: new SessionBridge(windowOf(sent), pool), pool }
+    // MCP 등록/해제 신호. 재시작 뒤 **다시 등록되는가**가 이 훅으로 보인다
+    const ready: string[] = []
+    const lost: string[] = []
+    const bridge = new SessionBridge(windowOf(sent), pool, {
+      onSessionReady: (project) => ready.push(project.id),
+      onSessionLost: (id) => lost.push(id),
+    })
+    return { bridge, pool, ready, lost }
   }
 
   it('탭을 열면 그 프로젝트의 서버를 띄운다 — 프로젝트마다 하나', async () => {
@@ -127,6 +135,53 @@ describe('SessionBridge — 서버 수명', () => {
     await bridge.dispose()
 
     expect(stops).toEqual({ '/tmp/alpha': 1, '/tmp/beta': 1 })
+  })
+
+  // 사용자가 「연결」 팝업에서 직접 조작하는 길 (설계 2026-08-14). 현장에는 터미널이 없다.
+  describe('사용자 조작', () => {
+    it('시작 — 없으면 띄운다', async () => {
+      const { bridge } = await setup()
+
+      await bridge.controlServer('start', projectOf('A', '/tmp/alpha'))
+
+      expect(roots).toEqual(['/tmp/alpha'])
+      await bridge.dispose()
+    })
+
+    // ⚠️ **여기가 "연결은 됐는데 도구가 없다" 를 막는 자리다.** opencode 의 MCP 등록은
+    // instance 수명이라 새로 뜬 서버에는 없다. 등록 표시를 비우는 신호(onSessionLost)와
+    // 다시 등록하는 신호(onSessionReady)가 **재시작마다 짝으로** 나야 한다.
+    it('다시 시작 — 접었다 띄우고 MCP 재등록 신호가 다시 난다', async () => {
+      const { bridge, ready, lost } = await setup()
+      const project = projectOf('A', '/tmp/alpha')
+      await bridge.activate(project)
+      expect(ready).toContain('A')
+      const registeredBefore = ready.length
+
+      await bridge.controlServer('restart', project)
+
+      expect(stops['/tmp/alpha']).toBe(1)
+      expect(roots).toEqual(['/tmp/alpha', '/tmp/alpha'])
+      expect(lost).toContain('A') // 등록 표시를 비웠다
+      expect(ready.length).toBeGreaterThan(registeredBefore) // 그리고 다시 등록했다
+      await bridge.dispose()
+    })
+
+    it('종료 — 서버를 거두고 화면에 끊겼다고 알린다', async () => {
+      const { bridge } = await setup()
+      const project = projectOf('A', '/tmp/alpha')
+      await bridge.activate(project)
+
+      await bridge.controlServer('stop', project)
+
+      expect(stops['/tmp/alpha']).toBe(1)
+      // 마지막 상태가 ready 로 남으면, 방금 끈 서버를 화면은 살아 있다고 말한다
+      const states = sent.map(
+        (message) => (message.payload as { payload?: { handshake?: { stage?: string } } }).payload?.handshake,
+      )
+      expect(states.at(-1)?.stage).toBe('idle')
+      await bridge.dispose()
+    })
   })
 
   // 서버를 못 띄우면 세션도 없다. **사유를 화면에 올려야 한다** — 조용히 넘어가면

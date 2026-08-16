@@ -38,7 +38,7 @@ import { PtySocket } from './socket'
 // opencode 를 올릴 때 `electron/pty/isolation.test.ts` 를 먼저 본다.
 
 /** 우리가 만든 pty 를 알아보는 이름. 앱을 껐다 켜도 이걸로 되찾는다. */
-export const DRAWER_TITLE = 'open-code-desktop 드로어'
+export const DRAWER_TITLE = 'closed-code-desktop 드로어'
 
 /** FitAddon 은 창을 끌 때마다 부른다 — 매번 HTTP 를 때리지 않게 묶는다. */
 const RESIZE_DEBOUNCE_MS = 120

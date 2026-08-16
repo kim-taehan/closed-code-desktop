@@ -18,9 +18,13 @@ const PROTOCOL_VERSION = '2025-06-18'
  *
  * 도구 이름은 opencode 가 `sanitize(서버이름) + "_" + sanitize(도구이름)` 으로 짓고
  * `sanitize` 는 `s.replace(/[^a-zA-Z0-9_-]/g, "_")` 다 (1.17.18 바이너리 실측).
- * **하이픈은 남는다** — 그래서 모델이 보는 이름은 `open-code-desktop_open_file` 이다.
+ * **하이픈은 남는다** — 그래서 모델이 보는 이름은 `closed-code-desktop_open_file` 이다.
+ *
+ * ⚠️ **이 상수를 바꾸면 등록 이름이 바뀐다.** desktop 은 사용자 `opencode.json` 을 건드리지
+ * 않고 세션마다 런타임으로 등록하므로(`register.ts:16`) 옛 이름은 opencode 가 다시 뜨면
+ * 사라진다. 다만 **바꾼 뒤 첫 실행에서 살아 있던 opencode 에는 두 이름이 함께 보일 수 있다.**
  */
-export const SERVER_NAME = 'open-code-desktop'
+export const SERVER_NAME = 'closed-code-desktop'
 
 export interface RpcRequest {
   id?: unknown
@@ -57,12 +61,6 @@ export const TOOLS = [
       },
       required: ['path'],
     },
-  },
-  {
-    name: 'current_view',
-    description:
-      '사용자가 이 프로젝트에서 무엇을 보고 있는지 알려준다. 사용자가 "이거", "여기", "이 파일" 처럼 화면을 가리키는 말을 쓸 때, 그리고 파일을 고치기 전에 확인한다.',
-    inputSchema: { type: 'object', properties: {} },
   },
 ] as const
 

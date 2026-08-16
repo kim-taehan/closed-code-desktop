@@ -1,5 +1,6 @@
 import { findOpencodeBinary, notFoundMessage } from './binary'
 import { startOpencodeServer, type SpawnedServer } from './serverProcess'
+import type { ServerPidStore } from './pidStore'
 
 // **프로젝트마다 opencode 서버 하나.** 이 파일이 "이 앱은 사용자가 띄운 서버에 붙는다" 를 끝낸다.
 //
@@ -28,6 +29,13 @@ export interface ServerPoolOptions {
    * 기본 구현은 `binary.ts` 로 실행 파일을 찾아 `serverProcess.ts` 로 띄운다.
    */
   start?: (root: string) => Promise<SpawnedServer>
+  /**
+   * 띄운 PID 를 적어 두는 곳 (`pidStore.ts`). 없으면 안 적는다 — 시험이 그렇게 돈다.
+   *
+   * **훅이 안 도는 종료(SIGKILL·크래시·전원 차단)의 그물이다.** 우리가 곱게 거둔 것은
+   * 지우므로, 파일에 남아 있다는 것은 곧 "지난 실행이 안 거둔 것" 이다.
+   */
+  pids?: ServerPidStore
   log?: (line: string) => void
 }
 
@@ -85,8 +93,30 @@ export class OpencodeServerPool {
       throw new Error('프로젝트가 닫혀 opencode 서버를 거뒀습니다')
     }
     this.servers.set(projectId, server)
+    // 표에 넣는 것과 **같은 자리에서** 흔적을 남긴다. 둘이 갈리면 그 틈이 곧 유령이다.
+    if (server.pid !== undefined) {
+      this.options.pids?.add({
+        pid: server.pid,
+        url: server.url,
+        root,
+        bin: server.bin,
+        startedAt: Date.now(),
+      })
+    }
     this.options.log?.(`opencode 서버 기동: ${root} → ${server.url} (pid=${server.pid ?? '?'})`)
     return server
+  }
+
+  /**
+   * 접었다 다시 띄운다. 「이 프로젝트 서버 다시 시작」의 실체다.
+   *
+   * **주소가 바뀐다** — 포트를 우리가 고르지 않기 때문이다. 그래서 부르는 쪽은 세션도
+   * 다시 만들어야 하고, **MCP 등록도 다시 해야 한다**(등록은 instance 수명이라 새 서버에는
+   * 없다). 그 순서는 `SessionBridge.controlServer` 가 쥔다.
+   */
+  async restart(projectId: string, root: string): Promise<string> {
+    await this.stop(projectId)
+    return this.urlFor(projectId, root)
   }
 
   /**
@@ -98,6 +128,19 @@ export class OpencodeServerPool {
   urlOf(projectId: string | null | undefined): string | null {
     if (projectId === null || projectId === undefined) return null
     return this.servers.get(projectId)?.url ?? null
+  }
+
+  /**
+   * 화면에 그대로 내려보낼 지금 상태. 역시 **띄우지 않는다.**
+   *
+   * `running` 이 거짓이라는 것은 **"우리 표에 없다"** 는 뜻이다. 그 자리에 남의 서버가
+   * 떠 있을 수는 있지만 그건 우리가 죽일 수 있는 것이 아니다 — 화면은 그 차이를 말해야 한다
+   * (「다시 시작」이 아니라 「서버 시작」).
+   */
+  statusOf(projectId: string | null | undefined): { running: boolean; url: string | null; pid: number | null } {
+    const server = projectId === null || projectId === undefined ? undefined : this.servers.get(projectId)
+    if (server === undefined) return { running: false, url: null, pid: null }
+    return { running: true, url: server.url, pid: server.pid ?? null }
   }
 
   /**
@@ -115,6 +158,8 @@ export class OpencodeServerPool {
     if (server !== undefined) {
       this.options.log?.(`opencode 서버 종료: ${server.url} (pid=${server.pid ?? '?'})`)
       await server.stop()
+      // 곱게 거뒀으니 흔적을 지운다. 남기면 다음 실행이 남의 PID 를 들여다본다.
+      if (server.pid !== undefined) this.options.pids?.forget(server.pid)
       return
     }
     // 아직 주소도 못 읽은 것. launch() 도 표가 빈 것을 보고 스스로 거두지만,

@@ -76,7 +76,7 @@ describe('McpSection', () => {
   })
 
   it('우리 서버는 도구 칩과 "이 앱이 띄움" 으로 갈린다', () => {
-    show([server({ serverName: 'open-code-desktop', transport: 'unknown', tools: ['open_file'] })])
+    show([server({ serverName: 'closed-code-desktop', transport: 'unknown', tools: ['open_file'] })])
     expect(screen.getByText('open_file')).toBeTruthy()
     expect(screen.getByText(/이 앱이 띄움/)).toBeTruthy()
   })
