@@ -19,6 +19,19 @@ import type { RunProjectTool } from './server'
 // `shared/run/runList.ts` 머리말). 그래서 규칙을 고쳐 적는다: **파일을 고치는 도구는 자기
 // 파일 조작을 자기 모듈에 두고**(`saveRunCommands.ts`), 이 파일은 갈래와 돌려줄 문장만 정한다.
 
+/**
+ * 뒤에 있는 프로젝트라 거절할 때 **문장의 꼬리.** 세 도구가 똑같이 이 말로 끝난다.
+ *
+ * 사유절은 묶지 않는다 — 도구마다 정말 다르다(파일 탭을 안 들고 있다 · 셸 칸이 앞엣것
+ * 하나뿐이다 · 탭이 없으면 멈출 문이 없다). 모델이 읽고 판단하는 것이 그 사유절이라
+ * 한 문장으로 뭉개면 도구가 무엇을 못 하는지가 사라진다.
+ *
+ * 꼬리만 묶는 처방은 `src/state/connectionDoctor.ts` 의 `ADOPT_ADVICE` 가 받은 것과 같다:
+ * 같은 문장이 리터럴 여러 벌로 있으면 고칠 때 한쪽만 내려가고, **낡은 채 남은 쪽이 하필
+ * 더 자주 보인다** (거기서는 `3599d87` → `01aa781` 로 두 번 걸렸다).
+ */
+export const SWITCH_TAB_ADVICE = '사용자에게 이 프로젝트 탭으로 옮겨 달라고 한 뒤 다시 부르세요.'
+
 export interface McpToolPorts {
   /** 열려 있는 프로젝트의 루트. 모르는(닫힌) 프로젝트면 null */
   rootOf(projectId: string): string | null
@@ -105,7 +118,7 @@ async function runOpenFile(
 
   // 조용히 성공했다고 하지 않고 무슨 일이 있었는지 그대로 돌려준다.
   if (!focused) {
-    return `${target.path} 을(를) 열지 못했습니다 — 사용자가 지금 다른 프로젝트를 보고 있고, 이 앱은 뒤에 있는 프로젝트의 파일 탭을 유지하지 않습니다. 사용자에게 이 프로젝트 탭으로 옮겨 달라고 한 뒤 다시 부르세요.`
+    return `${target.path} 을(를) 열지 못했습니다 — 사용자가 지금 다른 프로젝트를 보고 있고, 이 앱은 뒤에 있는 프로젝트의 파일 탭을 유지하지 않습니다. ${SWITCH_TAB_ADVICE}`
   }
 
   if (!ports.openInView(projectId, target)) {
@@ -127,7 +140,7 @@ function runOpenTerminal(
   const command = commandOf(args)
 
   if (!focused) {
-    return `셸 칸을 열지 못했습니다 — 사용자가 지금 다른 프로젝트를 보고 있고, 셸 칸은 앞에 나와 있는 프로젝트의 것 하나뿐입니다. 사용자에게 이 프로젝트 탭으로 옮겨 달라고 한 뒤 다시 부르세요.`
+    return `셸 칸을 열지 못했습니다 — 사용자가 지금 다른 프로젝트를 보고 있고, 셸 칸은 앞에 나와 있는 프로젝트의 것 하나뿐입니다. ${SWITCH_TAB_ADVICE}`
   }
 
   if (!ports.openTerminal(projectId, command)) {
@@ -153,7 +166,7 @@ async function runRunProject(
   const { name, command } = runProjectInput(args)
 
   if (!focused) {
-    return `\`${command}\` 를 띄우지 못했습니다 — 사용자가 지금 다른 프로젝트를 보고 있습니다. 뒤에 있는 프로젝트에서 띄우면 화면에 탭이 안 생겨 사용자가 멈출 방법이 없습니다. 이 프로젝트 탭으로 옮겨 달라고 한 뒤 다시 부르세요.`
+    return `\`${command}\` 를 띄우지 못했습니다 — 사용자가 지금 다른 프로젝트를 보고 있습니다. 뒤에 있는 프로젝트에서 띄우면 화면에 탭이 안 생겨 사용자가 멈출 방법이 없습니다. ${SWITCH_TAB_ADVICE}`
   }
 
   const result = await ports.runProject(projectId, name, command)
