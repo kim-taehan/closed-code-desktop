@@ -157,20 +157,30 @@ describe('주인 판정이 문장까지 닿는다', () => {
     davis.controlServer.mockImplementation(() => new Promise(() => {}))
   }
 
-  it('우리가 띄운 서버면 「다시 띄웁니다」라고 말한다', async () => {
+  // ⚠️ **약속 문구(「남의 것에 손대지 않는다」)를 여기서 겨누지 않는다.**
+  //
+  // 그 낱말은 이미 두 번 갈렸고(`3599d87` → `01aa781`), 두 번째 때 이 배선 시험까지 함께
+  // 빨개져 리더가 문자열 셋을 고쳐야 했다. **문장의 내용은 `healNotice.test.ts` 가 본다** —
+  // 여기서 또 겨누면 사본이 하나 더 늘고, 문구를 고칠 때마다 정작 이 시험이 겨누는 것
+  // (**주인 판정이 갈래를 실제로 갈랐는가**)이 문구 관리에 묻힌다.
+  //
+  // 그래서 두 갈래를 **서로 다른 문장인가**로 가른다. 판정이 안 닿으면 둘이 같아진다.
+  it('우리가 띄운 서버면 「다시 띄운다」 쪽 문장이 나온다', async () => {
     serverAlive(true)
     render(<Probe id="A" status="disconnected" />)
     // ①(재연결 재확인 1초 × 3)이 실패해야 ②로 내려간다
     await settle(5000)
+    expect(headline()).toContain('재연결이 실패했습니다')
     expect(headline()).toContain('다시 띄웁니다')
-    expect(headline()).not.toContain('건드리지 않습니다')
   }, 20000)
 
-  it('우리 것이 아니면 남의 프로세스는 안 건드린다고 말한다', async () => {
+  it('우리 것이 아니면 「새로 띄운다」 쪽 문장이 나온다 — 같은 문장이 아니다', async () => {
     serverAlive(false)
     render(<Probe id="A" status="disconnected" />)
     await settle(5000)
-    expect(headline()).toContain('건드리지 않습니다')
+    expect(headline()).toContain('이 프로젝트용 서버를')
+    // 판정이 안 닿으면 위 시험과 같은 문장이 나온다 — 그 자리를 겨눈다
+    expect(headline()).not.toContain('재연결이 실패했습니다')
   }, 20000)
 })
 
