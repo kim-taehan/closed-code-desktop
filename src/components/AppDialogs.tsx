@@ -8,6 +8,7 @@ import { useExtensionAskText } from '../state/useExtensionAskText'
 import { useDoctorGate } from '../state/useDoctorGate'
 import { useAutoHeal } from '../state/useAutoHeal'
 import { HealBanner } from './HealBanner'
+import { RunHealBanner } from './RunHealBanner'
 import type { ProjectRecord } from '../../shared/projects/projectRecord'
 import type { McpState } from '../../shared/protocol/mcpConfig'
 import type { ProjectStatus } from '../state/projectStatus'
@@ -54,6 +55,12 @@ export function AppDialogs(props: AppDialogsProps) {
     <>
       {/* 상태줄·배너. 창이 뜨기 전 단계의 표시라 다이얼로그들과 같은 자리에 산다 */}
       <HealBanner notice={heal.notice} />
+
+      {/* 실행이 로그에 아는 실패를 뱉으면 스스로 고친다 (설계 2026-08-16 §4).
+          **여기 사는 이유는 수명이다** — 사이드바 「실행」 패널은 그 패널을 볼 때만
+          마운트되는데, 오토힐링은 사용자가 어디를 보고 있든 돌아야 한다. 위 자가 복구와
+          같은 자리인 것도 맞다: 둘 다 "앱이 스스로 뭔가 하고 있다" 를 알리는 띠다. */}
+      {props.project && <RunHealBanner projectId={props.project.id} />}
 
       {props.palette === 'quickOpen' && (
         <QuickOpen onOpen={props.onOpenFile} onClose={props.onClosePalette} />

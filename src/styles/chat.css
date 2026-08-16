@@ -2061,6 +2061,25 @@ body {
   white-space: nowrap;
 }
 
+/* 오토힐링만 갖는 손잡이 (`RunHealBanner`). 연결 사다리 쪽 배너에는 버튼이 없다 —
+   그쪽은 도는 중에 손잡이를 주면 같은 조치가 두 번 나가기 때문이다. 이쪽은 예고를
+   **물리는** 자리라 규칙이 뒤집힌다. 오른쪽 끝으로 밀어 문장과 안 다투게 한다. */
+.dc-heal__stop {
+  margin-left: auto;
+  flex: none;
+  padding: 3px 8px;
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius-sm);
+  background: transparent;
+  color: var(--dc-text);
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+.dc-heal__stop:hover {
+  background: var(--dc-surface);
+}
+
 /* ── 런처 (첫 실행 화면·"+") ─────────────────────────── */
 
 /* 세로 가운데 한 줄 골격. 런처가 2단으로 떠난 뒤로는 첫 목록 대기 화면

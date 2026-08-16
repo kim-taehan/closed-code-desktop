@@ -37,6 +37,13 @@ beforeEach(() => {
     // AppDialogs 는 확장 물음창(`useAskText`)도 쥔다 — 마운트 즉시 구독한다
     onExtensionAskText: vi.fn(() => () => {}),
     respondExtensionAskText: vi.fn(),
+    // 오토힐링 띠(`RunHealBanner`)도 여기 산다 — 사이드바 「실행」 패널은 그 패널을 볼 때만
+    // 마운트되는데 오토힐링은 사용자가 어디를 보고 있든 돌아야 한다 (설계 2026-08-16 §4).
+    // 그래서 실행 목록과 드로어 출력 구독이 이 창들의 마운트에 함께 걸린다.
+    readRunList: vi.fn().mockResolvedValue({ found: false, entries: [], stale: false }),
+    onRunListChanged: vi.fn(() => () => {}),
+    onShellData: vi.fn(() => () => {}),
+    sendShellInput: vi.fn(),
   }
 })
 
