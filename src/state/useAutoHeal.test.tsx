@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, cleanup, render } from '@testing-library/react'
+import { act, cleanup, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAutoHeal, RECHECK_MS } from './useAutoHeal'
 import type { ProjectStatus } from './projectStatus'
@@ -37,8 +37,15 @@ beforeEach(() => {
 
 function Probe({ id, status }: { id?: string; status?: ProjectStatus }) {
   const heal = useAutoHeal(id, status)
-  return <span data-testid="stage">{heal.notice?.stage ?? '-'}</span>
+  return (
+    <>
+      <span data-testid="stage">{heal.notice?.stage ?? '-'}</span>
+      <span data-testid="headline">{heal.notice?.headline ?? '-'}</span>
+    </>
+  )
 }
+
+const headline = () => screen.getByTestId('headline').textContent ?? ''
 
 /** 사다리 한 바퀴가 끝날 때까지 (재확인 1초 × 3 이 두 번 낀다) */
 async function settle(ms = 8000) {
@@ -128,6 +135,42 @@ describe('한 바퀴가 상한이다', () => {
     } finally {
       vi.useRealTimers()
     }
+  }, 20000)
+})
+
+// ⭐⭐ **주인 판정이 사용자가 볼 문장까지 닿는가.**
+//
+// 순수 함수는 `healNotice.test.ts` 가 두 갈래 다 잠갔고, 포트는 `doctorDriver.test.ts` 가
+// 잠갔다. **그래도 그 사이가 이어졌는지는 아직 다른 물음이다** — `onOwnership` 을 안 걸거나
+// `healNotice` 에 안 넘겨도 **조치는 그대로 옳고 사다리도 통과한다.** 빨개지는 시험이
+// 하나도 없이 사용자만 늘 한쪽 문장을 본다.
+//
+// ⚠️ QA 가 실물에서 「우리 것」 갈래를 못 밟았다 (2026-08-16): 크래시 경로는 `forgetDead` 가
+// 표를 비운 뒤라 언제나 `theirs` 이고, 반대 갈래는 **서버는 살아 있는데 세션만 깨진** 경우라
+// 진단이 `model` 층까지 초록이어야 도달한다. 사내 프록시가 안 닿는 기계에서는 거기서 끝난다.
+// **실물에서 못 밟는 갈래일수록 여기서 밟아 둬야 한다.**
+describe('주인 판정이 문장까지 닿는다', () => {
+  /** 서버·모델은 멀쩡하고 **세션만** 깨진 자리 — 「우리 것」 갈래가 사는 유일한 경로 */
+  function serverAlive(ours: boolean) {
+    davis.serverStatus.mockResolvedValue({ running: ours, url: 'u', pid: ours ? 42 : null, ours })
+    // ②에서 멈춰 세운다 — 그 칸의 문장을 봐야 한다
+    davis.controlServer.mockImplementation(() => new Promise(() => {}))
+  }
+
+  it('우리가 띄운 서버면 「다시 띄웁니다」라고 말한다', async () => {
+    serverAlive(true)
+    render(<Probe id="A" status="disconnected" />)
+    // ①(재연결 재확인 1초 × 3)이 실패해야 ②로 내려간다
+    await settle(5000)
+    expect(headline()).toContain('다시 띄웁니다')
+    expect(headline()).not.toContain('그대로 둡니다')
+  }, 20000)
+
+  it('우리 것이 아니면 남의 서버를 살려 둔다고 말한다', async () => {
+    serverAlive(false)
+    render(<Probe id="A" status="disconnected" />)
+    await settle(5000)
+    expect(headline()).toContain('그대로 둡니다')
   }, 20000)
 })
 

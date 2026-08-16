@@ -142,6 +142,61 @@ describe('② 서버 되살리기 — 주인이 누구든 restart 하나다', ()
   })
 })
 
+// ⭐ **주인 판정이 화면까지 가는 길.**
+//
+// 조치는 주인과 무관하게 하나라, `ours` 가 남아서 하는 일은 **문구를 고르는 것뿐**이다.
+// 그 말은 곧 **이 포트가 끊기면 아무 시험도 안 빨개진다**는 뜻이다 — 조치는 그대로 옳고
+// 사다리도 통과하며, 사용자만 늘 틀린 문장을 본다. 그래서 여기서 따로 잠근다.
+describe('onOwnership — main 이 낸 판정을 그대로 흘려보낸다', () => {
+  const seen = () => davis.serverStatus.mock.results.length
+
+  async function ownershipOf(): Promise<string[]> {
+    const got: string[] = []
+    await driveDoctor({
+      getStatus: () => 'disconnected',
+      onState: () => {},
+      onOwnership: (ownership) => got.push(ownership),
+      shouldStop: () => false,
+      recheckIntervalMs: 0,
+    })
+    return got
+  }
+
+  it('우리 것이면 ours 를 흘린다', async () => {
+    ownedByUs(true)
+    expect(await ownershipOf()).toContain('ours')
+  })
+
+  it('남의 것이면 theirs 를 흘린다', async () => {
+    ownedByUs(false)
+    expect(await ownershipOf()).toEqual(expect.arrayContaining(['theirs']))
+    expect(await ownershipOf()).not.toContain('ours')
+  })
+
+  // 못 물으면 `theirs` 다 — 화면의 그 문장이 "죽었거나 남의 것" 을 함께 덮는다
+  it('main 에 못 물으면 theirs 다', async () => {
+    davis.serverStatus.mockRejectedValue(new Error('창이 없다'))
+    expect(await ownershipOf()).not.toContain('ours')
+  })
+
+  // 성공만 하는 회전은 ②로 안 내려가므로 물을 이유가 없다 — `ps` fork 는 공짜가 아니다
+  it('전부 정상이면 묻지도 흘리지도 않는다', async () => {
+    const got = await (async () => {
+      const collected: string[] = []
+      await driveDoctor({
+        getStatus: () => 'ready',
+        onState: () => {},
+        onOwnership: (ownership) => collected.push(ownership),
+        shouldStop: () => false,
+        recheckIntervalMs: 0,
+      })
+      return collected
+    })()
+    expect(got).toEqual([])
+    expect(seen()).toBe(0)
+  })
+})
+
 // ⭐⭐ **이 describe 가 없으면 재시작 루프가 조용히 산다** (설계 §5).
 describe('한 바퀴가 상한이다', () => {
   it('①②③ 을 전부 실패해도 서버 조작은 한 번뿐이다', async () => {
