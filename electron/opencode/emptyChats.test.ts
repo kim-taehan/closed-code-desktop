@@ -32,6 +32,24 @@ describe('빈 대화 판정', () => {
   })
 
   /**
+   * ⚠️ **세는 단계를 걷어내려는 사람이 멈춰야 하는 자리다.**
+   *
+   * 시각만 보고 접었다면 진짜 대화가 사라지는 세션이 **실재한다** (실측 —
+   * `opencode-local.db` 의 `ses_203ceefa5ffeuY0eTackOMPfkW`: `delta=0` 인데 메시지 2건,
+   * 메시지가 세션 생성 +15ms·+17ms 에 들어왔는데 `time_updated` 가 안 움직였다).
+   * 아래는 그 세션을 그대로 옮긴 것이고, **후보로 잡히되 접히지 않는** 것이 계약이다.
+   */
+  it('delta 가 0인데 메시지가 있는 세션 — 후보로 세되 접지 않는다', async () => {
+    const fetchMessages = vi.fn(async () => [
+      { info: { id: 'msg_dfc311069001', role: 'user' } },
+      { info: { id: 'msg_dfc31106b003', role: 'assistant' } },
+    ] as OpencodeMessage[])
+    const empty = await verifyEmptyChats([session('ses_203ceefa5ffeuY0e')], fetchMessages)
+    expect(fetchMessages).toHaveBeenCalledWith('ses_203ceefa5ffeuY0e')
+    expect(empty.size).toBe(0)
+  })
+
+  /**
    * `time.updated` 는 메시지 없이도 움직인다 (`setModel`·`setAgent` 가 올린다 — 실측).
    * 그래서 후보 판정은 **건너뛰기 용도로만** 쓴다. 건너뛴 세션에는 딱지가 안 붙는다.
    * 반대 방향(delta=0 인데 메시지 있음)은 저장소 2550건에서 **0건**이다 (`emptyChats.ts`).
