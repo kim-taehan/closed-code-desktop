@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { alive, created, resetFakePtyServer, sockets } from './__fixtures__/fakePtyServer'
 
 // **이미 돌고 있으면 겹쳐 띄우지 않는가** (설계 §6 넷째 줄).
 //
@@ -6,8 +7,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 // **정말로 안 띄우는가** 다 — 두 층이 각각 잠겨 있어도 그 사이가 비면 모델에게는 "안
 // 띄웠다" 고 말하면서 서버에는 개발 서버가 둘 도는 일이 생긴다.
 //
-// 가짜는 `multiplex.test.ts` 의 것과 같은 계약이다 (제목으로 되찾기 · 열리기 전에는 못 쓴다).
-// 파일을 나눈 것은 300줄 상한 때문이고, **가짜를 고칠 때는 둘 다 고쳐야 한다.**
+// 가짜는 `multiplex.test.ts` 와 **같은 것을 쓴다** (`__fixtures__/fakePtyServer.ts`).
+// 예전에는 사본이 둘이었고 여기에 *"가짜를 고칠 때는 둘 다 고쳐야 한다"* 고 적혀 있었다 —
+// 기억에 기대는 규칙이라, 한쪽만 고치면 두 시험이 서로 다른 서버를 상대로 초록을 낸다.
 
 const handlers = new Map<string, (...args: unknown[]) => unknown>()
 const listeners = new Map<string, (...args: unknown[]) => unknown>()
@@ -23,79 +25,15 @@ vi.mock('electron', () => ({
 
 const A = { id: 'A', root: '/tmp/projA' }
 
-interface FakeSocket {
-  readonly sent: string[]
-  fireOpen(): void
-}
-
-const sockets = new Map<string, FakeSocket>()
-
-// **열리기 전에는 못 쓴다** — 실물이 그렇다 (`socket.ts` 의 실측). 여기서 그냥 받아 주면
-// "맡아 뒀다 열릴 때 넣는다" 는 규칙이 없어도 초록이 나온다.
-vi.mock('./socket', () => ({
-  PtySocket: class {
-    opened = false
-    readonly sent: string[] = []
-    private openHandler: () => void = () => {}
-
-    constructor(options: { url: string }) {
-      sockets.set(options.url, this)
-    }
-    onData(): void {}
-    onControl(): void {}
-    onClose(): void {}
-    onError(): void {}
-    onOpen(handler: () => void): void {
-      this.openHandler = handler
-    }
-    open(): void {}
-    fireOpen(): void {
-      this.opened = true
-      this.openHandler()
-    }
-    write(data: string): boolean {
-      if (!this.opened) return false
-      this.sent.push(data)
-      return true
-    }
-    close(): void {}
-  },
-}))
-
-/** 서버에 살아 있는 pty (제목 → 하나). 되찾기 경로가 여기서 나온다 */
-const alive = new Map<string, { id: string; title: string; status: string }>()
-/** 서버에 만들어진 pty 의 제목. **겹쳐 띄우면 여기 둘이 쌓인다** */
-const created: string[] = []
+vi.mock('./socket', async () => {
+  const { FakePtySocket } = await import('./__fixtures__/fakePtyServer')
+  return { PtySocket: FakePtySocket }
+})
 
 vi.mock('./client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./client')>()
-  return {
-    ...actual,
-    PtyClient: class {
-      readonly headers = {}
-      list(): Promise<unknown[]> {
-        return Promise.resolve([...alive.values()])
-      }
-      create(_directory: string, input: { title: string }): Promise<{ id: string }> {
-        created.push(input.title)
-        const pty = { id: `pty_${input.title}`, title: input.title, status: 'running' }
-        alive.set(input.title, pty)
-        return Promise.resolve(pty)
-      }
-      socketUrl(_directory: string, ptyId: string): string {
-        return `ws://fake/${ptyId}`
-      }
-      get(): Promise<null> {
-        return Promise.resolve(null)
-      }
-      resize(): Promise<void> {
-        return Promise.resolve()
-      }
-      remove(): Promise<void> {
-        return Promise.resolve()
-      }
-    },
-  }
+  const { FakePtyClient } = await import('./__fixtures__/fakePtyServer')
+  return { ...actual, PtyClient: FakePtyClient }
 })
 
 describe('PtyDrawerBridge — run_project', () => {
@@ -104,9 +42,7 @@ describe('PtyDrawerBridge — run_project', () => {
   beforeEach(() => {
     handlers.clear()
     listeners.clear()
-    sockets.clear()
-    alive.clear()
-    created.length = 0
+    resetFakePtyServer()
     active = A
   })
 

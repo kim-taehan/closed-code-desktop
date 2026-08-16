@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { closed, exits, removed, resetFakePtyServer, sockets } from './__fixtures__/fakePtyServer'
 
 // **한 프로젝트에 칸이 여럿일 때 서로 섞이지 않는가** (설계 2026-08-16 §6 첫 줄).
 //
@@ -23,98 +24,21 @@ vi.mock('electron', () => ({
 
 const A = { id: 'A', root: '/tmp/projA' }
 
-interface FakeSocket {
-  readonly sent: string[]
-  fireOpen(): void
-  fireData(chunk: string): void
-  fireClose(): void
-}
-
-/** ptyId 로 찾는다 — 칸 하나에 소켓 하나다 */
-const sockets = new Map<string, FakeSocket>()
-const closed: string[] = []
-
-vi.mock('./socket', () => ({
-  PtySocket: class {
-    opened = false
-    readonly sent: string[] = []
-    private openHandler: () => void = () => {}
-    private dataHandler: (chunk: string) => void = () => {}
-    private closeHandler: () => void = () => {}
-
-    constructor(private readonly options: { url: string }) {
-      sockets.set(options.url, this)
-    }
-    onControl(): void {}
-    onError(): void {}
-    onOpen(handler: () => void): void {
-      this.openHandler = handler
-    }
-    onData(handler: (chunk: string) => void): void {
-      this.dataHandler = handler
-    }
-    onClose(handler: () => void): void {
-      this.closeHandler = handler
-    }
-    open(): void {}
-    fireOpen(): void {
-      this.opened = true
-      this.openHandler()
-    }
-    fireData(chunk: string): void {
-      this.dataHandler(chunk)
-    }
-    fireClose(): void {
-      this.closeHandler()
-    }
-    write(data: string): boolean {
-      if (!this.opened) return false
-      this.sent.push(data)
-      return true
-    }
-    close(): void {
-      closed.push(this.options.url)
-    }
-  },
-}))
-
-/** 서버에서 실제로 지워진 pty */
-const removed: string[] = []
-/** 서버에 살아 있는 pty (제목 → id). `list` 로 되찾는 경로가 여기서 나온다 */
-const alive = new Map<string, { id: string; title: string; status: string }>()
+// 가짜는 `runPane.test.ts` 와 **같은 것을 쓴다** (`__fixtures__/fakePtyServer.ts`) — 사본이
+// 둘이던 자리다. 갈라 두면 한쪽만 고쳐도 양쪽이 초록이라 어느 쪽이 실물인지 알 수 없다.
+vi.mock('./socket', async () => {
+  const { FakePtySocket } = await import('./__fixtures__/fakePtyServer')
+  return { PtySocket: FakePtySocket }
+})
 
 vi.mock('./client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./client')>()
-  return {
-    ...actual,
-    PtyClient: class {
-      readonly headers = {}
-      list(): Promise<unknown[]> {
-        return Promise.resolve([...alive.values()])
-      }
-      create(_directory: string, input: { title: string }): Promise<{ id: string }> {
-        // 제목이 곧 이름이다 — 실물도 제목으로 되찾는다
-        const pty = { id: `pty_${input.title}`, title: input.title, status: 'running' }
-        alive.set(input.title, pty)
-        return Promise.resolve(pty)
-      }
-      socketUrl(_directory: string, ptyId: string): string {
-        return `ws://fake/${ptyId}`
-      }
-      get(_directory: string, ptyId: string): Promise<{ exitCode: number } | null> {
-        return Promise.resolve(ptyId === 'pty_closed-code-desktop 드로어:dev' ? { exitCode: 7 } : null)
-      }
-      resize(): Promise<void> {
-        return Promise.resolve()
-      }
-      remove(_directory: string, ptyId: string): Promise<void> {
-        removed.push(ptyId)
-        for (const [title, pty] of alive) if (pty.id === ptyId) alive.delete(title)
-        return Promise.resolve()
-      }
-    },
-  }
+  const { FakePtyClient } = await import('./__fixtures__/fakePtyServer')
+  return { ...actual, PtyClient: FakePtyClient }
 })
+
+/** 이 파일에서 「이미 끝난 pty」로 쓸 칸. 가짜에 박아 두지 않고 여기서 채운다 */
+const DEV_PTY = 'pty_closed-code-desktop 드로어:dev'
 
 interface Sent {
   channel: string
@@ -128,10 +52,8 @@ describe('pty 다중화 — 한 프로젝트의 칸 둘', () => {
   beforeEach(() => {
     handlers.clear()
     listeners.clear()
-    sockets.clear()
-    alive.clear()
-    closed.length = 0
-    removed.length = 0
+    resetFakePtyServer()
+    exits.set(DEV_PTY, 7)
     pushed.length = 0
   })
 
