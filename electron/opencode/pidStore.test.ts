@@ -99,6 +99,13 @@ describe('owns — 그 PID 가 지금도 우리 것인가', () => {
     expect(pids.owns(process.pid)).toBe(false)
   })
 
+  // ⭐ **「잴 수 없었다」도 거짓으로 온다** — 파일을 못 읽으면 목록이 비고 그대로 false 다.
+  // 살아 있는 우리 서버가 조용히 「남의 것」이 되는 경로이고, 지금 견딜 만한 이유는
+  // `ours` 가 **문구만** 가르기 때문이다 (`pidStore.ts` 의 owns 주석 4번).
+  it('읽을 수 없는 저장소에서는 무엇을 물어도 거짓이다', () => {
+    expect(new ServerPidStore('/nonexistent/dir/servers.json').owns(process.pid)).toBe(false)
+  })
+
   it.skipIf(process.platform === 'win32')('살아 있고 명령줄이 맞으면 참이다', async () => {
     const ours = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 30000) /* serve */'])
     spawned.push(ours)
