@@ -163,14 +163,14 @@ describe('주인 판정이 문장까지 닿는다', () => {
     // ①(재연결 재확인 1초 × 3)이 실패해야 ②로 내려간다
     await settle(5000)
     expect(headline()).toContain('다시 띄웁니다')
-    expect(headline()).not.toContain('그대로 둡니다')
+    expect(headline()).not.toContain('건드리지 않습니다')
   }, 20000)
 
-  it('우리 것이 아니면 남의 서버를 살려 둔다고 말한다', async () => {
+  it('우리 것이 아니면 남의 프로세스는 안 건드린다고 말한다', async () => {
     serverAlive(false)
     render(<Probe id="A" status="disconnected" />)
     await settle(5000)
-    expect(headline()).toContain('그대로 둡니다')
+    expect(headline()).toContain('건드리지 않습니다')
   }, 20000)
 })
 

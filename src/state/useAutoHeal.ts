@@ -82,6 +82,12 @@ export function useAutoHeal(
   } | null>(null)
   const owned = run$ !== null && run$.id === projectId ? run$ : null
   const pipeline = owned?.state ?? null
+  /**
+   * **사다리가 다 실패해 멈췄다.** 주기 재측정의 근거이고, `pipeline` 과 따로 쥔다 —
+   * 재측정 회전이 `pipeline` 을 덮어쓰면서 자기 조건을 지우던 자리다 (아래 effect 주석).
+   * 세우는 것은 치유 회전의 `manual` 뿐이고, 내리는 것은 성공과 상태 회복뿐이다.
+   */
+  const [stopped, setStopped] = useState(false)
   /** 이번 프로젝트에서 자동 사다리를 이미 태웠나. **1회 상한의 실체다** */
   const usedRef = useRef(false)
   /** 지금 도는 중인가 — 겹쳐 돌면 재연결이 두 번 나간다 */
@@ -106,6 +112,7 @@ export function useAutoHeal(
     usedRef.current = false
     runningRef.current = false
     setRun(null)
+    setStopped(false)
   }, [projectId])
 
   // 화면이 사라지면 도는 사다리도 거둔다 (창을 닫는 길에서 서버가 다시 뜨면 안 된다)
@@ -122,12 +129,18 @@ export function useAutoHeal(
       try {
         const state = await driveDoctor({
           getStatus: () => statusRef.current ?? 'idle',
+          // ⚠️ **진단 전용 회전은 화면을 안 건드린다.**
+          //
+          // 건드리게 두면 그 회전의 `next`(치유 칸 앞에서 멈춘 자리)가 「이제 할 일」로
+          // 읽혀 **하지도 않을 일을 예고한다** — "이 프로젝트용 서버를 새로 띄웁니다…"
+          // 라고 적고 안 띄운다 (실측 2026-08-16). 승격도 창→배너로 거꾸로 간다.
+          // 재측정은 설계 §2 에서 **조용한** 것이고, 화면은 마지막 사다리 결과를 유지한다.
           onState: (next) => {
-            if (gen !== genRef.current) return
+            if (!healing || gen !== genRef.current) return
             setRun((prev) => ({ id: owner, state: next, ownership: prev?.ownership ?? 'theirs' }))
           },
           onOwnership: (ownership) => {
-            if (gen !== genRef.current) return
+            if (!healing || gen !== genRef.current) return
             setRun((prev) => (prev === null ? prev : { ...prev, ownership }))
           },
           shouldStop: () => gen !== genRef.current,
@@ -135,7 +148,16 @@ export function useAutoHeal(
         })
         if (gen !== genRef.current) return
         // 초록이면 **자격이 돌아온다.** 다음에 또 깨지면 다시 한 바퀴 탈 수 있다.
-        if (state.verdict === 'healthy' || state.verdict === 'healed') usedRef.current = false
+        // 재측정이 초록을 봤을 때가 설계 §2 의 *"VPN 을 켜면 스스로 초록이 된다"* 다 —
+        // 화면도 그때 비운다 (지금까지 띄워 두던 실패 배너를 내린다).
+        if (state.verdict === 'healthy' || state.verdict === 'healed') {
+          usedRef.current = false
+          setStopped(false)
+          setRun(null)
+          return
+        }
+        // 사다리가 다 실패했다. **치유 회전만** 이 표시를 세운다 — 재측정은 못 세운다.
+        if (healing && state.verdict === 'manual') setStopped(true)
       } finally {
         runningRef.current = false
       }
@@ -148,6 +170,7 @@ export function useAutoHeal(
     // 저절로 살아났든 상관없다. 이게 없으면 다음에 또 깨져도 30초 재측정을 기다려야 한다.
     if (sessionUp(status ?? 'idle')) {
       usedRef.current = false
+      setStopped(false)
       return
     }
     if (status !== 'disconnected' && status !== 'error') return
@@ -157,13 +180,22 @@ export function useAutoHeal(
   }, [enabled, projectId, status, run])
 
   // 한 바퀴가 끝나 멈춘 뒤에만 주기 재측정이 돈다. **치유는 안 한다.**
-  const stopped = pipeline?.verdict === 'manual'
+  //
+  // ⚠️ **이 근거는 재측정이 덮어쓰는 값이면 안 된다.** 한때 `pipeline?.verdict === 'manual'`
+  // 이었고, 그래서 **한 번 돌고 죽었다**: `healing:false` 회전은 치유 칸 **앞에서** 멈춰
+  // `verdict:null` 로 끝나므로 자기가 서 있던 조건을 스스로 지웠고, effect 가 정리되며
+  // 타이머가 다시 안 걸렸다 (실측 2026-08-16: 100초에 31.2s 한 번뿐, 60s·90s 없음).
+  //
+  // 증상이 조용한 것이 이 결함의 값이다 — 설계 §2 가 약속한 *"VPN 을 켜면 스스로 초록이
+  // 된다"* 가 **첫 30초 창에만** 성립했다. 3분 뒤에 켜면 아무 일도 안 일어나고, 아무도 신고
+  // 하지 않는다. 그래서 근거를 **따로 쥔다**: 내리는 것은 성공과 상태 회복뿐이다.
   useEffect(() => {
     if (!enabled || !stopped) return
     const timer = setInterval(() => {
       // 그 사이 저절로 살아났으면 잴 것도 없다 — 자격만 돌려주고 화면을 비운다
       if (sessionUp(statusRef.current ?? 'idle')) {
         usedRef.current = false
+        setStopped(false)
         setRun(null)
         return
       }
