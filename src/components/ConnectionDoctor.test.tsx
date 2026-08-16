@@ -128,8 +128,12 @@ describe('실패 — 5상이 화면에 그대로 나온다', () => {
     expect(document.querySelector('.dc-doctor__step-detail')?.textContent).toBe('연결 거부')
     expect(document.querySelector('.dc-doctor__cause')?.textContent).toBe('연결 거부')
     // 안내가 *"`opencode serve` 로 서버를 띄우세요"* 였다 — 현장 사용자에게 터미널이 없어
-    // 못 따라 할 지시였고, 앱이 서버를 띄우게 되면서 조치 문장으로 바뀌었다
-    expect(document.querySelector('.dc-doctor__advice')?.textContent).toContain('그대로 둡니다')
+    // 못 따라 할 지시였고, 앱이 서버를 띄우게 되면서 조치 문장으로 바뀌었다.
+    //
+    // ⚠️ **문구를 낱말로 겨눈다** (`3599d87` 로 한 번 갈렸다: *"이미 떠 있는 다른 서버는
+    // 그대로 둡니다"* → *"우리가 띄우지 않은 서버는 건드리지 않습니다"*). 여기서 지켜야 할
+    // 것은 특정 문장이 아니라 **「남의 것에 손대지 않는다」는 약속이 안내에 남아 있는가**다.
+    expect(document.querySelector('.dc-doctor__advice')?.textContent).toContain('건드리지 않습니다')
   }, 10000)
 
   // 모델 실패는 서버 실패와 다르다 — 서버는 ✓ 로 남고 세션만 – 다
