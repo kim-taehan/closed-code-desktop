@@ -20,6 +20,7 @@ describe('run_project', () => {
     openTerminal: () => true,
     runProject: runProject as unknown as McpToolPorts['runProject'],
     readLogs: () => null,
+    runListDir: () => '/tmp/run-lists',
     runListChanged: () => {},
     ...over,
   })
@@ -117,6 +118,7 @@ describe('read_logs', () => {
     openTerminal: () => true,
     runProject: () => Promise.resolve({ ok: true as const, started: true }),
     readLogs: () => snapshot,
+    runListDir: () => '/tmp/run-lists',
     runListChanged: () => {},
     ...over,
   })
@@ -161,6 +163,7 @@ describe('read_logs', () => {
 // "띄웠다" 로 읽고 사용자에게 그렇게 말한다 — 사용자는 뜨지도 않은 서버를 찾는다.
 describe('save_run_commands', () => {
   let root: string
+  let dir: string
   let runListChanged: ReturnType<typeof vi.fn>
 
   const portsFor = (): McpToolPorts => ({
@@ -170,18 +173,21 @@ describe('save_run_commands', () => {
     openTerminal: () => true,
     runProject: () => Promise.resolve({ ok: false as const, error: '여기서는 안 부른다' }),
     readLogs: () => null,
+    runListDir: () => dir,
     runListChanged: runListChanged as unknown as McpToolPorts['runListChanged'],
   })
 
   beforeEach(async () => {
     root = await mkdtemp(join(tmpdir(), 'run-tool-'))
+    dir = await mkdtemp(join(tmpdir(), 'run-tool-store-'))
     runListChanged = vi.fn()
   })
   afterEach(async () => {
     await rm(root, { recursive: true, force: true })
+    await rm(dir, { recursive: true, force: true })
   })
 
-  // **뒤에 있는 프로젝트에서도 적는다** — 파일에 적는 일이라 화면이 필요 없다.
+  // **뒤에 있는 프로젝트에서도 적는다** — 저장소에 적는 일이라 화면이 필요 없다.
   // (`focusedProjectId` 가 'B' 인데 'A' 에 적는 것이 이 시험의 전부다.)
   it('앞에 나와 있지 않아도 적고, 실행하지 않았다고 말한다', async () => {
     const run = createToolRunner(portsFor())
@@ -190,11 +196,15 @@ describe('save_run_commands', () => {
     })
 
     expect(answer).toContain('아무것도 실행하지 않았습니다')
-    expect(answer).toContain('AGENTS.md')
+    // **저장 자리를 말하지 않는다** — 프로젝트 밖의 해시 이름 파일이라 사용자가 갈 곳이
+    // 아니고, 경로를 알려 주면 모델이 다음번에 도구 대신 그 파일을 고치려 든다
+    expect(answer).not.toContain('AGENTS.md')
+    expect(answer).not.toContain(dir)
+    expect(answer).toContain('실행 목록')
     expect(runListChanged).toHaveBeenCalledWith('A')
   })
 
-  it('닫힌 프로젝트에는 파일을 안 만든다', async () => {
+  it('닫힌 프로젝트에는 아무것도 안 적는다', async () => {
     const run = createToolRunner(portsFor())
     await expect(
       run('닫힘', 'save_run_commands', { commands: [{ name: 'dev', command: 'npm run dev' }] }),

@@ -15,8 +15,9 @@ import type { RunProjectTool } from './server'
 //
 // ⚠️ 여기에는 **"도구가 하는 일은 화면에 알리는 것뿐이고 파일을 고치지 않는다"** 고 적혀
 // 있었다. 도구 넷일 때는 참이었고 `save_run_commands` 가 들어오며 거짓이 됐다 — 그것은
-// AGENTS.md 를 **쓴다.** 그래서 규칙을 고쳐 적는다: **파일을 고치는 도구는 자기 파일 조작을
-// 자기 모듈에 두고**(`saveRunCommands.ts`), 이 파일은 갈래와 돌려줄 문장만 정한다.
+// **실행 목록을 앱 저장소에 쓴다** (처음에는 프로젝트의 AGENTS.md 였다. 옮긴 이유는
+// `shared/run/runList.ts` 머리말). 그래서 규칙을 고쳐 적는다: **파일을 고치는 도구는 자기
+// 파일 조작을 자기 모듈에 두고**(`saveRunCommands.ts`), 이 파일은 갈래와 돌려줄 문장만 정한다.
 
 export interface McpToolPorts {
   /** 열려 있는 프로젝트의 루트. 모르는(닫힌) 프로젝트면 null */
@@ -43,7 +44,15 @@ export interface McpToolPorts {
   /** 그 칸이 붙들고 있는 지나간 출력. 그런 칸이 없으면 null (`outputBuffer.ts`) */
   readLogs(projectId: string, name: string): OutputSnapshot | null
   /**
-   * AGENTS.md 의 「실행」 절이 방금 바뀌었다 — **화면에 알린다.**
+   * 실행 목록을 두는 앱 저장소 폴더 (`~/Library/Application Support/.../run-lists`).
+   *
+   * **경로를 여기서 짓지 않고 받는다** — `app.getPath('userData')` 를 아는 것은 `main.ts`
+   * 하나이고(`extensions/hostPorts.ts` 의 `userDataDir` 과 같은 규칙), 그래야 이 파일의
+   * 시험이 electron 을 안 물어 온다.
+   */
+  runListDir(): string
+  /**
+   * 실행 목록이 방금 바뀌었다 — **화면에 알린다.**
    *
    * 파일을 고치는 것은 `saveRunCommands` 가 이미 끝냈고 여기서는 알리기만 한다. 안 알리면
    * 사이드바가 20초 전에 읽어 둔 목록을 그대로 들고 있어, 사용자에게는 「찾을까요?」를
@@ -73,7 +82,7 @@ export function createToolRunner(ports: McpToolPorts): RunProjectTool {
     // main 이 붙들고 있어(`outputBuffer`) 어느 탭을 보고 있든 그대로 읽힌다. 사용자가 탭을
     // 옮겼다는 이유로 "못 읽는다" 를 돌려주면 모델이 고칠 수 없는 벽이 된다.
     if (name === 'read_logs') return runReadLogs(ports, projectId, args)
-    // **적는 것도 앞에 나와 있지 않아도 된다** — 파일에 적는 일이고 화면을 건드리지 않는다.
+    // **적는 것도 앞에 나와 있지 않아도 된다** — 저장소에 적는 일이고 화면을 건드리지 않는다.
     // 사용자가 다른 탭을 보는 동안 적어 둬도 그 프로젝트로 돌아오면 그대로 있다.
     if (name === 'save_run_commands') return await runSaveRunCommands(ports, projectId, root, args)
     throw new Error(`모르는 도구입니다: ${name}`)
@@ -173,10 +182,13 @@ function runReadLogs(
 }
 
 /**
- * 알아낸 실행 방법을 AGENTS.md 에 적는다 (설계 §2 — **파일이 곧 캐시다**).
+ * 알아낸 실행 방법을 **앱 저장소**에 적는다 (설계 §2 — 한 번 적으면 다음부터 모델을 안 부른다).
  *
  * 위 셋과 달리 **아무것도 실행하지 않는다.** 돌려주는 문장이 그 사실을 분명히 해야 한다 —
  * 모델이 "띄웠다" 로 읽고 사용자에게 그렇게 말하면, 사용자는 뜨지도 않은 서버를 찾는다.
+ *
+ * **어느 파일에 적었는지는 말하지 않는다.** 프로젝트 밖의 해시 이름 파일이라 사용자가 갈 곳이
+ * 아니고, 모델이 그 경로를 알면 다음번에 도구 대신 그 파일을 직접 고치려 든다.
  */
 async function runSaveRunCommands(
   ports: McpToolPorts,
@@ -184,10 +196,10 @@ async function runSaveRunCommands(
   root: string,
   args: Record<string, unknown>,
 ): Promise<string> {
-  const saved = await saveRunCommands(root, runCommandsInput(args))
+  const saved = await saveRunCommands(ports.runListDir(), root, runCommandsInput(args))
   ports.runListChanged(projectId)
 
   const list = saved.entries.map((entry) => `${entry.name}(\`${entry.command}\`)`).join(' · ')
   const verb = saved.replaced ? '고쳐 적었습니다' : '적었습니다'
-  return `${saved.path} 의 「실행」 절에 ${saved.entries.length}개를 ${verb}: ${list}. **아무것도 실행하지 않았습니다** — 사용자가 사이드바 「실행」 패널에서 ▶ 로 띄웁니다. 지금 바로 돌려야 하는 것이 있으면 run_project 를 따로 부르세요.`
+  return `이 프로젝트의 실행 목록에 ${saved.entries.length}개를 ${verb}: ${list}. 목록은 앱이 프로젝트별로 기억하고 사이드바 「실행」 패널에 그대로 뜹니다. **아무것도 실행하지 않았습니다** — 사용자가 그 패널에서 ▶ 로 띄웁니다. 지금 바로 돌려야 하는 것이 있으면 run_project 를 따로 부르세요.`
 }

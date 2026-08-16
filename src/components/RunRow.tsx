@@ -1,4 +1,4 @@
-import type { RunEntry } from '../../shared/run/runSection'
+import type { RunEntry } from '../../shared/run/runList'
 import type { RunState } from '../state/runPanel'
 import { t } from '../i18n/messages'
 

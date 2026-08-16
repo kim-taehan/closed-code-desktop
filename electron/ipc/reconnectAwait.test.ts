@@ -20,6 +20,9 @@ vi.mock('electron', () => {
       __invoke: (channel: string, ...args: unknown[]) => handlers.get(channel)?.(...args),
       __has: (channel: string) => handlers.has(channel),
     },
+    // 등록 중에 실행 목록 저장소 자리를 묻는다 (`run/runListDir.ts`). 이 시험은 그 채널에
+    // 닿지 않지만, 없으면 `register()` 자체가 터진다 (`wiring.test.ts` 와 같은 이유).
+    app: { getPath: () => '/tmp' },
   }
 })
 

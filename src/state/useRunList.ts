@@ -1,21 +1,21 @@
 import { useCallback, useEffect, useState } from 'react'
-import { manifestFingerprint, MANIFEST_FILES } from '../../shared/run/runManifest'
-import { parseRunSection, type RunEntry } from '../../shared/run/runSection'
+import type { RunEntry } from '../../shared/run/runList'
 
-// 실행 목록을 **AGENTS.md 에서 읽는다** (설계 §2). 앱이 캐시를 따로 들지 않는다 —
-// 파일이 곧 캐시다. 그래서 여기 있는 것은 「지금 파일이 뭐라고 적혀 있나」뿐이고,
-// 목록을 만들어 내는 일(모델 20초)은 이 훅이 하지 않는다.
+// 실행 목록을 **앱 저장소에서 읽는다** (설계 §2).
 //
-// **읽는 것은 렌더러다.** main 에 새 문을 내지 않고 이미 있는 `readFile` 을 쓴다 —
-// 프로젝트 안의 파일이고, 경로 판정(`resolveInside`)이 거기 한 벌 있다. 문을 새로 내면
-// 그 판정이 두 벌이 된다.
-
-export const AGENTS_FILE = 'AGENTS.md'
+// ⚠️ 여기에는 **"AGENTS.md 에서 읽는다 — 파일이 곧 캐시다"** 라고 적혀 있었고, 읽는 것도
+// 렌더러였다(`readFile` 로 프로젝트 파일을 직접 읽었다). 목록이 앱 저장소로 옮겨 가며
+// 둘 다 거짓이 됐다 — 이유와 그때 잃은 것은 `shared/run/runList.ts` 머리말에 있다.
+//
+// **읽는 것은 이제 main 이다.** 목록이 프로젝트 밖이라 `readFile` 이 못 닿는다
+// (`RUN_LIST_READ`). 「다시 확인할까요?」 판정도 main 이 함께 실어 보낸다 — 지문을 재는 곳이
+// 둘이면 값이 갈리고, 그러면 사용자는 무엇을 해도 사라지지 않는 물음을 보게 된다.
+// 그래서 이 훅에 남은 것은 **언제 다시 묻나**(프로젝트 전환 · ↻ · 모델이 적었다는 신호)뿐이다.
 
 export interface RunListHandle {
   entries: RunEntry[]
   /**
-   * 「실행」 절이 **있었나.** 절이 없는 것과 절이 비어 있는 것은 다른 사실이라 가른다 —
+   * 목록이 **있었나.** 없는 것과 비어 있는 것은 다른 사실이라 가른다 —
    * 앞은 아직 안 물어본 것이고, 뒤는 물어봤는데 못 찾은 것이다 (`runSourceLine`).
    */
   found: boolean
@@ -48,9 +48,9 @@ export function useRunList(projectId: string): RunListHandle {
     setLoading(true)
     setState({ entries: [], found: false, stale: false })
 
-    void loadRunList(projectId).then((next) => {
+    void window.davis.readRunList({ projectId }).then((next) => {
       if (alive) {
-        setState(next)
+        setState({ entries: next.entries, found: next.found, stale: next.stale })
         setLoading(false)
       }
     })
@@ -59,7 +59,7 @@ export function useRunList(projectId: string): RunListHandle {
     }
   }, [projectId, nonce])
 
-  // 모델이 `save_run_commands` 로 방금 적었다 — **목록은 안 실려 온다.** 정본은 파일이고
+  // 모델이 `save_run_commands` 로 방금 적었다 — **목록은 안 실려 온다.** 정본은 저장소이고
   // 이 신호는 "다시 읽어라" 하나다 (`RUN_LIST_CHANGED`).
   useEffect(
     () => window.davis.onRunListChanged((_payload, from) => (from === projectId ? refresh() : undefined)),
@@ -67,35 +67,4 @@ export function useRunList(projectId: string): RunListHandle {
   )
 
   return { ...state, loading, refresh }
-}
-
-async function loadRunList(
-  projectId: string,
-): Promise<{ entries: RunEntry[]; found: boolean; stale: boolean }> {
-  const file = await window.davis.readFile({ projectId, path: AGENTS_FILE })
-  const section = file.ok ? parseRunSection(file.text) : null
-  if (section === null) return { entries: [], found: false, stale: false }
-
-  return {
-    entries: section.entries,
-    found: true,
-    stale: await isStale(projectId, section.manifest),
-  }
-}
-
-/**
- * 지문이 달라졌나. **지문이 없으면 묻지 않는다** — 사람이 손으로 적은 절에는 이 값이
- * 없고, 우리가 만들지 않은 목록을 우리 판단으로 덮어쓰자고 청할 이유가 없다
- * (`RunSection.manifest` 머리말).
- */
-async function isStale(projectId: string, manifest: string | null): Promise<boolean> {
-  if (manifest === null) return false
-
-  const found: { path: string; text: string }[] = []
-  for (const path of MANIFEST_FILES) {
-    const file = await window.davis.readFile({ projectId, path })
-    // 없는 파일은 빠진다 — 후보 목록은 여러 생태계를 함께 담고 있어 대부분이 없는 것이 정상이다
-    if (file.ok && file.text !== '') found.push({ path, text: file.text })
-  }
-  return manifestFingerprint(found) !== manifest
 }

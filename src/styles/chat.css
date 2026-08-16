@@ -5254,8 +5254,7 @@ body {
   font-size: 11px;
 }
 
-.dc-run__ask,
-.dc-run__edit {
+.dc-run__ask {
   background: none;
   border: none;
   padding: 0;
@@ -5265,7 +5264,7 @@ body {
   text-decoration: underline;
 }
 
-/* 출처 한 줄. 목록이 틀렸을 때 어디를 고치면 되는지가 여기 있다 */
+/* 출처 한 줄. 목록을 누가 들고 있는지가 여기 있다 (「편집」은 없어졌다 — RunPanel.tsx) */
 .dc-run__source {
   padding: 6px;
   border-top: 1px solid var(--dc-border);

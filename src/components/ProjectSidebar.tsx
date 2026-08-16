@@ -184,7 +184,6 @@ export function ProjectSidebar(props: ProjectSidebarProps) {
             key={props.project.id}
             projectId={props.project.id}
             shell={props.shell}
-            onOpenFile={props.onOpenFile}
             onToast={props.onToast}
           />
         )}

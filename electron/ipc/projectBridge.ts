@@ -9,6 +9,8 @@ import {
   type ProjectStatePayload,
 } from '../../shared/ipc/channels'
 import { registerFsHandlers } from './projectFsHandlers'
+import { registerRunListHandlers } from './runListHandlers'
+import { runListDir } from '../run/runListDir'
 import { ProjectFs } from '../projects/projectFs'
 import { pickAttachments, resolveAttachments } from '../projects/attachmentPicker'
 import { listFiles, searchText } from '../projects/projectSearch'
@@ -89,6 +91,7 @@ const HANDLED_CHANNELS = [
   Channel.OPENCODE_CONFIG_READ,
   Channel.OPENCODE_CONFIG_WRITE,
   Channel.OPENCODE_CONFIG_RELOAD,
+  Channel.RUN_LIST_READ,
 ]
 
 export class ProjectBridge {
@@ -227,6 +230,12 @@ export class ProjectBridge {
     })
     // 파일 읽기/쓰기/OS 열기/디렉토리 — 300줄 상한 때문에 등록만 갈라냈다
     registerFsHandlers(this.fs)
+    // 실행 목록 읽기. **열린 프로젝트만** 안다 — fs 경계와 같은 근거를 쓴다.
+    // 목록은 프로젝트 밖(앱 저장소)에 있어 `ProjectFs` 가 못 닿는다 (`runListHandlers.ts`).
+    registerRunListHandlers({
+      rootOf: (id) => this.registry.openProjects.find((project) => project.id === id)?.root ?? null,
+      dir: runListDir(),
+    })
   }
 
   /**

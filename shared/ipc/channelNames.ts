@@ -145,12 +145,12 @@ export const Channel = {
    * (`PTY_OPEN`) main 이 「이미 돌고 있다」로 읽어 명령이 영영 안 들어간다 (`appWiring.ts`).
    */
   PTY_RUN: 'pty:run',
-  /**
-   * main → renderer: **AGENTS.md 의 「실행」 절이 바뀌었다** (`save_run_commands`).
-   * 목록은 안 싣는다 — 정본은 파일이고(설계 §2 「파일이 곧 캐시다」) 화면이 다시 읽는다.
-   * 실어 보내면 정본이 둘이 되고, 사람이 손으로 고친 경우가 다른 길을 타게 된다.
-   */
+  // 사이드바 「실행」 패널의 둘. **근거는 `runBridgeSurface.ts` 에 있다** — 이 파일이 300줄
+  // 상한에 붙어 있어 설명을 그쪽으로 옮겼다(둘 다 그 표면의 메서드라 자리가 어색하지도 않다).
+  /** main → renderer: 그 프로젝트의 실행 목록이 바뀌었다 — **목록은 안 싣는다** */
   RUN_LIST_CHANGED: 'run:listChanged',
+  /** renderer → main: 이 프로젝트의 실행 목록 (앱 저장소에서 읽는다 · `stale` 판정 포함) */
+  RUN_LIST_READ: 'run:listRead',
   /** renderer → main: 대화에 붙일 것을 고른다 (이미지·파일 구분 없이) */
   ATTACH_PICK: 'attach:pick',
   ATTACH_RESOLVE: 'attach:resolve', // 드래그드롭 경로 판별 (다이얼로그 없이)

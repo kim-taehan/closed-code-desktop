@@ -1,15 +1,17 @@
 import { useState } from 'react'
 import { ASK_PROMPT, recheckPrompt, runSourceLine, runState, runStateLabel } from '../state/runPanel'
 import { sendUserText } from '../state/slashCommands'
-import { useRunList, AGENTS_FILE } from '../state/useRunList'
+import { useRunList } from '../state/useRunList'
 import type { ShellDrawer } from '../state/useShellDrawer'
 import { RunRow } from './RunRow'
 import { t } from '../i18n/messages'
 
 // 사이드바 「실행」 패널 (설계 2026-08-16 §1·§2).
 //
-// **목록의 정본은 AGENTS.md 다** (`useRunList`) — 앱은 캐시를 따로 안 든다. 여기서 하는
-// 일은 그 목록을 그리고, ▶ 로 띄우고, 어디서 읽었는지 밝히는 것뿐이다.
+// **목록의 정본은 앱 저장소다** (`useRunList`) — 예전에는 프로젝트의 AGENTS.md 였고,
+// 그래서 여기 「편집」 버튼이 있었다. 옮긴 이유와 그때 잃은 것(팀 공유 · 버전 관리 ·
+// 손으로 고칠 자리)은 `shared/run/runList.ts` 머리말에 있다. 여기서 하는 일은 목록을
+// 그리고, ▶ 로 띄우고, 틀렸을 때 다시 물을 문을 내는 것뿐이다.
 //
 // **띄우는 판정은 여기 없다.** 「이미 돌고 있으면 겹쳐 띄우지 않는다」는 main 한 곳에서
 // 정한다 (`PtyDrawerBridge.run` — 도구가 타는 길과 같은 함수다). 화면이 따로 판정하면
@@ -19,12 +21,10 @@ interface Props {
   projectId: string
   /** 탭 목록·▶ 뒤에 열 칸·■ (`useShellDrawer`) */
   shell: ShellDrawer
-  /** AGENTS.md 를 본문 탭으로 연다 — 「편집」 */
-  onOpenFile: (path: string) => void
   onToast: (text: string) => void
 }
 
-export function RunPanel({ projectId, shell, onOpenFile, onToast }: Props): React.ReactElement {
+export function RunPanel({ projectId, shell, onToast }: Props): React.ReactElement {
   const list = useRunList(projectId)
   // 물어본 뒤 20초쯤 걸린다 (설계 §2). 그동안 버튼을 그대로 두면 사용자가 또 누르고,
   // 같은 분석이 둘 돈다 — 눌렀다는 사실을 화면에 남긴다.
@@ -58,7 +58,7 @@ export function RunPanel({ projectId, shell, onOpenFile, onToast }: Props): Reac
           type="button"
           className="dc-run__refresh"
           onClick={list.refresh}
-          title={t('AGENTS.md 를 다시 읽습니다')}
+          title={t('실행 목록을 다시 읽습니다')}
         >
           ↻
         </button>
@@ -106,14 +106,8 @@ export function RunPanel({ projectId, shell, onOpenFile, onToast }: Props): Reac
         </div>
       )}
 
-      <div className="dc-run__source">
-        {t(runSourceLine(list.found, list.entries.length))}
-        {' · '}
-        {/* 목록이 틀렸을 때 사용자가 갈 곳 (설계 §1). 절이 없어도 연다 — 손으로 적는 길이다 */}
-        <button type="button" className="dc-run__edit" onClick={() => onOpenFile(AGENTS_FILE)}>
-          {t('편집')}
-        </button>
-      </div>
+      {/* 「편집」이 있던 자리다. 목록이 프로젝트 밖으로 가면서 사람이 열 파일이 없어졌다 */}
+      <div className="dc-run__source">{t(runSourceLine(list.found, list.entries.length))}</div>
     </div>
   )
 }

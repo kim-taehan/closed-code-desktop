@@ -35,9 +35,9 @@ describe('runStateLabel', () => {
 })
 
 describe('runSourceLine', () => {
-  it('「절이 없다」와 「절이 비었다」를 가른다 — 사용자가 다음에 할 일이 다르다', () => {
+  it('「목록이 없다」와 「목록이 비었다」를 가른다 — 사용자가 다음에 할 일이 다르다', () => {
     expect(runSourceLine(false, 0)).toContain('없습니다')
     expect(runSourceLine(true, 0)).toContain('비어 있습니다')
-    expect(runSourceLine(true, 2)).toContain('읽었습니다')
+    expect(runSourceLine(true, 2)).toContain('기억해 둔')
   })
 })

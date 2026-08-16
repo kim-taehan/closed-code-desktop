@@ -1,4 +1,4 @@
-import type { RunEntry } from '../../shared/run/runSection'
+import type { RunEntry } from '../../shared/run/runList'
 
 // 사이드바 「실행」 패널의 **판정과 문구** (설계 2026-08-16 §1·§2).
 //
@@ -46,32 +46,37 @@ export function runStateLabel(state: RunState, exit: number | null | undefined):
 }
 
 /**
- * 목록의 출처 한 줄. **목록이 틀렸을 때 사용자가 갈 곳을 안다** (설계 §1).
+ * 목록의 출처 한 줄 (설계 §1).
  *
- * 「없다」와 「비어 있다」를 가른다: 절이 없으면 우리가 아직 안 물어본 것이고, 절이 있는데
+ * 「없다」와 「비어 있다」를 가른다: 목록이 없으면 우리가 아직 안 물어본 것이고, 있는데
  * 비었으면 모델이 물어본 뒤 아무것도 못 찾은 것이다. 사용자가 다음에 할 일이 서로 다르다.
+ *
+ * ⚠️ 예전에는 이 줄이 **갈 곳**(AGENTS.md)을 가리켰고 옆에 「편집」이 있었다. 목록이 앱
+ * 저장소로 들어가며 사람이 손으로 고칠 자리가 없어졌다 (`shared/run/runList.ts` 머리말 —
+ * 잃은 것 셋 중 하나). 그래서 지금 이 줄은 **누가 들고 있나**만 말한다: 목록이 틀렸을 때
+ * 사용자가 할 수 있는 일은 "다시 확인할까요?" 아니면 모델에게 다시 부탁하는 것이다.
  */
 export function runSourceLine(found: boolean, count: number): string {
-  if (!found) return 'AGENTS.md 에 「실행」 절이 없습니다'
-  if (count === 0) return 'AGENTS.md 의 「실행」 절이 비어 있습니다'
-  return 'AGENTS.md 의 「실행」 절에서 읽었습니다'
+  if (!found) return '이 프로젝트의 실행 목록이 아직 없습니다'
+  if (count === 0) return '실행 목록이 비어 있습니다'
+  return '앱이 기억해 둔 실행 목록입니다'
 }
 
 /**
  * 모델에게 보내는 부탁. **입력창에 친 것과 같은 큐로 들어간다** (`sendUserText`).
  *
  * 도구 이름을 문장에 박아 둔다 — 이 부탁이 성립하는 조건이 그 도구의 존재이고,
- * 모델이 자기 편집 도구로 AGENTS.md 를 고치면 형식이 어긋나 패널이 그 목록을 못 읽는다
- * (`electron/mcp/saveRunCommands.ts` 머리말).
+ * 목록이 앱 저장소에 있어 **모델의 편집 도구로는 닿지 않는다.** 모델이 프로젝트 파일에
+ * 적어 두면 패널은 그것을 영영 못 읽는다 (`electron/mcp/saveRunCommands.ts` 머리말).
  *
  * **아무것도 실행하지 말라고 못 박는다.** 실행 방법을 묻는 말은 모델에게 "돌려 봐라" 로도
  * 읽힌다 — 개발 서버가 사용자 모르게 뜨면 포트를 물고 있는 이유를 아무도 모른다.
  */
 export const ASK_PROMPT =
-  '이 프로젝트를 어떻게 실행하는지 알아봐 주세요. package.json 의 scripts · gradle 태스크 · Makefile · docker-compose · README 를 직접 읽고 정하세요 — 이름만 보고 짐작하지 마세요. 사람이 누를 만한 것(개발 서버 · 테스트 · 빌드)만 골라 save_run_commands 도구로 AGENTS.md 의 「실행」 절에 적어 주세요. **아무것도 실행하지 마세요.**'
+  '이 프로젝트를 어떻게 실행하는지 알아봐 주세요. package.json 의 scripts · gradle 태스크 · Makefile · docker-compose · README 를 직접 읽고 정하세요 — 이름만 보고 짐작하지 마세요. 사람이 누를 만한 것(개발 서버 · 테스트 · 빌드)만 골라 save_run_commands 도구로 적어 주세요 (프로젝트 파일에 적지 마세요 — 그 도구가 유일한 길입니다). **아무것도 실행하지 마세요.**'
 
 /** 매니페스트가 바뀐 뒤의 부탁. 지금 목록을 함께 실어 무엇이 달라졌는지 보게 한다. */
 export function recheckPrompt(entries: readonly RunEntry[]): string {
   const current = entries.map((entry) => `${entry.name}: \`${entry.command}\``).join(' · ')
-  return `${ASK_PROMPT}\n\n지금 AGENTS.md 에 적혀 있는 것은 ${current} 입니다. 매니페스트가 바뀌었으니 아직 맞는지 확인하고, 달라졌으면 고쳐 적어 주세요.`
+  return `${ASK_PROMPT}\n\n지금 적혀 있는 것은 ${current} 입니다. 매니페스트가 바뀌었으니 아직 맞는지 확인하고, 달라졌으면 고쳐 적어 주세요.`
 }

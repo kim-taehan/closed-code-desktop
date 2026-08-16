@@ -6,13 +6,12 @@ import { setSendToRuntime } from '../state/slashCommands'
 import type { ShellDrawer } from '../state/useShellDrawer'
 
 // 「실행」 패널이 지켜야 하는 것 셋 (설계 §1·§2):
-//   · 목록은 **AGENTS.md 에서** 온다 — 앱이 캐시를 따로 안 든다
+//   · 목록은 **앱이 프로젝트별로 기억해 둔 것**에서 온다 (`RUN_LIST_READ` — 예전에는
+//     렌더러가 AGENTS.md 를 직접 읽었다. 옮긴 이유는 `shared/run/runList.ts` 머리말)
 //   · ▶ 는 **main 왕복이 끝난 뒤에** 탭을 만든다 (순서를 뒤집으면 명령이 안 들어간다)
-//   · 절이 없으면 **묻는다** — 말없이 20초를 태우지 않는다
+//   · 목록이 없으면 **묻는다** — 말없이 20초를 태우지 않는다
 
-const AGENTS = ['## 실행', '', '| dev 서버 | `npm run dev` | 개발 서버 |'].join('\n')
-
-let files: Record<string, string>
+let list: { found: boolean; entries: { name: string; command: string; note?: string }[]; stale: boolean }
 let runShellPane: ReturnType<typeof vi.fn>
 let showPane: ReturnType<typeof vi.fn>
 let closeTab: ReturnType<typeof vi.fn>
@@ -21,7 +20,7 @@ let exits: Record<string, number | null>
 let sent: string[]
 
 beforeEach(() => {
-  files = { 'AGENTS.md': AGENTS }
+  list = { found: true, entries: [{ name: 'dev 서버', command: 'npm run dev', note: '개발 서버' }], stale: false }
   runShellPane = vi.fn().mockResolvedValue({ ok: true, started: true })
   showPane = vi.fn()
   closeTab = vi.fn()
@@ -31,12 +30,8 @@ beforeEach(() => {
   setSendToRuntime((text) => sent.push(text))
 
   window.davis = {
-    readFile: ({ path }: { path: string }) =>
-      Promise.resolve(
-        files[path] === undefined
-          ? { ok: false, text: '', reason: 'missing' }
-          : { ok: true, text: files[path], mtimeMs: 0 },
-      ),
+    // 「다시 확인할까요?」 판정(stale)까지 main 이 실어 보낸다 — 화면은 지문을 재지 않는다
+    readRunList: () => Promise.resolve(list),
     runShellPane,
     onRunListChanged: () => () => {},
   } as never
@@ -52,14 +47,16 @@ function panel() {
     closeTab,
   } as unknown as ShellDrawer
 
-  render(<RunPanel projectId="p1" shell={shell} onOpenFile={vi.fn()} onToast={vi.fn()} />)
+  render(<RunPanel projectId="p1" shell={shell} onToast={vi.fn()} />)
 }
 
 describe('RunPanel', () => {
-  it('AGENTS.md 의 「실행」 절을 그린다', async () => {
+  it('앱이 기억해 둔 목록을 그린다', async () => {
     panel()
     expect(await screen.findByText('dev 서버')).toBeTruthy()
-    expect(screen.getByText(/읽었습니다/)).toBeTruthy()
+    expect(screen.getByText(/앱이 기억해 둔/)).toBeTruthy()
+    // 「편집」이 있던 자리다 — 목록이 프로젝트 밖으로 가며 사람이 열 파일이 없어졌다
+    expect(screen.queryByText('편집')).toBeNull()
   })
 
   // 순서를 뒤집으면 그 탭이 같은 이름으로 칸을 열고, main 이 「이미 돌고 있다」로 읽어
@@ -100,8 +97,8 @@ describe('RunPanel', () => {
     expect(screen.queryByTitle('정지 (프로세스도 멈춥니다)')).toBeNull()
   })
 
-  it('절이 없으면 묻는다 — 말없이 분석하지 않는다', async () => {
-    files = {}
+  it('목록이 없으면 묻는다 — 말없이 분석하지 않는다', async () => {
+    list = { found: false, entries: [], stale: false }
     panel()
 
     fireEvent.click(await screen.findByText('실행 방법을 찾을까요?'))
@@ -112,10 +109,7 @@ describe('RunPanel', () => {
 
   // package.json 이 지문과 다르면 물어본다. **말없이 다시 분석하지 않는다** (설계 §2)
   it('매니페스트가 바뀌면 다시 확인할지 묻고, 누르기 전에는 아무것도 안 한다', async () => {
-    files = {
-      'AGENTS.md': ['## 실행', '', '<!-- open-code-desktop:run manifest=deadbeef -->', '', '| dev | `npm run dev` |'].join('\n'),
-      'package.json': '{"scripts":{"dev":"vite"}}',
-    }
+    list = { found: true, entries: [{ name: 'dev', command: 'npm run dev' }], stale: true }
     panel()
 
     const ask = await screen.findByText('다시 확인할까요?')
