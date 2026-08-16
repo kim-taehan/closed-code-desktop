@@ -48,9 +48,12 @@ export interface PtyCloseInfo {
 export class PtySocket {
   private socket: PtyLikeSocket | null = null
   private closedByUs = false
+  /** 핸드셰이크가 끝났는가. `write` 가 이걸 안 보면 던진다 (실측 — `open` 절 참조) */
+  private opened = false
 
   private dataHandler: (chunk: string) => void = () => {}
   private controlHandler: (payload: unknown) => void = () => {}
+  private openHandler: () => void = () => {}
   private closeHandler: (info: PtyCloseInfo) => void = () => {}
   private errorHandler: (error: Error) => void = () => {}
 
@@ -58,6 +61,14 @@ export class PtySocket {
 
   onData(handler: (chunk: string) => void): void {
     this.dataHandler = handler
+  }
+  /**
+   * 이제 써도 된다는 신호. **사람이 아니라 프로그램이 채워 넣을 때 필요하다** —
+   * 사람의 키는 늦게 오지만(`write` 가 버려도 손해가 없다), 에이전트가 채우는 명령은
+   * 소켓이 열리기 **전에** 도착한다 (`drawerBridge.fill`).
+   */
+  onOpen(handler: () => void): void {
+    this.openHandler = handler
   }
   /** 0x00 을 앞세운 제어 프레임. 지금 오는 것은 `{cursor}` 하나다. */
   onControl(handler: (payload: unknown) => void): void {
@@ -70,6 +81,14 @@ export class PtySocket {
     this.errorHandler = handler
   }
 
+  /**
+   * 붙는다. **돌아왔다고 쓸 수 있는 것이 아니다** — 그때 소켓은 아직 CONNECTING 이다.
+   *
+   * 실측(1.18.18, 실서버 pty): 만들자마자 `send` 하면 `ws` 가 그 자리에서 던진다 —
+   * `WebSocket is not open: readyState 0 (CONNECTING)`. 이 예외는 IPC 리스너
+   * (`ipcMain.on(PTY_INPUT)`) 안에서 나므로 아무에게도 안 보이고, 보낸 글자만 사라진다.
+   * 그래서 열림을 여기서 기록하고 `write` 가 확인한다.
+   */
   open(): void {
     if (this.socket !== null) return
     this.closedByUs = false
@@ -79,19 +98,30 @@ export class PtySocket {
       : (new WebSocket(this.options.url, { headers }) as unknown as PtyLikeSocket)
     this.socket = socket
 
+    socket.on('open', () => {
+      this.opened = true
+      this.openHandler()
+    })
     socket.on('message', (data, isBinary) => this.onMessage(data, isBinary))
     socket.on('error', (error) => this.errorHandler(error))
     socket.on('close', (code, reason) => {
       this.socket = null
+      this.opened = false
       // 우리가 접은 것(드로어 닫기)은 화면에 "셸이 끝났다" 로 보이면 안 된다
       if (this.closedByUs) return
       this.closeHandler({ code, reason: String(reason ?? '') })
     })
   }
 
-  /** 사용자가 누른 키를 그대로 보낸다. 아직 안 열렸으면 버린다 — 큐를 만들면 순서가 꼬인다. */
+  /**
+   * 사용자가 누른 키를 그대로 보낸다. 아직 안 열렸으면 버린다 — 큐를 만들면 순서가 꼬인다.
+   *
+   * **"안 열렸다" 는 소켓이 없는 것만이 아니다.** 붙는 중(CONNECTING)에도 못 쓴다 —
+   * 그냥 넘기면 `ws` 가 던진다 (`open` 절의 실측). 못 썼다는 것은 `false` 로만 말하고
+   * 여기서 던지지 않는다: 부르는 자리가 키 입력이라 예외로 올릴 것이 없다.
+   */
   write(data: string): boolean {
-    if (this.socket === null) return false
+    if (this.socket === null || !this.opened) return false
     this.socket.send(data)
     return true
   }
@@ -100,6 +130,7 @@ export class PtySocket {
   close(): void {
     const socket = this.socket
     this.socket = null
+    this.opened = false
     if (socket === null) return
     this.closedByUs = true
     socket.close()

@@ -43,6 +43,19 @@ export const DRAWER_TITLE = 'closed-code-desktop 드로어'
 /** FitAddon 은 창을 끌 때마다 부른다 — 매번 HTTP 를 때리지 않게 묶는다. */
 const RESIZE_DEBOUNCE_MS = 120
 
+/**
+ * 채우기 전에 줄을 비우는 바이트 — Ctrl+E(줄 끝으로) + Ctrl+U(줄 지우기).
+ *
+ * 실측(zsh, opencode 1.18.18 pty): 쳐 둔 글자가 있는 채로 이 둘을 보내면 셸이 지운 만큼
+ * 되감아 그린다(`ESC[11D` + 공백 11 + `ESC[11D`). **Ctrl+U 하나로는 모자란다** —
+ * bash 의 그것은 커서 **앞쪽만** 지운다(`unix-line-discard`). 끝으로 옮기고 지워야 둘이 같다.
+ *
+ * **뒤에 이어 붙이지 않는다.** 모델에게 돌려주는 문장은 "이 명령을 채웠다" 인데, 사용자가
+ * 쳐 두던 글자에 이어 붙으면 화면의 줄은 그 문장과 **다른 명령**이 된다. 보고 엔터를 치는
+ * 사람에게는 그쪽이 훨씬 위험하다 — 쓰던 글자를 잃는 것과 맞바꿨다.
+ */
+const CLEAR_LINE = '\x05\x15'
+
 const HANDLED = [Channel.PTY_OPEN, Channel.PTY_RESIZE]
 
 interface DrawerState {
@@ -70,6 +83,8 @@ export interface PtyDrawerOptions {
 
 export class PtyDrawerBridge {
   private readonly drawers = new Map<string, DrawerState>()
+  /** 아직 못 넣은 명령. 프로젝트마다 하나 — 뒤엣것이 앞엣것을 덮는다 (`fill`) */
+  private readonly pending = new Map<string, string>()
 
   private readonly onInput = (_event: unknown, payload: PtyInputPayload): void => this.write(payload)
   private readonly onDetach = (_event: unknown, payload: PtyDetachPayload): void =>
@@ -121,6 +136,9 @@ export class PtyDrawerBridge {
     const state: DrawerState = { ptyId, root: project.root, socket, size: null, resizeTimer: null }
     this.drawers.set(project.id, state)
 
+    // 맡아 둔 명령은 **여기서** 들어간다. `open()` 이 돌아온 시점은 아직 CONNECTING 이라
+    // 그때 쓰면 사라진다 (`PtySocket.open` 의 실측).
+    socket.onOpen(() => this.flush(project.id))
     socket.onData((chunk) => this.push(Channel.PTY_DATA, project.id, { chunk }))
     socket.onError((error) => this.push(Channel.PTY_DATA, project.id, { chunk: `\r\n[${error.message}]\r\n` }))
     // close 는 대개 "셸이 끝났다" 다. 종료 코드는 프레임에 없어 다시 물어봐야 안다 (실측).
@@ -140,6 +158,31 @@ export class PtyDrawerBridge {
     const state = this.current()
     // 열리기 전에 친 키는 버린다. 큐에 쌓아 두면 셸이 준비된 뒤 한꺼번에 쏟아진다.
     state?.socket.write(payload.data)
+  }
+
+  /**
+   * 드로어에 명령을 **채워만 둔다.** 개행을 붙이지 않으므로 실행되지 않는다 —
+   * 보고 엔터를 치는 것은 사용자다 (`electron/mcp/openTerminal.ts`).
+   *
+   * **소켓이 아직 없거나 안 열렸으면 맡아 둔다.** 이 자리가 필요한 이유는 순서다:
+   * 에이전트가 부르는 시점에 칸은 한 번도 안 펴져 있을 수 있고(`everOpened`), 그러면
+   * pty 는 화면이 칸을 그린 **뒤에야** 붙는다. 그 전에 쓴 바이트는 아무 흔적 없이 사라진다.
+   *
+   * 맡아 둔 것은 그 프로젝트의 드로어가 열릴 때 들어간다. 사용자가 그 사이에 다른
+   * 프로젝트로 옮겨 칸을 안 펴면 **남아 있다가 나중에 펼 때 채워진다** — 늦을 뿐
+   * 엉뚱한 곳으로 가지는 않는다(키가 프로젝트다). 탭을 닫으면 함께 버린다.
+   */
+  fill(projectId: string, command: string): void {
+    this.pending.set(projectId, command)
+    this.flush(projectId)
+  }
+
+  /** 맡아 둔 명령을 넣는다. 못 넣었으면(아직 안 열렸다) 그대로 두고 다음 기회를 기다린다. */
+  private flush(projectId: string): void {
+    const command = this.pending.get(projectId)
+    const state = this.drawers.get(projectId)
+    if (command === undefined || state === undefined) return
+    if (state.socket.write(CLEAR_LINE + command)) this.pending.delete(projectId)
   }
 
   /**
@@ -189,6 +232,9 @@ export class PtyDrawerBridge {
 
   /** 탭을 닫았다 — 셸도 함께 거둔다. 안 그러면 서버에 죽은 셸이 쌓인다. */
   async closeProject(projectId: string): Promise<void> {
+    // 맡아 둔 명령도 여기서 버린다. 남겨 두면 그 프로젝트를 다시 열었을 때
+    // 사용자가 잊은 명령이 유령처럼 채워진다.
+    this.pending.delete(projectId)
     const state = this.drawers.get(projectId)
     if (state === undefined) return
     this.forget(projectId)

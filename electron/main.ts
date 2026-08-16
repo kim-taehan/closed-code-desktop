@@ -123,6 +123,8 @@ async function createWindow(): Promise<void> {
     settings: () => settings.load(),
     registry: () => projectRegistry,
     window: () => mainWindow,
+    // 아래에서 만들어진다 — 여기서 값을 잡지 않는 이유가 그것만은 아니다 (창 수명, 머리말)
+    ptyDrawer: () => drawer,
     // 등록은 **그 프로젝트의 서버**에 한다 — 여기가 갈리는 것이 격리의 전부다
     serverUrl: (projectId) => opencodeServers.urlOf(projectId),
   })

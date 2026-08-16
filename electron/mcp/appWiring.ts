@@ -3,6 +3,7 @@ import { Channel } from '../../shared/ipc/channels'
 import type { AppSettings } from '../../shared/settings/appSettings'
 import { logStore } from '../logs/logStore'
 import type { ProjectRegistry } from '../projects/projectRegistry'
+import type { PtyDrawerBridge } from '../pty/drawerBridge'
 import { DesktopMcp } from './desktopMcp'
 import type { McpToolPorts } from './tools'
 
@@ -23,6 +24,13 @@ export interface DesktopMcpDeps {
   registry: () => ProjectRegistry | null
   /** 지금 창. 창과 함께 새로 생긴다 */
   window: () => BrowserWindow | null
+  /**
+   * 지금 셸 드로어 배선. 창과 함께 새로 생긴다.
+   *
+   * 채울 명령을 여기에 맡긴다 — pty 가 언제 붙는지 아는 것이 이쪽뿐이라, 화면에 글자를
+   * 보내 대신 치게 하면 칸이 처음 펴지는 경우에 조용히 사라진다 (`PtyDrawerBridge.fill`).
+   */
+  ptyDrawer: () => PtyDrawerBridge | null
   /** 그 프로젝트의 opencode 서버 주소 (`opencode/serverPool.ts`). 안 떴으면 null */
   serverUrl: (projectId: string) => string | null
 }
@@ -42,6 +50,21 @@ export function desktopMcpPorts(deps: DesktopMcpDeps): McpToolPorts {
       const window = deps.window()
       if (window === null || window.isDestroyed()) return false
       window.webContents.send(Channel.DESKTOP_MCP_OPEN_FILE, { projectId, payload: target })
+      return true
+    },
+    // **일이 두 군데로 갈린다.** 칸을 펴는 것은 화면이 하고(`useDesktopMcpOpen`),
+    // 글자를 pty 에 넣는 것은 main 이 한다 — 칸이 한 번도 안 펴졌으면 pty 는 화면이
+    // 칸을 그린 **뒤에야** 붙고, 그 전에 쓴 바이트는 흔적 없이 사라지기 때문이다.
+    // 그래서 맡겨 두고(`fill`), 소켓이 열릴 때 들어간다.
+    openTerminal: (projectId, command) => {
+      const window = deps.window()
+      if (window === null || window.isDestroyed()) return false
+      const drawer = deps.ptyDrawer()
+      // 맡길 곳이 없는데 성공이라고 하지 않는다 — 채운 줄 알고 사용자에게 확인을 청하면
+      // 사용자는 빈 칸을 보게 된다
+      if (command !== null && drawer === null) return false
+      if (command !== null) drawer?.fill(projectId, command)
+      window.webContents.send(Channel.DESKTOP_MCP_OPEN_TERMINAL, { projectId, payload: { command } })
       return true
     },
   }

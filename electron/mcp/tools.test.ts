@@ -11,11 +11,13 @@ describe('createToolRunner', () => {
   let rootA: string
   let rootB: string
   let openInView: ReturnType<typeof vi.fn>
+  let openTerminal: ReturnType<typeof vi.fn>
 
   const portsWith = (over: Partial<McpToolPorts> = {}): McpToolPorts => ({
     rootOf: (id) => (id === 'A' ? rootA : id === 'B' ? rootB : null),
     focusedProjectId: () => 'A',
     openInView: openInView as unknown as McpToolPorts['openInView'],
+    openTerminal: openTerminal as unknown as McpToolPorts['openTerminal'],
     ...over,
   })
 
@@ -26,6 +28,7 @@ describe('createToolRunner', () => {
     await writeFile(join(rootA, 'src', 'a.ts'), 'a\n')
     await writeFile(join(rootB, 'secret.ts'), 'b\n')
     openInView = vi.fn().mockReturnValue(true)
+    openTerminal = vi.fn().mockReturnValue(true)
   })
 
   afterEach(async () => {
@@ -73,5 +76,89 @@ describe('createToolRunner', () => {
     openInView.mockReturnValue(false)
     const run = createToolRunner(portsWith())
     await expect(run('A', 'open_file', { path: 'src/a.ts' })).rejects.toThrow('화면이 없어')
+  })
+})
+
+// **이 도구의 값은 "실행하지 않는다" 하나다.** 개행이 통과하면 셸이 그 자리에서 돌려 버리고
+// (실측 — `openTerminal.ts` 머리말), 그 순간 이 도구는 그냥 명령 실행기가 된다.
+describe('createToolRunner — open_terminal', () => {
+  let openTerminal: ReturnType<typeof vi.fn>
+
+  const portsWith = (over: Partial<McpToolPorts> = {}): McpToolPorts => ({
+    rootOf: (id) => (id === 'A' ? '/tmp/A' : null),
+    focusedProjectId: () => 'A',
+    openInView: () => true,
+    openTerminal: openTerminal as unknown as McpToolPorts['openTerminal'],
+    ...over,
+  })
+
+  beforeEach(() => {
+    openTerminal = vi.fn().mockReturnValue(true)
+  })
+
+  it('명령을 채워만 뒀다고 답한다 — 실행했다고 하지 않는다', async () => {
+    const run = createToolRunner(portsWith())
+    const answer = await run('A', 'open_terminal', { command: 'rm -rf build' })
+
+    expect(openTerminal).toHaveBeenCalledWith('A', 'rm -rf build')
+    expect(answer).toContain('채워만 뒀습니다')
+    expect(answer).toContain('실행하지 않았습니다')
+    // 모델이 읽고 사용자에게 확인을 청해야 이 도구가 완성된다
+    expect(answer).toContain('확인')
+  })
+
+  it('개행이 섞이면 거절한다 — 채우는 순간 실행되어 버린다', async () => {
+    const run = createToolRunner(portsWith())
+    await expect(run('A', 'open_terminal', { command: 'echo 하나\necho 둘' })).rejects.toThrow(
+      '실행되어',
+    )
+    expect(openTerminal).not.toHaveBeenCalled()
+  })
+
+  // `\r` 도 셸에서는 개행이고(엔터가 보내는 것이 그것이다), ESC 는 키 바인딩을 건드린다.
+  // **양끝이 아니라 가운데** 것이다 — 끝에 붙은 것은 "돌려라" 라는 뜻일 뿐이라 떼어 낸다.
+  it('가운데의 캐리지리턴·제어문자도 거절한다', async () => {
+    const run = createToolRunner(portsWith())
+    await expect(run('A', 'open_terminal', { command: 'echo 하나\recho 둘' })).rejects.toThrow(
+      '제어문자',
+    )
+    await expect(run('A', 'open_terminal', { command: 'ls\u001b[A' })).rejects.toThrow('제어문자')
+    expect(openTerminal).not.toHaveBeenCalled()
+  })
+
+  // 모델은 실행할 셈으로 끝에 개행을 붙여 보낸다. 그건 명령의 일부가 아니다.
+  it('양끝의 개행·공백은 떼고 채운다', async () => {
+    const run = createToolRunner(portsWith())
+    await run('A', 'open_terminal', { command: '  npm test\n' })
+    expect(openTerminal).toHaveBeenCalledWith('A', 'npm test')
+  })
+
+  it('명령이 없으면 칸만 편다', async () => {
+    const run = createToolRunner(portsWith())
+    const answer = await run('A', 'open_terminal', {})
+
+    expect(openTerminal).toHaveBeenCalledWith('A', null)
+    expect(answer).toContain('명령은 넣지 않았습니다')
+  })
+
+  it('뒤에 있는 프로젝트에는 열지 않고 그 사실을 알린다', async () => {
+    const run = createToolRunner(portsWith({ focusedProjectId: () => 'B' }))
+    const answer = await run('A', 'open_terminal', { command: 'ls' })
+
+    expect(openTerminal).not.toHaveBeenCalled()
+    expect(answer).toContain('열지 못했습니다')
+  })
+
+  it('닫힌 프로젝트는 아무것도 건드리지 않는다', async () => {
+    const run = createToolRunner(portsWith())
+    await expect(run('닫힘', 'open_terminal', { command: 'ls' })).rejects.toThrow('닫힌 프로젝트')
+    expect(openTerminal).not.toHaveBeenCalled()
+  })
+
+  // 채운 줄 알고 사용자에게 확인을 청하면 사용자는 빈 칸을 본다
+  it('못 보냈으면 성공이라고 하지 않는다', async () => {
+    openTerminal.mockReturnValue(false)
+    const run = createToolRunner(portsWith())
+    await expect(run('A', 'open_terminal', { command: 'ls' })).rejects.toThrow('화면이 없어')
   })
 })

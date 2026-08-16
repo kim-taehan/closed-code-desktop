@@ -92,6 +92,20 @@ export interface DesktopMcpOpenFilePayload {
   line?: number
 }
 
+/**
+ * 데스크톱 MCP 서버의 `open_terminal` 도구가 셸 칸을 펴라고 했다 (`electron/mcp/openTerminal.ts`).
+ */
+export interface DesktopMcpOpenTerminalPayload {
+  /**
+   * 채워 둔 명령. 없으면 칸만 편다.
+   *
+   * **화면은 이 값을 쓰지 않는다** — 글자를 pty 에 넣는 일은 main 이 한다
+   * (`drawerBridge.fill`). 그래도 싣는 이유는 프레임이 스스로를 설명하게 두려는 것이다:
+   * 로그에 이 프레임만 남았을 때 "칸만 편 것" 과 구별되어야 한다.
+   */
+  command: string | null
+}
+
 export interface HistoryRenamePayload {
   chatId: string
   title: string

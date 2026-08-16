@@ -79,12 +79,41 @@ describe('PtySocket', () => {
   // 실측: JSON 봉투로 보냈더니 그 JSON 문자열이 셸에 그대로 타이핑됐다
   it('보내는 것은 원시 바이트다 — 봉투를 씌우지 않는다', () => {
     const { socket, fake } = connect()
+    fake.emit('open')
     socket.write('echo hi\n')
     expect(fake.sent).toEqual(['echo hi\n'])
   })
 
   it('아직 안 열렸으면 버린다 — 큐에 쌓으면 셸이 준비된 뒤 한꺼번에 쏟아진다', () => {
     const socket = new PtySocket({ url: 'ws://x', create: () => new FakeSocket() })
+    expect(socket.write('a')).toBe(false)
+  })
+
+  // **`open()` 이 돌아왔다고 쓸 수 있는 것이 아니다.** 실측(실서버 pty): 그 시점의
+  // readyState 는 0(CONNECTING)이고 `ws` 는 `send` 에서 그 자리에서 던진다. 그 예외는
+  // IPC 리스너 안에서 나 아무에게도 안 보이고, 보낸 글자만 사라진다.
+  it('붙는 중(open 이벤트 전)에는 쓰지 않는다', () => {
+    const { socket, fake } = connect()
+    expect(socket.write('a')).toBe(false)
+    expect(fake.sent).toEqual([])
+
+    fake.emit('open')
+    expect(socket.write('a')).toBe(true)
+  })
+
+  it('열렸다고 알려 준다 — 맡아 둔 글자를 넣는 신호다', () => {
+    const { socket, fake } = connect()
+    const opened = vi.fn()
+    socket.onOpen(opened)
+
+    fake.emit('open')
+    expect(opened).toHaveBeenCalledTimes(1)
+  })
+
+  it('끊긴 뒤에는 다시 못 쓴다', () => {
+    const { socket, fake } = connect()
+    fake.emit('open')
+    fake.emit('close', 1000, Buffer.from(''))
     expect(socket.write('a')).toBe(false)
   })
 

@@ -62,6 +62,23 @@ export const TOOLS = [
       required: ['path'],
     },
   },
+  {
+    name: 'open_terminal',
+    description:
+      'Open Code Desktop 화면 아래 셸 칸을 펴고, 명령을 **채워만 둔다 — 실행하지 않는다.** 사용자가 화면에서 눈으로 확인하고 직접 엔터를 친다. 지우거나 되돌리기 어려운 명령, 사용자가 판단해야 하는 명령을 제안할 때 쓴다. 결과가 곧바로 필요하면 이 도구가 아니라 셸을 직접 실행하는 도구를 쓴다 — 여기서는 아무것도 돌아가지 않는다. 사용자가 다른 프로젝트를 보고 있으면 열지 못하며, 그 사실을 결과로 알려준다.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        command: {
+          type: 'string',
+          description:
+            '채울 명령 한 줄. 없으면 칸만 편다. **개행을 넣지 마라** — 셸에 들어가는 즉시 실행되어 사용자가 확인할 기회가 사라지므로 거절한다.',
+        },
+      },
+      // command 는 없어도 된다 — "터미널 좀 열어 줘" 만으로도 뜻이 있다
+      required: [],
+    },
+  },
 ] as const
 
 /**

@@ -9,6 +9,7 @@ import type {
   TaskNoticePayload,
   ChatSnapshotPayload,
   DesktopMcpOpenFilePayload,
+  DesktopMcpOpenTerminalPayload,
   ExtensionChatAskPayload,
   DiagnosticsPayload,
   FileListPayload,
@@ -192,6 +193,11 @@ export interface DesktopBridge extends GitHistoryBridge, ExtensionRegistryBridge
    * 위의 `*McpCredentials`·`onMcpState` 와 **다른 뜻의 MCP** 다 — `channelNames.ts` 참조.
    */
   onDesktopMcpOpenFile(handler: ProjectHandler<DesktopMcpOpenFilePayload>): () => void
+  /**
+   * 같은 서버의 `open_terminal` 도구가 셸 칸을 펴라고 했다. **화면은 펴기만 한다** —
+   * 명령을 pty 에 넣는 것은 main 이다 (`DesktopMcpOpenTerminalPayload`).
+   */
+  onDesktopMcpOpenTerminal(handler: ProjectHandler<DesktopMcpOpenTerminalPayload>): () => void
   /**
    * 확장이 `chat.ask` 로 물었다 — **화면이 사용자 입력과 같은 큐에 넣어야 한다.**
    * main 이 직접 보내지 않는 이유는 그 큐가 렌더러에 있기 때문이다 (`useSendQueue`).

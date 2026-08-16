@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { desktopMcpPorts, type DesktopMcpDeps } from './appWiring'
 
 // **창을 되살렸을 때 낡은 세대를 보지 않는가** (design-audit A7 「수명이 섞인 클로저」).
@@ -32,6 +32,7 @@ describe('desktopMcpPorts — 창보다 오래 사는 배선', () => {
       serverUrl,
       registry: () => registry,
       window: () => null,
+      ptyDrawer: () => null,
     })
 
     expect(ports.rootOf('A')).toBe('/old/A')
@@ -60,6 +61,7 @@ describe('desktopMcpPorts — 창보다 오래 사는 배선', () => {
       serverUrl,
       registry: () => null,
       window: () => window,
+      ptyDrawer: () => null,
     })
 
     expect(ports.openInView('A', { path: 'a.ts' })).toBe(true)
@@ -74,4 +76,54 @@ describe('desktopMcpPorts — 창보다 오래 사는 배선', () => {
     expect(sent).toEqual(['old', 'new'])
   })
 
+})
+
+// **일이 두 군데로 갈리는 자리다.** 칸을 펴는 것은 화면이, 글자를 넣는 것은 main 이 한다.
+// 한쪽만 하면 증상이 조용하다: 프레임만 보내면 빈 칸이 열리고, 맡기기만 하면 아무 일도 안 난다.
+describe('desktopMcpPorts — open_terminal', () => {
+  const frames: { channel: string; scoped: unknown }[] = []
+  const window = {
+    isDestroyed: () => false,
+    webContents: { send: (channel: string, scoped: unknown) => frames.push({ channel, scoped }) },
+  } as never
+
+  beforeEach(() => {
+    frames.length = 0
+  })
+
+  function portsWith(drawer: { fill: ReturnType<typeof vi.fn> } | null) {
+    return desktopMcpPorts({
+      settings,
+      serverUrl,
+      registry: () => null,
+      window: () => window,
+      ptyDrawer: () => drawer as never,
+    })
+  }
+
+  it('칸을 펴라고 화면에 알리고, 채울 명령은 드로어에 맡긴다', () => {
+    const fill = vi.fn()
+    expect(portsWith({ fill }).openTerminal('A', 'npm test')).toBe(true)
+
+    expect(fill).toHaveBeenCalledWith('A', 'npm test')
+    expect(frames).toEqual([
+      {
+        channel: 'desktopMcp:openTerminal',
+        scoped: { projectId: 'A', payload: { command: 'npm test' } },
+      },
+    ])
+  })
+
+  it('명령이 없으면 맡길 것도 없다 — 칸만 편다', () => {
+    const fill = vi.fn()
+    expect(portsWith({ fill }).openTerminal('A', null)).toBe(true)
+    expect(fill).not.toHaveBeenCalled()
+    expect(frames).toHaveLength(1)
+  })
+
+  // 맡길 곳이 없는데 성공이라고 하면, 모델이 "확인해 달라" 고 말하고 사용자는 빈 칸을 본다
+  it('셸 배선이 없으면 채울 명령을 삼키지 않고 실패로 답한다', () => {
+    expect(portsWith(null).openTerminal('A', 'npm test')).toBe(false)
+    expect(frames).toEqual([])
+  })
 })

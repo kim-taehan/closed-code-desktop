@@ -35,6 +35,14 @@ export const Channel = {
    */
   DESKTOP_MCP_OPEN_FILE: 'desktopMcp:openFile',
   /**
+   * main → renderer: **데스크톱 MCP 서버의 `open_terminal` 도구가 셸 칸을 펴라고 했다.**
+   *
+   * 화면이 하는 일은 **칸을 펴는 것뿐**이다. 채울 명령을 pty 에 넣는 것은 main 이 한다
+   * (`electron/pty/drawerBridge.ts` 의 `fill`) — 소켓이 언제 열리는지는 main 만 알고,
+   * 열리기 전에 쓴 바이트는 흔적 없이 사라진다 (`PtySocket.write` 실측).
+   */
+  DESKTOP_MCP_OPEN_TERMINAL: 'desktopMcp:openTerminal',
+  /**
    * main → renderer: **확장이 채팅으로 물었다** (`code.chat.ask`).
    *
    * 확장 질의는 사용자 입력과 **같은 큐**를 타야 한다 — 그 큐는 렌더러에 있다

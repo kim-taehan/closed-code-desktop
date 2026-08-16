@@ -22,6 +22,7 @@ const ports = {
   focusedProjectId: () => null,
   activeFile: () => null,
   openInView: () => false,
+  openTerminal: () => false,
 }
 
 function make(options: { enabled?: boolean; status?: string } = {}): {
