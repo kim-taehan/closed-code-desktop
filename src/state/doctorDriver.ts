@@ -35,6 +35,13 @@ export interface DriverPorts {
   /** true 를 돌려주면 그 자리에서 그만둔다 (화면이 닫혔거나 「중지」를 눌렀다) */
   shouldStop(): boolean
   /**
+   * main 이 낸 주인 판정을 물어 볼 때마다 알린다.
+   *
+   * 화면이 이것을 따로 물으면 **판정이 두 벌**이 된다 — 사다리가 조치를 고를 때 본 값과
+   * 화면이 말을 고를 때 본 값이 그 사이에 갈릴 수 있다. 같은 값을 흘려보내 그 창을 없앤다.
+   */
+  onOwnership?(ownership: ServerOwnership): void
+  /**
    * 치유 칸을 탈 것인가. **기본은 탄다.**
    *
    * 거짓이면 진단만 재고 사다리 앞에서 멈춘다 — 설계 §2 의 「30초 주기 재측정」이 그것이다.
@@ -69,6 +76,7 @@ export async function driveDoctor(ports: DriverPorts): Promise<PipelineState> {
     // **실패했을 때만 묻는다.** 성공 전이는 ②로 안 내려가므로 주인 판정이 필요 없고,
     // 그 물음은 main 에서 `ps` 를 부른다 (`pidStore.owns`) — 공짜가 아니다.
     const ownership = outcome.ok ? 'theirs' : await currentOwnership()
+    if (!outcome.ok) ports.onOwnership?.(ownership)
     state = advance(state, outcome, sessionUp(ports.getStatus()), ownership)
     ports.onState(state)
   }
@@ -99,23 +107,35 @@ async function runCommand(command: DoctorCommand, ports: DriverPorts): Promise<C
     case 'heal-reconnect':
       await window.davis.reconnectProject()
       return recheck(ports, RECONNECT_TRIES)
-    // ② — **우리가 띄운 것을 접었다 다시 띄운다.** 남의 프로세스에는 손대지 않는다:
-    // main 의 `serverPool.stop` 이 접는 것은 우리 표에 있는 자식뿐이다.
+    // ② — **주인이 누구든 `restart` 하나다.**
+    //
+    // 갈래가 둘이었고 남의 서버 쪽은 `start` 를 골랐다. `start` 는 아무것도 안 끄니까
+    // 안전해 보였는데, **아무것도 안 하기도 했다**: 세션이 살아 있으면 `bridge.activate` 의
+    // 이른 반환에 걸려 그대로 돌아가고, 성공으로 적혔다 (실측 2026-08-16, contract-qa).
+    // 그 상태가 예외가 아니라 **크래시의 기본 모양**이다 — 서버는 죽고 세션은 남는다.
+    //
+    // `restart` 는 두 경우를 다 덮는다. 남의 프로세스에는 닿지 않는다: main 의
+    // `closeProject` 가 접는 것은 우리 세션과 **우리 표의 서버뿐**이라, 진짜 남의 서버면
+    // 접는 절반이 no-op 이고 이어지는 기동이 이 프로젝트용을 세운다.
     case 'heal-restart-server':
       return controlServer('restart')
-    // ② — 남의 서버(또는 주인을 모르는 서버)는 **그대로 살려 둔다.** 이 프로젝트만
-    // 우리가 띄운 서버로 옮긴다 (설계 §1). `start` 는 아무것도 끄지 않는다.
-    case 'heal-adopt-server':
-      return controlServer('start')
+    // ③ — **조치가 없다.** ②가 세션까지 붙여 놓고 돌아오므로 여기서 재연결을 또 부르면
+    // 멀쩡한 세션을 접었다 붙이는 것이 된다 (실측 2026-08-16). 검산만 한다.
+    case 'heal-verify':
+      return recheck(ports, RECONNECT_TRIES)
   }
 }
 
 /**
- * 서버 조작 한 번. **재확인 폴링이 없다** — main 이 조작 직후 표를 다시 읽어
- * "떠 있어야 성공" 을 이미 판정해서 돌려준다 (`ipc/projectBridge.ts`).
+ * 서버 조작 한 번. **재확인 폴링이 없다** — main 이 조작 직후 **그 주소에 직접 ping** 해
+ * "응답해야 성공" 을 판정해서 돌려준다 (`ipc/projectBridge.ts`).
  * 세션이 붙었는지는 이 칸의 물음이 아니라 **③의 물음**이다.
+ *
+ * 한때 main 의 판정이 `statusOf().running`(우리 표에 있나)이었고, 그래서 죽은 서버에
+ * 아무 일도 안 하고 `ok` 가 돌아왔다. 여기서 그 `ok` 를 그대로 믿는다 — 믿을 수 있게
+ * 고친 자리는 저쪽이다.
  */
-async function controlServer(action: 'start' | 'restart'): Promise<CheckOutcome> {
+async function controlServer(action: 'restart'): Promise<CheckOutcome> {
   const result = await window.davis.controlServer({ action })
   if (!result.ok) {
     // 사유를 그대로 올린다 — 실행 파일을 못 찾았다는 말이 여기로 온다 (`binary.ts`)

@@ -104,8 +104,26 @@ export class OpencodeServerPool {
         startedAt: Date.now(),
       })
     }
+    // **죽으면 표에서 스스로 빠진다.** 이게 없으면 크래시·SIGKILL 뒤에도 표가 그대로 남아
+    // `urlFor` 가 죽은 주소를 영원히 재발급한다 (실측 2026-08-16) — Doctor 만의 문제가
+    // 아니라 MCP 등록·프로브·드로어까지 전부 그 주소를 물고 늘어진다.
+    server.onExit(() => this.forgetDead(projectId, server))
     this.options.log?.(`opencode 서버 기동: ${root} → ${server.url} (pid=${server.pid ?? '?'})`)
     return server
+  }
+
+  /**
+   * 자식이 끝났다 — 우리가 시켰든 아니든 표에서 지운다.
+   *
+   * **자기 자신일 때만 지운다.** 그 사이 재시작이 다녀갔으면 표에 있는 것은 새 서버이고,
+   * 그걸 지우면 방금 띄운 것을 아무도 못 찾는다 (`urlFor`·`stop` 의 같은 조심과 같은 결).
+   */
+  private forgetDead(projectId: string, server: SpawnedServer): void {
+    if (this.servers.get(projectId) !== server) return
+    this.servers.delete(projectId)
+    // 흔적도 지운다 — 이미 죽은 PID 라 다음 실행이 들여다볼 이유가 없다
+    if (server.pid !== undefined) this.options.pids?.forget(server.pid)
+    this.options.log?.(`opencode 서버가 끝났습니다: ${server.url} (pid=${server.pid ?? '?'})`)
   }
 
   /**
@@ -139,9 +157,16 @@ export class OpencodeServerPool {
    * (「다시 시작」이 아니라 「서버 시작」).
    *
    * `ours` 는 **표를 믿지 않고 한 겹 더 본다** — 그 PID 가 지금도 우리가 띄운
-   * `opencode serve` 로 살아 있나 (`pidStore.owns`). 표에 있어도 프로세스가 죽었거나 그
-   * 번호를 남이 물려받았으면 거짓이다. Doctor 사다리 ②가 이 값으로 갈리고(설계 2026-08-16 §1),
-   * **모르면 거짓이라 갈아타기로 간다** — 남의 프로세스를 끄는 쪽으로는 틀리지 않는다.
+   * `opencode serve` 로 살아 있나 (`pidStore.owns`). 표에 있어도 그 번호를 남이 물려받았으면
+   * 거짓이다. **모르면 거짓이다** — 남의 프로세스를 끄는 쪽으로는 틀리지 않는다.
+   *
+   * ⚠️ **`running` 을 성공 판정에 쓰지 마라.** 자식이 죽으면 `forgetDead` 가 표에서 지우지만
+   * 그것은 exit 이벤트가 도착한 **뒤**다. 그 찰나에는 `running` 이 참인 채로 죽은 주소를
+   * 가리킨다 — 서버가 실제로 사는지는 HTTP 로 물어야 한다 (`ipc/projectBridge.ts` 의
+   * SERVER_CONTROL 판정, 실측 2026-08-16).
+   *
+   * `ours` 는 Doctor 사다리 ②의 **문구**를 가른다. 조치는 하나다 — 갈래가 접혔다
+   * (설계 2026-08-16 §1: `pool.stop` 사정거리가 우리 자식뿐이라 `restart` 가 두 경우를 다 덮는다).
    */
   statusOf(projectId: string | null | undefined): ServerStatusPayload {
     const server = projectId === null || projectId === undefined ? undefined : this.servers.get(projectId)

@@ -3,7 +3,7 @@ import type { ProjectStatus } from './projectStatus'
 import { sessionUp } from './connectionDoctor'
 import { driveDoctor } from './doctorDriver'
 import { healNotice, type HealNotice } from './healNotice'
-import type { PipelineState } from './doctorPipeline'
+import type { PipelineState, ServerOwnership } from './doctorPipeline'
 
 // 자가 복구의 **실행 규칙** — 언제 시작하나 · 몇 번 도나 · 실패한 뒤엔 뭘 하나.
 //
@@ -74,8 +74,14 @@ export function useAutoHeal(
    * 비우는 것은 effect 이고 읽는 쪽(`useDoctorGate`)도 effect 라, **누가 먼저냐**에
    * 결과가 걸린다. 주인을 같이 들고 그리는 순간에 걸러 그 창을 없앤다.
    */
-  const [run$, setRun] = useState<{ id: string | undefined; state: PipelineState } | null>(null)
-  const pipeline = run$ !== null && run$.id === projectId ? run$.state : null
+  const [run$, setRun] = useState<{
+    id: string | undefined
+    state: PipelineState
+    /** 사다리가 조치를 고를 때 본 판정. **화면의 말도 같은 값에서 나온다** */
+    ownership: ServerOwnership
+  } | null>(null)
+  const owned = run$ !== null && run$.id === projectId ? run$ : null
+  const pipeline = owned?.state ?? null
   /** 이번 프로젝트에서 자동 사다리를 이미 태웠나. **1회 상한의 실체다** */
   const usedRef = useRef(false)
   /** 지금 도는 중인가 — 겹쳐 돌면 재연결이 두 번 나간다 */
@@ -117,7 +123,12 @@ export function useAutoHeal(
         const state = await driveDoctor({
           getStatus: () => statusRef.current ?? 'idle',
           onState: (next) => {
-            if (gen === genRef.current) setRun({ id: owner, state: next })
+            if (gen !== genRef.current) return
+            setRun((prev) => ({ id: owner, state: next, ownership: prev?.ownership ?? 'theirs' }))
+          },
+          onOwnership: (ownership) => {
+            if (gen !== genRef.current) return
+            setRun((prev) => (prev === null ? prev : { ...prev, ownership }))
           },
           shouldStop: () => gen !== genRef.current,
           healing,
@@ -162,7 +173,7 @@ export function useAutoHeal(
   }, [enabled, stopped, run])
 
   return {
-    notice: healNotice(pipeline),
+    notice: healNotice(pipeline, owned?.ownership ?? 'theirs'),
     failed: pipeline?.verdict === 'manual',
     result: pipeline?.verdict === 'manual' ? pipeline : null,
   }

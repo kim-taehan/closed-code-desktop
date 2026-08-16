@@ -205,8 +205,16 @@ export class ProjectBridge {
         const status = this.listener.serverStatus()
         // **떠 있어야 성공이다.** 조작이 예외 없이 끝나도 서버가 없으면 실패다
         // (시작·다시 시작에서 spawn 이 조용히 못 붙는 경우).
-        if (payload.action !== 'stop' && !status.running) {
-          return { ok: false, error: '서버가 뜨지 않았습니다 — 로그를 확인하세요', status }
+        //
+        // ⚠️ **`status.running` 으로 재지 않는다.** 그것은 "우리 표에 있나" 일 뿐이라
+        // 자식이 SIGKILL 돼도 exit 이 도착하기 전까지 참으로 남는다 — 그때 이 자리는
+        // **아무것도 안 하고 성공을 돌려준다** (실측 2026-08-16, contract-qa).
+        // 물어야 할 것은 하나다: **그 주소가 지금 응답하나.**
+        if (payload.action !== 'stop') {
+          const health = await pingOpencode(this.serverUrl())
+          if (!health.ok) {
+            return { ok: false, error: `서버가 응답하지 않습니다 — ${health.detail}`, status }
+          }
         }
         return { ok: true, status }
       } catch (error) {

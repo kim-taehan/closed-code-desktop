@@ -20,16 +20,16 @@ import type { DoctorStep, DoctorStepId, PipelineState, ServerOwnership } from '.
  * 한 번에 실행 가능한 복구 액션.
  *
  * **`'reconnect'` 하나뿐이었다** (위 머리말의 뒤집힌 전제와 같은 뿌리다).
- * 지금은 서버를 되살리는 둘이 더 있고, **그 둘은 서로 다른 것을 한다**:
+ * 지금은 서버를 되살리는 `'restart-server'` 가 하나 더 있다.
  *
- * | | 무엇을 | 남의 프로세스 |
- * |---|---|---|
- * | `restart-server` | 우리가 띄운 그 서버를 접었다 다시 띄운다 | 손대지 않는다 (우리 표의 자식만 접는다) |
- * | `adopt-server` | 이 프로젝트용 서버를 **새로** 띄운다 | **살려 둔다** — 끄지 않는다 |
+ * **한때 둘이었다** — `restart-server`(우리 것을 접었다 띄운다)와 `adopt-server`(남의 것은
+ * 살려 두고 새로 띄운다). 조치 층이 이미 그 둘을 갈라 주고 있었다: `serverPool.stop` 은
+ * 우리 표의 자식만 접으므로 남의 서버면 접는 절반이 저절로 no-op 이다. 갈래를 세운 대가로
+ * `adopt` 가 고른 `start` 는 세션이 살아 있을 때 **아무 일도 안 했다** (실측 2026-08-16).
  *
- * 갈래는 `ServerStatusPayload.ours` 하나로 정해지고, **모르면 `adopt` 다.**
+ * `ServerStatusPayload.ours` 는 이제 **안내 문장만** 가른다 (`serverIssueFix`).
  */
-export type DoctorFix = 'reconnect' | 'restart-server' | 'adopt-server'
+export type DoctorFix = 'reconnect' | 'restart-server'
 
 export interface DoctorIssue {
   layer: 'opencode 서버' | '모델' | '세션'
@@ -48,11 +48,6 @@ export interface DoctorIssue {
 const RESTART_ADVICE = '이 프로젝트의 서버를 접었다 다시 띄웁니다'
 const ADOPT_ADVICE =
   '이 프로젝트용 서버를 새로 띄웁니다 — 이미 떠 있는 다른 서버는 그대로 둡니다'
-
-/** ②의 두 조치 중 어느 버튼을 줄 것인가. **모르면 갈아타기다** (남의 것을 안 끈다) */
-export function serverFixFor(ownership: ServerOwnership): DoctorFix {
-  return ownership === 'ours' ? 'restart-server' : 'adopt-server'
-}
 
 /** 세션이 대화 가능한 상태인가 (doctorPipeline 의 치유 성공 판정도 이것을 쓴다) */
 export function sessionUp(status: ProjectStatus): boolean {
@@ -161,20 +156,26 @@ function lastStep(steps: DoctorStep[], id: DoctorStepId): DoctorStep | undefined
   return [...steps].reverse().find((step) => step.id === id)
 }
 
-/** 서버 이슈에 붙일 조치 + 그 조치가 무엇을 하는지 한 줄 */
+/**
+ * 서버 이슈에 붙일 조치 + 그 조치가 무엇을 하는지 한 줄.
+ *
+ * **조치는 하나이고 안내만 갈린다.** 사용자가 볼 말이 달라야 하는 이유는 두 경우가 실제로
+ * 다른 일이기 때문이다 — 앞은 있던 것을 접었다 띄우고, 뒤는 없던 것을 세운다.
+ * 뒤쪽에는 **남의 서버를 살려 둔다**는 사실이 함께 들어간다 (설계 §6 미결 1).
+ */
 function serverIssueFix(ownership: ServerOwnership): { fix: DoctorFix; advice: string } {
-  const fix = serverFixFor(ownership)
-  return { fix, advice: fix === 'restart-server' ? RESTART_ADVICE : ADOPT_ADVICE }
+  return {
+    fix: 'restart-server',
+    advice: ownership === 'ours' ? RESTART_ADVICE : ADOPT_ADVICE,
+  }
 }
 
 export const FIX_LABEL: Record<DoctorFix, string> = {
   reconnect: '재연결',
-  'restart-server': '서버 다시 시작',
-  'adopt-server': '우리 서버로 갈아타기',
+  'restart-server': '서버 되살리기',
 }
 
 export const FIX_PROGRESS: Record<DoctorFix, string> = {
   reconnect: '재연결 중…',
-  'restart-server': '서버를 다시 띄우는 중…',
-  'adopt-server': '서버를 띄우는 중…',
+  'restart-server': '서버를 되살리는 중…',
 }

@@ -51,26 +51,37 @@ describe('승격 — 어디에 보이나', () => {
   })
 
   // ⭐ 무거운 조치는 알린다
-  it('②(서버 다시 시작)는 배너로 올라간다', () => {
-    const notice = healNotice(advance(atReconnect(), bad('재연결 실패'), false, 'ours'))
+  it('②는 배너로 올라간다', () => {
+    const notice = healNotice(advance(atReconnect(), bad('재연결 실패'), false, 'ours'), 'ours')
     expect(notice?.stage).toBe('banner')
     expect(notice?.headline).toContain('재연결이 실패했습니다')
     expect(notice?.headline).toContain('다시 띄웁니다')
   })
 
-  // 남의 서버를 살려 둔다는 사실을 문구가 말한다 (설계 §6 미결 1)
-  it('②(갈아타기)는 남의 서버를 그대로 둔다고 말한다', () => {
-    const notice = healNotice(advance(atReconnect(), bad('재연결 실패'), false, 'theirs'))
-    expect(notice?.stage).toBe('banner')
-    expect(notice?.headline).toContain('그대로 둡니다')
+  // ⭐ **조치는 하나이고 말만 갈린다** — 남의 서버를 살려 둔다는 사실을 문구가 말한다
+  // (설계 §6 미결 1). 사다리 칸은 둘 다 `heal-restart-server` 로 같다.
+  it('②의 문구는 주인에 따라 갈린다 — 칸은 같다', () => {
+    const state = advance(atReconnect(), bad('재연결 실패'), false, 'theirs')
+    expect(state.next).toBe('heal-restart-server')
+    expect(healNotice(state, 'theirs')?.headline).toContain('그대로 둡니다')
+    expect(healNotice(state, 'ours')?.headline).toContain('재연결이 실패했습니다')
   })
 
-  // ③은 ①과 같은 조치인데 **자리가 다르다** — 이미 무거운 것을 했으므로 배너에 남는다
-  it('③(서버를 되살린 뒤의 재연결)은 상태줄로 내려가지 않는다', () => {
+  // **모르면 「남의 것」 쪽 문장이다** — 그 문장이 "죽었거나 남의 것" 을 함께 덮는다
+  it('주인을 안 넘기면 살려 둔다는 쪽으로 말한다', () => {
+    const state = advance(atReconnect(), bad('재연결 실패'), false)
+    expect(healNotice(state)?.headline).toContain('그대로 둡니다')
+  })
+
+  // ③은 **조치가 아니라 검산이다.** "붙이는 중" 이라고 하면 하지도 않는 일을 알리는 것이 된다
+  it('③(검산)은 배너에 남고, 붙이는 중이라고 말하지 않는다', () => {
     const second = advance(atReconnect(), bad('재연결 실패'), false, 'ours')
     const third = advance(second, ok('서버가 떴습니다'), false)
-    expect(third.next).toBe('heal-reconnect')
-    expect(healNotice(third)?.stage).toBe('banner')
+    expect(third.next).toBe('heal-verify')
+    const notice = healNotice(third, 'ours')
+    expect(notice?.stage).toBe('banner')
+    expect(notice?.headline).toContain('확인하는 중')
+    expect(notice?.headline).not.toContain('붙입니다')
   })
 
   it('최종 실패는 창이다', () => {
@@ -84,7 +95,7 @@ describe('승격 — 어디에 보이나', () => {
 // 근거는 **마지막으로 실패한 단계**의 사유다 — "왜" 를 잃으면 배너가 잔소리가 된다
 describe('근거', () => {
   it('실패한 단계의 이름과 사유를 함께 싣는다', () => {
-    const notice = healNotice(advance(atReconnect(), bad('재확인 시간 초과'), false, 'ours'))
+    const notice = healNotice(advance(atReconnect(), bad('재확인 시간 초과'), false, 'ours'), 'ours')
     expect(notice?.detail).toBe('재연결: 재확인 시간 초과')
   })
 

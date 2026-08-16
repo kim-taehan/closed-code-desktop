@@ -14,15 +14,16 @@
 //
 // 치유는 **세 칸 사다리다** (설계 2026-08-16):
 //
-//   ① heal-reconnect                          세션만 다시 붙인다
-//   ② heal-restart-server / heal-adopt-server  서버를 되살린다 (우리 것이냐로 갈린다)
-//   ③ heal-reconnect                           서버를 되살렸다고 세션이 저절로 붙지는 않는다
+//   ① heal-reconnect        세션만 다시 붙인다
+//   ② heal-restart-server   서버를 되살린다 (**조치는 하나**, 문구만 주인에 따라 갈린다)
+//   ③ heal-verify           **재확인만** 한다 — ②가 세션까지 붙여 놓는다 (실측)
 //
 // **이 자리에 "치유는 재연결 하나뿐이다" 가 적혀 있었다.** 근거는 *"opencode 서버는
 // 사용자가 직접 띄운 남의 프로세스라 우리가 죽였다 살릴 수 없다"* 였고, 그것은
 // **커밋 `c09cac8`("프로젝트마다 opencode 서버를 우리가 띄운다") 이전까지만 참이었다.**
 // 지금은 `serverPool` 이 띄우고 `pidStore` 가 우리 PID 를 안다 — 그래서 사다리가 돌아왔다.
-// 다만 **남의 서버는 여전히 못 죽인다**: 우리 것이 아니면 재시작이 아니라 갈아타기다.
+// **남의 서버는 여전히 못 죽인다.** 다만 그것을 여기서 갈라 줄 필요가 없다:
+// `serverPool.stop` 의 사정거리가 우리 자식뿐이라 조치 층이 이미 안전하다 (설계 §1 정정).
 //
 // 머신은 순수하다: 부작용(ping·재연결·서버 조작)은 next 로 시키기만 하고,
 // 드라이버(`doctorDriver.ts`)가 실행해 결과를 advance 로 돌려준다. 화면 없이 단언한다.
@@ -33,7 +34,6 @@ import {
   blockedAfter,
   setStep,
   stepStatus,
-  serverHealFor,
   type DiagStepId,
   type DoctorStep,
   type DoctorStepId,
@@ -47,7 +47,6 @@ export {
   STEP_LABEL,
   blockedAfter,
   isHealStep,
-  serverHealFor,
   type DiagStepId,
   type DoctorStep,
   type DoctorStepId,
@@ -162,24 +161,27 @@ export function advance(
       if (outcome.ok) {
         return withLog({ ...base, next: null, verdict: 'healed' }, '자동 복구 완료 — 연결이 살아났습니다')
       }
-      // **③이 실패했다 — 사다리의 끝이다.** 서버까지 되살려 놓고도 안 붙었으면 우리가 더
-      // 할 것이 없다. 여기서 ②로 돌아가면 그것이 곧 설계가 막으려는 **재시작 루프**다
-      // (실패 조건이 그대로인데 무거운 조치를 반복한다).
+      // ①이 실패했다 → ②로 내려간다.
+      //
+      // **여기 「②를 이미 밟았으면 멈춘다」 검사가 있었다.** ③이 재연결이던 시절, ③의
+      // 실패가 이 case 로 들어와 ②를 또 부를 수 있었기 때문이다 — 그것이 재시작 루프였다.
+      // ③이 `heal-verify` 로 갈리면서 **이 case 는 ①에서만 들어온다**: 사다리에 순환이
+      // 남지 않았고, 상한은 검사가 아니라 **모양**이 보장한다.
       //
       // 예전에는 ①의 실패가 곧 사다리의 끝이었다 — *"서버는 우리가 띄운 것이 아니라
       // 재시작할 수단이 없다"* 가 근거였고, `serverPool` 이 생기며 거짓이 됐다.
-      if (serverHealTried(state.steps)) {
-        return withLog(
-          { ...base, next: null, verdict: 'manual' },
-          '서버를 되살린 뒤에도 연결되지 않았습니다 — 아래 진단을 확인하세요',
-        )
-      }
       return startServerHeal(base, ownership)
 
-    // ② — 서버를 되살렸다. **성공해도 끝이 아니다**: 세션은 저절로 안 붙는다.
-    // 이 칸이 없으면 "서버는 초록인데 대화는 여전히 안 되는" 상태로 끝난다 (설계 §1).
+    // ② — 서버를 되살렸다. **성공해도 끝이 아니다** — 다만 남은 일은 「붙이기」가 아니라
+    // 「확인」이다.
+    //
+    // *"세션은 저절로 안 붙는다"* 고 적었는데 **틀렸다** (실측 2026-08-16): ②가 타는 경로
+    // (`controlServer` → `closeProject` → `activate`)는 세션을 새로 만들고 핸드셰이크
+    // ready 까지 기다렸다가 돌아온다. 그 위에 재연결을 또 부르면 멀쩡한 세션을 접었다
+    // 붙이는 것이고, 그 재조립이 실패하면 **②가 고쳐 놨는데도 사다리가 실패로 끝난다.**
+    //
+    // 그래도 칸을 없애지 않는다: 사다리가 「고쳤다」고 **스스로 단정하지 않고 검산한다.**
     case 'heal-restart-server':
-    case 'heal-adopt-server':
       if (!outcome.ok) {
         return withLog(
           { ...base, next: null, verdict: 'manual' },
@@ -189,28 +191,42 @@ export function advance(
       return withLog(
         {
           ...base,
-          steps: [...base.steps, { id: 'heal-reconnect', status: 'running' }],
-          next: 'heal-reconnect',
+          steps: [...base.steps, { id: 'heal-verify', status: 'running' }],
+          next: 'heal-verify',
         },
-        '서버가 떴습니다 → 세션을 다시 붙입니다',
+        '서버가 떴습니다 → 연결을 확인합니다',
+      )
+
+    // ③ — 검산. **여기서 조치를 하지 않는다.** 실패하면 그대로 멈춘다.
+    case 'heal-verify':
+      if (outcome.ok) {
+        return withLog({ ...base, next: null, verdict: 'healed' }, '자동 복구 완료 — 연결이 살아났습니다')
+      }
+      return withLog(
+        { ...base, next: null, verdict: 'manual' },
+        '서버를 되살린 뒤에도 연결되지 않았습니다 — 아래 진단을 확인하세요',
       )
   }
 }
 
-/** ②를 이미 한 번 밟았나. **자동 사다리의 1회 상한이 이 물음에서 나온다** */
-function serverHealTried(steps: DoctorStep[]): boolean {
-  return steps.some((step) => step.id === 'heal-restart-server' || step.id === 'heal-adopt-server')
-}
-
-/** ②를 붙인다. 갈래는 `ownership` 하나로 갈린다 — 다른 근거를 섞지 않는다. */
+/**
+ * ②를 붙인다. **칸은 하나이고 `ownership` 은 로그 문장만 가른다.**
+ *
+ * 갈래가 둘이던 자리다. 조치를 가르는 대신 조치 층에 맡긴다 — `serverPool.stop` 은
+ * 우리 표의 자식만 접으므로, 남의 서버(또는 이미 죽은 우리 서버)면 접는 절반이 no-op 이고
+ * 이어지는 기동이 이 프로젝트용을 세운다.
+ */
 function startServerHeal(state: PipelineState, ownership: ServerOwnership): PipelineState {
-  const id = serverHealFor(ownership)
   return withLog(
-    { ...state, steps: [...state.steps, { id, status: 'running' }], next: id },
+    {
+      ...state,
+      steps: [...state.steps, { id: 'heal-restart-server', status: 'running' }],
+      next: 'heal-restart-server',
+    },
     ownership === 'ours'
-      ? '우리가 띄운 서버입니다 → 서버를 다시 띄웁니다'
-      : // 남의 것이거나 **모르는** 경우다. 남의 프로세스는 그대로 두고 우리 것을 새로 띄운다.
-        '우리가 띄운 서버가 아닙니다 → 이 프로젝트만 우리 서버로 옮깁니다',
+      ? '우리가 띄운 서버가 살아 있습니다 → 접었다 다시 띄웁니다'
+      : // 남의 것이거나, **죽었거나, 모르는** 경우다. 남의 프로세스에는 손대지 않는다.
+        '우리가 띄운 서버가 아닙니다 → 이 프로젝트용 서버를 띄웁니다',
   )
 }
 

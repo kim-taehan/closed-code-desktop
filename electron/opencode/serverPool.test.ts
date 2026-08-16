@@ -10,6 +10,8 @@ import type { SpawnedServer } from './serverProcess'
 
 interface Fake extends SpawnedServer {
   stopped: number
+  /** 우리가 안 시킨 종료 (크래시·SIGKILL) 를 흉내낸다 */
+  die(): void
 }
 
 function fakePool() {
@@ -20,6 +22,7 @@ function fakePool() {
   const pool = new OpencodeServerPool({
     start: (root) => {
       roots.push(root)
+      const exitListeners: (() => void)[] = []
       const server: Fake = {
         url: `http://127.0.0.1:${port++}`,
         pid: 1000 + started.length,
@@ -28,6 +31,10 @@ function fakePool() {
         stop: () => {
           server.stopped += 1
           return Promise.resolve()
+        },
+        onExit: (listener) => exitListeners.push(listener),
+        die: () => {
+          for (const listener of exitListeners.splice(0)) listener()
         },
       }
       started.push(server)
@@ -130,6 +137,7 @@ describe('OpencodeServerPool', () => {
         stopped += 1
         return Promise.resolve()
       },
+      onExit: () => {},
     })
     await stopping
 
@@ -152,6 +160,7 @@ describe('statusOf — running 과 ours 는 다른 물음이다', () => {
           pid: 4242,
           bin: '/bin/opencode',
           stop: () => Promise.resolve(),
+          onExit: () => {},
         }),
       pids: { owns, add: () => {}, forget: () => {} } as never,
     })
@@ -184,5 +193,76 @@ describe('statusOf — running 과 ours 는 다른 물음이다', () => {
     const { pool } = fakePool()
     await pool.urlFor('a', '/p/alpha')
     expect(pool.statusOf('a')).toMatchObject({ running: true, ours: false })
+  })
+})
+
+// ⭐⭐ **표가 자식의 죽음을 알아야 한다.**
+//
+// 안 그러면 크래시·SIGKILL 뒤에도 표에 죽은 주소가 남고 `urlFor` 가 그것을 **영원히
+// 재발급한다** (실측 2026-08-16, contract-qa: SIGKILL 직후 `statusOf().running` 이 참이고
+// `urlFor` 가 ECONNREFUSED 나는 주소를 돌려줬다). Doctor 만의 문제가 아니다 — MCP 등록·
+// 프로브·드로어까지 전부 그 주소를 물고 늘어진다.
+describe('자식이 죽으면 표에서 빠진다', () => {
+  it('죽은 뒤에는 running 이 거짓이다', async () => {
+    const { pool, started } = fakePool()
+    await pool.urlFor('a', '/p/alpha')
+    expect(pool.statusOf('a').running).toBe(true)
+
+    started[0]!.die()
+
+    expect(pool.statusOf('a')).toEqual({ running: false, url: null, pid: null, ours: false })
+    expect(pool.urlOf('a')).toBeNull()
+  })
+
+  // **여기가 무동작 성공의 뿌리였다** — 죽은 주소를 계속 나눠 주면 아무도 못 고친다
+  it('죽은 뒤 urlFor 는 새 서버를 띄운다', async () => {
+    const { pool, started } = fakePool()
+    const first = await pool.urlFor('a', '/p/alpha')
+    started[0]!.die()
+
+    const second = await pool.urlFor('a', '/p/alpha')
+    expect(second).not.toBe(first)
+    expect(started).toHaveLength(2)
+  })
+
+  // 재시작이 다녀간 뒤 **옛 서버의 뒤늦은 exit** 이 새 서버를 지우면 안 된다
+  it('그 사이 새 서버가 들어왔으면 그것은 안 지운다', async () => {
+    const { pool, started } = fakePool()
+    await pool.urlFor('a', '/p/alpha')
+    const old = started[0]!
+    const fresh = await pool.restart('a', '/p/alpha')
+
+    old.die()
+
+    expect(pool.urlOf('a')).toBe(fresh)
+  })
+
+  it('죽은 서버의 흔적은 지운다 — 다음 실행이 들여다볼 이유가 없다', async () => {
+    const forgotten: number[] = []
+    const started: Fake[] = []
+    const pool = new OpencodeServerPool({
+      start: () => {
+        const exitListeners: (() => void)[] = []
+        const server: Fake = {
+          url: 'http://127.0.0.1:55640',
+          pid: 4242,
+          bin: '/bin/opencode',
+          stopped: 0,
+          stop: () => Promise.resolve(),
+          onExit: (listener) => exitListeners.push(listener),
+          die: () => {
+            for (const listener of exitListeners.splice(0)) listener()
+          },
+        }
+        started.push(server)
+        return Promise.resolve(server)
+      },
+      pids: { add: () => {}, forget: (pid: number) => forgotten.push(pid), owns: () => true } as never,
+    })
+
+    await pool.urlFor('a', '/p/alpha')
+    started[0]!.die()
+
+    expect(forgotten).toEqual([4242])
   })
 })

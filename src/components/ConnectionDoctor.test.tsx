@@ -176,12 +176,11 @@ describe('자동 치유 — 세션만 죽었을 때', () => {
     renderDoctor({ status: 'disconnected' })
 
     await vi.waitFor(() => expect(davis.controlServer).toHaveBeenCalled())
-    expect(davis.controlServer).toHaveBeenCalledWith({ action: 'start' })
-    // ①은 안 돈다 — 다만 ③의 재연결은 곧바로 뒤따르므로 "안 불렸다" 가 아니라
-    // **서버 조작이 먼저다**를 본다 (`doctorDriver.test.ts` 와 같은 이유)
-    expect(davis.controlServer.mock.invocationCallOrder[0]).toBeLessThan(
-      davis.reconnectProject.mock.invocationCallOrder[0] ?? Number.MAX_SAFE_INTEGER,
-    )
+    // **주인이 누구든 `restart` 다.** 한때 남의 것이면 `start` 를 보냈는데, 세션이 살아
+    // 있으면 그것이 무동작 성공이 됐다 (실측 2026-08-16).
+    expect(davis.controlServer).toHaveBeenCalledWith({ action: 'restart' })
+    // ①을 건너뛰었다. ③은 검산이라 재연결을 부르지 않으므로 한 번도 안 나간다.
+    expect(davis.reconnectProject).not.toHaveBeenCalled()
   })
 })
 

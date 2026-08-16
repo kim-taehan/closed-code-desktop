@@ -194,9 +194,16 @@ export class SessionBridge {
       } satisfies SessionStatePayload)
       return
     }
-    // start 도 restart 도 같은 길이다 — 떠 있으면 접고, 없으면 그냥 띄운다.
-    // 「시작」과 「다시 시작」을 가르는 것은 화면이고(무엇이 일어날지 말해야 한다),
-    // 여기서 갈라 봐야 같은 코드가 둘이 된다.
+    // ⚠️ **「start 도 restart 도 같은 길이다」고 적혀 있었다 — 조건이 빠진 참이다.**
+    // 같아지는 것은 **아무것도 안 떠 있을 때뿐**이고, 그 조건은 아래 한 줄이 깬다:
+    // 세션이 살아 있으면 `start` 는 `activate` 의 이른 반환(`this.sessions.has`)에 걸려
+    // **아무 일도 안 한다.** `restart` 만 `closeProject` 로 그 자리를 비운다.
+    //
+    // 이 어긋남이 실제로 값을 치렀다: Doctor 사다리의 「갈아타기」가 `start` 를 골랐고,
+    // 서버가 죽었는데 세션은 남은 상태(가장 흔한 크래시 모양)에서 **무동작 성공**이 됐다
+    // (실측 2026-08-16, contract-qa). 그래서 사다리는 지금 두 경우 모두 `restart` 를 쓴다 —
+    // `closeProject` 가 접는 것은 우리 세션과 **우리 표의 서버뿐**이라 남의 프로세스에는
+    // 닿지 않는다. 「시작」과 「다시 시작」을 화면 문구로 가르는 것은 그대로다.
     if (action === 'restart') await this.closeProject(project.id)
     await this.activate(project)
   }

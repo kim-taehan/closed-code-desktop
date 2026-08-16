@@ -81,49 +81,52 @@ describe('진단 — 어느 단계가 어떤 IPC 를 부르나', () => {
 })
 
 // ⭐ **여기가 「남의 서버는 끄지 않는다」의 배선 시험이다.**
-describe('② 서버 되살리기 — 주인에 따라 다른 조치를 부른다', () => {
+//
+// **한때 주인에 따라 다른 조치를 불렀다** — 우리 것이면 `restart`, 남의 것이면 `start`.
+// `start` 는 아무것도 안 끄니 안전해 보였는데 **아무것도 안 하기도 했다**: 세션이 살아
+// 있으면 `bridge.activate` 의 이른 반환에 걸려 무동작 성공이 된다 (실측 2026-08-16).
+// 지금은 **한 조치가 두 경우를 다 덮는다** — `closeProject` 가 접는 것이 우리 세션과
+// 우리 표의 서버뿐이라, 진짜 남의 서버면 접는 절반이 저절로 no-op 이다.
+describe('② 서버 되살리기 — 주인이 누구든 restart 하나다', () => {
   it('우리가 띄운 서버면 restart 다', async () => {
     ownedByUs(true)
     await drive()
     expect(actions()).toEqual(['restart'])
   })
 
-  // `start` 는 **아무것도 끄지 않는다.** 남의 서버는 그대로 살아 있고 이 프로젝트만 옮긴다.
-  it('남이 띄운 서버면 start 다', async () => {
+  it('남이 띄운(또는 죽은) 서버여도 restart 다', async () => {
     ownedByUs(false)
     await drive()
-    expect(actions()).toEqual(['start'])
+    expect(actions()).toEqual(['restart'])
   })
 
-  // **모르면 남의 것으로 본다** — main 이 답을 못 주는 경우까지 그렇다
-  it('주인을 못 물으면 start 다 (안전한 쪽으로 틀린다)', async () => {
+  it('주인을 못 물어도 restart 다', async () => {
     davis.serverStatus.mockRejectedValue(new Error('창이 없다'))
     await drive()
-    expect(actions()).toEqual(['start'])
+    expect(actions()).toEqual(['restart'])
   })
 
-  // 어느 갈래로 가든 **끄는 호출은 나가지 않는다.** 사다리에 `stop` 이 낄 자리가 없다.
-  it('어느 갈래도 stop 을 부르지 않는다', async () => {
+  // ⭐⭐ **끄는 호출은 어디서도 나가지 않는다.** 사다리에 `stop` 이 낄 자리가 없다 —
+  // 남의 프로세스를 지키는 것은 조치 층(`pool.stop` 의 사정거리)이고, 여기서는 그 층에
+  // 「끄라」고 시키지 않는다는 것만 잠근다.
+  it('어느 경우에도 stop 을 부르지 않는다', async () => {
     for (const ours of [true, false]) {
       davis.controlServer.mockClear()
       ownedByUs(ours)
       await drive()
       expect(actions()).not.toContain('stop')
+      expect(actions()).not.toContain('start')
     }
   })
 
   // 서버가 죽은 채로 재연결하면 같은 자리에서 또 실패한다 — ①을 건너뛴다.
-  // **③의 재연결은 그대로 나간다**: 그래서 "안 부른다" 가 아니라 "①이 먼저 안 나간다" 를 본다.
   it('서버 진단이 실패하면 재연결을 건너뛰고 곧장 ②로 간다', async () => {
     davis.pingServer.mockResolvedValue({ ok: false, detail: '연결 거부' })
     ownedByUs(true)
     await drive()
     expect(actions()).toEqual(['restart'])
-    // ③ 한 번뿐이다 — ①이 돌았으면 둘이 된다
-    expect(davis.reconnectProject).toHaveBeenCalledTimes(1)
-    expect(davis.controlServer.mock.invocationCallOrder[0]).toBeLessThan(
-      davis.reconnectProject.mock.invocationCallOrder[0]!,
-    )
+    // ①을 건너뛰었으니 재연결이 한 번도 안 나간다 (③은 확인만 한다)
+    expect(davis.reconnectProject).not.toHaveBeenCalled()
   })
 
   it('서버를 못 띄우면 그 사유가 그대로 판정에 실린다', async () => {
@@ -134,7 +137,7 @@ describe('② 서버 되살리기 — 주인에 따라 다른 조치를 부른�
     })
     const state = await drive()
     expect(state.verdict).toBe('manual')
-    const failed = state.steps.find((step) => step.id === 'heal-adopt-server')
+    const failed = state.steps.find((step) => step.id === 'heal-restart-server')
     expect(failed?.detail).toBe('opencode 실행 파일을 찾지 못했습니다')
   })
 })
@@ -149,11 +152,22 @@ describe('한 바퀴가 상한이다', () => {
     expect(state.next).toBeNull()
   })
 
-  // ①과 ③ — 재연결은 두 번 나간다. 그것이 설계의 세 칸이다.
-  it('재연결은 서버를 되살린 앞뒤로 한 번씩 나간다', async () => {
+  // ⭐ **③은 재연결이 아니다.** ②의 경로가 세션을 새로 만들고 ready 까지 기다렸다가
+  // 돌아오므로, 여기서 또 붙이면 멀쩡한 세션을 접었다 붙이는 것이 된다 (실측 2026-08-16).
+  // 재연결은 ① 한 번뿐이고 ③은 확인만 한다.
+  it('재연결은 ① 한 번뿐이다 — ③은 조치를 안 한다', async () => {
     ownedByUs(true)
     await drive()
-    expect(davis.reconnectProject).toHaveBeenCalledTimes(2)
+    expect(davis.reconnectProject).toHaveBeenCalledTimes(1)
+  })
+
+  it('③은 진단 ping 으로 검산만 한다', async () => {
+    ownedByUs(true)
+    const state = await drive()
+    expect(state.steps.map((step) => step.id)).toContain('heal-verify')
+    // 검산이 실패했으니 manual 이다 — 여기서 ②로 되돌아가지 않는다
+    expect(state.verdict).toBe('manual')
+    expect(davis.controlServer).toHaveBeenCalledTimes(1)
   })
 })
 

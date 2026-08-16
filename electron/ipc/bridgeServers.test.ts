@@ -65,6 +65,8 @@ describe('SessionBridge — 서버 수명', () => {
             stops[root] = (stops[root] ?? 0) + 1
             return Promise.resolve()
           },
+          // 이 시험에서 자식이 스스로 죽는 일은 없다 — 죽음의 전파는 serverPool.test.ts 몫이다
+          onExit: () => {},
         }
         return Promise.resolve(started)
       },

@@ -2,6 +2,16 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import { FakeHistoryStore } from './fakeHistory'
 import { FakePtyStore } from './fakePty'
 import { turnScript } from './turnScript'
+import { MIN_OPENCODE_VERSION } from '../../shared/opencode/version'
+
+/**
+ * health 가 알리는 릴리스 버전.
+ *
+ * **하한선에서 유도한다.** 숫자를 손으로 적으면 하한을 올리는 날 이 가짜만 낡아서,
+ * 실물이 통과할 서버를 가짜가 거절하거나 그 반대가 된다 — 그리고 그 어긋남은
+ * "왜 시험만 빨간가" 로만 보인다.
+ */
+const FAKE_OPENCODE_VERSION = MIN_OPENCODE_VERSION
 
 // 가짜 opencode 헤드리스 서버. davis 시절 `tests/fake-runtime` 이 하던 자리를 대신한다.
 //
@@ -88,6 +98,13 @@ export class FakeOpencodeServer {
 
     const body = await readJson(request)
     this.calls.push({ method: request.method ?? 'GET', url, body })
+
+    // 실물 그대로의 모양이다 — **`/global/health` 만 릴리스 버전을 준다**
+    // (`{"healthy":true,"version":"1.17.18"}`, `electron/opencode/probe.ts` 머리말 실측).
+    // `/api/health` 는 옛 판에서 웹 UI HTML 을 돌려주므로 여기서도 흉내내지 않는다.
+    if (request.method === 'GET' && url.startsWith('/global/health')) {
+      return send(response, 200, { healthy: true, version: FAKE_OPENCODE_VERSION })
+    }
 
     if (this.pty.matches(url)) return this.pty.handle(request, url, body, response)
 

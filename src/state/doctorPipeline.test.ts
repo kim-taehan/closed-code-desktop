@@ -95,7 +95,7 @@ describe('blocked — 앞 단계가 실패하면 뒤는 확인하지 않는다',
     expect(statusOf(state, 'model')).toBe('blocked')
     expect(statusOf(state, 'session')).toBe('blocked')
     // 진단 단계는 더 안 돈다 — 다음은 치유 칸이다
-    expect(state.next).toBe('heal-adopt-server')
+    expect(state.next).toBe('heal-restart-server')
   })
 
   it('server 실패 시 blocked 단계에 사유가 붙는다', () => {
@@ -156,7 +156,7 @@ describe('판정 (verdict)', () => {
   it('server 가 죽었으면 재연결을 건너뛰고 곧장 서버 되살리기로 간다', () => {
     const state = advance(initPipeline(false), bad('연결 거부'), false)
     expect(ids(state)).not.toContain('heal-reconnect')
-    expect(state.next).toBe('heal-adopt-server')
+    expect(state.next).toBe('heal-restart-server')
   })
 
   it('model 이 없으면 재연결을 시도하지 않고 곧장 manual 이다', () => {

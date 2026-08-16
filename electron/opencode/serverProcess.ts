@@ -32,6 +32,17 @@ export interface SpawnedServer {
   bin: string
   /** SIGTERM → (안 죽으면) SIGKILL. 이미 죽었으면 아무 일도 안 한다 */
   stop(): Promise<void>
+  /**
+   * 자식이 끝났다 — **우리가 안 시킨 종료까지 포함해서.**
+   *
+   * 이 신호가 없으면 아무도 죽음을 모른다. `stop()` 으로 접는 길에는 부르는 쪽이 알지만,
+   * 크래시·SIGKILL 은 알릴 곳이 없어 `serverPool` 의 표에 **죽은 주소가 그대로 남고**
+   * `urlFor` 가 그것을 영원히 재발급한다 (실측 2026-08-16: 자식을 SIGKILL 한 뒤에도
+   * `statusOf().running` 이 참이었고 `urlFor` 가 ECONNREFUSED 나는 주소를 돌려줬다).
+   *
+   * 이미 끝난 뒤에 걸면 **곧바로 부른다** — 걸기 전에 죽는 창을 없앤다.
+   */
+  onExit(listener: () => void): void
 }
 
 /**
@@ -111,6 +122,8 @@ export function startOpencodeServer(options: StartServerOptions): Promise<Spawne
     let output = ''
     let settled = false
     let exited = false
+    /** 주소를 읽어낸 **뒤에** 죽음을 듣는 사람들 (`serverPool` 이 표에서 지우는 데 쓴다) */
+    const exitListeners: (() => void)[] = []
 
     const finish = (fn: () => void): void => {
       if (settled) return
@@ -141,7 +154,16 @@ export function startOpencodeServer(options: StartServerOptions): Promise<Spawne
         const url = parseListeningUrl(line)
         if (url === null) continue
         finish(() =>
-          resolve({ url, pid: child.pid, bin: options.binPath, stop: () => stop(child, () => exited) }),
+          resolve({
+            url,
+            pid: child.pid,
+            bin: options.binPath,
+            stop: () => stop(child, () => exited),
+            onExit: (listener) => {
+              if (exited) listener()
+              else exitListeners.push(listener)
+            },
+          }),
         )
         return
       }
@@ -153,7 +175,10 @@ export function startOpencodeServer(options: StartServerOptions): Promise<Spawne
     child.on('error', (error) => fail(`opencode 를 실행하지 못했습니다: ${error.message}`))
     child.on('exit', (code, signal) => {
       exited = true
+      // 주소를 알리기 전이면 실패로 끝난다. 그 뒤라면 `fail` 은 아무 일도 안 하고
+      // (이미 settled), 듣는 사람들에게 죽음만 알린다.
       fail(`opencode 가 주소를 알리기 전에 끝났습니다 (code=${code} signal=${signal})`)
+      for (const listener of exitListeners.splice(0)) listener()
     })
 
     const timer = setTimeout(() => fail(`opencode 가 ${timeoutMs / 1000}초 안에 주소를 알리지 않았습니다`), timeoutMs)

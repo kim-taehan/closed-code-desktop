@@ -28,8 +28,25 @@ export const DIAG_ORDER = ['server', 'model', 'session'] as const
 
 /** 배열에서 유도한다 — 배열과 union 이 갈리는 자리를 없앤다 */
 export type DiagStepId = (typeof DIAG_ORDER)[number]
-/** 치유 칸. ②의 두 갈래는 **서버가 우리 것이냐**로만 갈린다 (`ServerOwnership`) */
-export type HealStepId = 'heal-reconnect' | 'heal-restart-server' | 'heal-adopt-server'
+/**
+ * 치유 칸. **②는 하나다.**
+ *
+ * 한때 `heal-adopt-server`(갈아타기)가 따로 있었다 — 남의 서버는 못 끄니 재시작이 아니라
+ * 새로 띄우는 것이어야 한다고 봤다. **조치 층에서 이미 갈려 있었다**: `serverPool.stop` 의
+ * 사정거리가 우리 자식뿐이라, 남의 서버면 `restart` 의 접는 절반이 저절로 no-op 이고
+ * 이어지는 기동이 우리 것을 띄운다. 그것이 곧 「살려 둔 채 이 프로젝트만 옮긴다」다.
+ *
+ * 갈래를 세운 대가는 실측으로 드러났다: 갈아타기가 고른 `start` 는 세션이 살아 있으면
+ * `activate` 의 이른 반환에 걸려 **아무것도 안 하고 성공**했다 (2026-08-16, contract-qa).
+ * 지금 갈리는 것은 **문구뿐**이고, 그 갈림은 `ServerOwnership` 이 쥔다.
+ *
+ * ③(`heal-verify`)은 **재연결이 아니라 재확인이다.** 초판은 여기서 ①과 같은 재연결을
+ * 다시 불렀는데, ②의 경로(`controlServer`)가 세션을 접었다 새로 만들고 **핸드셰이크
+ * ready 까지 기다렸다가** 돌아온다는 것이 실측으로 나왔다 (802ms, 2026-08-16). 그 위에
+ * 재연결을 또 부르면 **멀쩡한 세션을 접었다 붙이는 것**이고, 그 재조립이 실패하면
+ * ②가 고쳐 놨는데도 사다리가 실패로 끝난다. 그래서 이 칸은 **검산만** 한다.
+ */
+export type HealStepId = 'heal-reconnect' | 'heal-restart-server' | 'heal-verify'
 export type DoctorStepId = DiagStepId | HealStepId
 
 export type StepStatus = 'pending' | 'running' | 'ok' | 'fail' | 'blocked'
@@ -42,20 +59,19 @@ export interface DoctorStep {
 }
 
 /**
- * 이 프로젝트의 opencode 서버가 **우리가 띄운 것인가.**
+ * 이 프로젝트의 opencode 서버가 **우리가 띄운 것으로 지금 살아 있나.**
  *
  * 판정은 여기서 하지 않는다 — main 이 `pidStore` 로 내고(`ServerStatusPayload.ours`)
  * 렌더러는 결과만 받는다. 렌더러에는 프로세스를 들여다볼 수단이 없다.
  *
- * **모르면 `theirs` 다.** 안전한 쪽으로 틀린다: 남의 프로세스는 절대 안 끈다
- * (하네스의 「내가 안 띄운 프로세스는 끄지 않는다」와 같은 규칙).
+ * **조치를 가르지 않는다 — 문구만 가른다.** `ours` 면 "다시 띄웁니다", 아니면
+ * "이 프로젝트용 서버를 띄웁니다". 사용자가 볼 말이 달라야 하는 이유는 두 경우가
+ * 실제로 다른 일이기 때문이다: 앞은 있던 것을 접었다 띄우고, 뒤는 없던 것을 세운다.
+ *
+ * **모르면 `theirs` 다.** 실제로 `theirs` 가 나오는 지배적 경우는 「남이 띄운 서버」가 아니라
+ * **「우리가 띄웠는데 죽었다」** 이다 (실측 2026-08-16) — 문구가 그 둘을 함께 덮어야 한다.
  */
 export type ServerOwnership = 'ours' | 'theirs'
-
-/** ②의 갈래. **이 함수가 갈림의 전부다** — 다른 근거를 섞지 않는다 */
-export function serverHealFor(ownership: ServerOwnership): HealStepId {
-  return ownership === 'ours' ? 'heal-restart-server' : 'heal-adopt-server'
-}
 
 /** 치유 칸인가 (진단만 돌리는 주기 재측정이 여기서 멈춘다 — 설계 §2) */
 export function isHealStep(id: DoctorStepId): id is HealStepId {
@@ -99,9 +115,10 @@ export const STEP_LABEL: Record<DoctorStepId, string> = {
   model: '모델 확인',
   session: '연결 상태 확인',
   'heal-reconnect': '재연결',
-  'heal-restart-server': '서버 다시 시작',
-  // 「갈아타기」다 — 남의 서버를 끄고 그 자리를 뺏는 것이 아니라, 이 프로젝트용을 새로 띄운다
-  'heal-adopt-server': '우리 서버로 갈아타기',
+  // 주인에 따라 갈리지 않는 이름이다 — 단계 목록은 **무엇을 했나**만 적고,
+  // 「다시 띄웁니다」/「띄웁니다」의 갈림은 예고 문구(`healNotice.ts`)가 맡는다
+  'heal-restart-server': '서버 되살리기',
+  'heal-verify': '연결 재확인',
 }
 
 /** 로그 문장용 — 단계 표시(STEP_LABEL)보다 행위에 가깝게 쓴다 */
@@ -110,6 +127,6 @@ export const LOG_LABEL: Record<DoctorStepId, string> = {
   model: '모델 조회',
   session: '연결 상태 확인',
   'heal-reconnect': '프로젝트 재연결',
-  'heal-restart-server': 'opencode 서버 다시 시작',
-  'heal-adopt-server': '이 프로젝트용 opencode 서버 시작',
+  'heal-restart-server': 'opencode 서버 되살리기',
+  'heal-verify': '연결 재확인',
 }

@@ -1,4 +1,4 @@
-import { STEP_LABEL, type PipelineState } from './doctorPipeline'
+import { STEP_LABEL, type PipelineState, type ServerOwnership } from './doctorPipeline'
 
 // 자가 복구가 **화면에 뭐라고 말하나.** 순수 함수라 화면 없이 단언한다.
 //
@@ -33,8 +33,14 @@ export interface HealNotice {
  *
  * `null` 이 되는 두 경우가 뜻이 다르다 — **아직 아무것도 안 돌았다**(pipeline 없음)와
  * **잘 끝났다**(healthy·healed). 둘 다 화면에 낼 말이 없다는 점만 같다.
+ *
+ * `ownership` 은 ②의 문구 하나만 가른다. **모르면 `theirs`** — 그쪽 문장이 "죽었거나
+ * 남의 것" 을 함께 덮으므로, 안 넘겨도 틀린 말이 나가지 않는다.
  */
-export function healNotice(state: PipelineState | null): HealNotice | null {
+export function healNotice(
+  state: PipelineState | null,
+  ownership: ServerOwnership = 'theirs',
+): HealNotice | null {
   if (state === null) return null
 
   if (state.verdict === 'healthy' || state.verdict === 'healed') return null
@@ -54,37 +60,34 @@ export function healNotice(state: PipelineState | null): HealNotice | null {
     case 'session':
       return { stage: 'statusline', headline: '연결을 확인하는 중…' }
 
+    // ① — **예고가 여기 들어간다.** 다음에 무엇이 일어날지 지금 말해 둔다.
+    // 이 칸은 ①에서만 온다 — ③은 `heal-verify` 로 갈렸다 (재연결이 아니라 재확인이다).
     case 'heal-reconnect':
-      // ③ — 서버까지 되살린 뒤의 재연결이다. 이미 무거운 조치를 했으므로 배너에 남는다.
-      if (serverHealed(state)) {
-        return { stage: 'banner', headline: '서버를 다시 띄웠습니다. 이제 세션을 다시 붙입니다…', ...detailOf(state) }
-      }
-      // ① — **예고가 여기 들어간다.** 다음에 무엇이 일어날지 지금 말해 둔다.
       return { stage: 'statusline', headline: '연결이 끊겨 재연결 중… 실패하면 서버를 다시 띄웁니다' }
 
+    // ⭐ **여기가 `ownership` 이 남은 유일한 자리다.** 조치는 하나(`restart`)로 접혔고,
+    // 갈리는 것은 사용자가 볼 말뿐이다 — 두 경우가 실제로 다른 일이기 때문이다:
+    // 앞은 있던 것을 접었다 띄우고, 뒤는 없던 것을 세운다. 뒤쪽에는 **남의 서버를 살려
+    // 둔다**는 사실을 싣는다 (나중에 그것이 떠 있는 것을 보고 헷갈릴 자리다 — 설계 §6 미결 1).
     case 'heal-restart-server':
       return {
         stage: 'banner',
-        headline: '재연결이 실패했습니다. 이제 이 프로젝트의 서버를 다시 띄웁니다…',
+        headline:
+          ownership === 'ours'
+            ? '재연결이 실패했습니다. 이제 이 프로젝트의 서버를 다시 띄웁니다…'
+            : '이 프로젝트용 서버를 새로 띄웁니다 — 이미 떠 있는 다른 서버는 그대로 둡니다…',
         ...detailOf(state),
       }
 
-    // 남의 서버는 **그대로 둔다.** 그 사실을 문구에 싣는다 — 나중에 그 서버가 떠 있는 것을
-    // 보고 헷갈릴 수 있는 자리라 여기서 미리 말해 둔다 (설계 §6 미결 1).
-    case 'heal-adopt-server':
+    // ③ — 이미 무거운 조치를 했으므로 배너에 남는다. 조치가 아니라 검산 중이라는 것을
+    // 말한다 — "붙이는 중" 이라고 하면 하지도 않는 일을 알리는 것이 된다.
+    case 'heal-verify':
       return {
         stage: 'banner',
-        headline: '이 프로젝트용 서버를 새로 띄웁니다 — 이미 떠 있는 다른 서버는 그대로 둡니다…',
+        headline: '서버를 다시 띄웠습니다. 연결이 살아났는지 확인하는 중…',
         ...detailOf(state),
       }
   }
-}
-
-/** ②를 이미 지나왔나 — ①의 재연결과 ③의 재연결을 가른다 */
-function serverHealed(state: PipelineState): boolean {
-  return state.steps.some(
-    (step) => step.id === 'heal-restart-server' || step.id === 'heal-adopt-server',
-  )
 }
 
 /** 근거 한 줄 — **마지막으로 실패한 단계**의 사유를 그대로 쓴다 */

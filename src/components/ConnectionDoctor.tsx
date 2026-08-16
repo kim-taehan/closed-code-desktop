@@ -3,7 +3,7 @@ import type { DiagnosticsPayload } from '../../shared/ipc/channels'
 import type { ProjectStatus } from '../state/projectStatus'
 import { diagnoseIssues, stepIssues, type DoctorFix } from '../state/connectionDoctor'
 import type { PipelineState, ServerOwnership } from '../state/doctorPipeline'
-import { currentOwnership, driveDoctor } from '../state/doctorDriver'
+import { driveDoctor } from '../state/doctorDriver'
 import { ConnectionFixForm } from './ConnectionFixForm'
 import { DoctorSteps, IssueList, mergeIssues } from './DoctorSteps'
 
@@ -56,10 +56,9 @@ export interface ConnectionDoctorProps {
 /** 수동 「고치기」 버튼이 부르는 것. 사다리가 자동으로 부르는 것과 **같은 조치**다. */
 const RUN: Record<DoctorFix, () => Promise<unknown>> = {
   reconnect: () => window.davis.reconnectProject(),
-  // 우리가 띄운 서버를 접었다 다시 띄운다
+  // **주인이 누구든 `restart` 다.** 남의 프로세스에는 닿지 않는다 — main 의 `closeProject`
+  // 가 접는 것은 우리 세션과 우리 표의 서버뿐이다 (`state/doctorDriver.ts` 의 같은 근거).
   'restart-server': () => window.davis.controlServer({ action: 'restart' }),
-  // 남의 서버는 **그대로 두고** 이 프로젝트용을 새로 띄운다 — `start` 는 아무것도 안 끈다
-  'adopt-server': () => window.davis.controlServer({ action: 'start' }),
 }
 
 export function ConnectionDoctor({ status, failure, fix, initial, onHealthy }: ConnectionDoctorProps) {
@@ -101,11 +100,14 @@ export function ConnectionDoctor({ status, failure, fix, initial, onHealthy }: C
         onDiag: (diag) => {
           if (!stopped) setLastDiag(diag)
         },
+        // 이슈 목록의 안내를 고르려면 서버가 우리 것인지가 필요하다. **사다리가 조치를
+        // 고를 때 본 그 값**을 그대로 받는다 — 따로 물으면 판정이 두 벌이 된다.
+        onOwnership: (next) => {
+          if (!stopped) setOwnership(next)
+        },
         shouldStop: () => stopped || haltRef.current,
       })
       if (stopped) return
-      // 이슈 목록의 버튼을 고르려면 지금 서버가 우리 것인지가 필요하다
-      setOwnership(await currentOwnership())
       // 초록으로 끝났다 — 최초 등록 게이트가 이 신호로 자동 닫힘한다
       if (!haltRef.current && (state.verdict === 'healthy' || state.verdict === 'healed')) {
         onHealthyRef.current?.()

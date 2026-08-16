@@ -35,7 +35,8 @@ function runAll(sessionOk: boolean, outcomes: CheckOutcome[]): PipelineState {
 //
 // 갈라오기 전 이 자리에는 *"치유 사다리가 하나뿐이다 — opencode 서버는 사용자가 띄운 남의
 // 프로세스라 우리가 죽였다 살릴 수 없다"* 고 적혀 있었다. **커밋 `c09cac8` 이후 거짓이다**:
-// 서버는 프로젝트마다 우리가 띄운다. 남의 것은 여전히 못 죽이고, 그래서 ②가 두 갈래다.
+// 서버는 프로젝트마다 우리가 띄운다. 남의 것은 여전히 못 죽이지만 **②를 갈라 줄 필요는
+// 없다** — `pool.stop` 의 사정거리가 우리 자식뿐이라 조치 층이 이미 안전하다 (설계 §1 정정).
 
 /** 진단 셋을 통과했는데 세션만 죽은 자리 — 사다리 ①의 입구 */
 function toHeal(): PipelineState {
@@ -54,64 +55,72 @@ describe('치유 — 사다리 ① 재연결', () => {
   it('재연결이 실패하면 ②(서버 되살리기)를 붙인다', () => {
     const state = advance(toHeal(), bad('재확인 시간 안에 연결되지 않았습니다'), false)
     expect(statusOf(state, 'heal-reconnect')).toBe('fail')
-    expect(state.next).toBe('heal-adopt-server')
+    expect(state.next).toBe('heal-restart-server')
     expect(state.verdict).toBeNull()
   })
 })
 
-// ⭐ **②의 갈래 — 이 describe 가 「남의 서버는 안 끈다」를 잠근다.**
+// ⭐ **②는 갈래가 없다 — 칸이 하나다.**
 //
-// 두 경로가 서로 다른 조치를 부르는지가 요점이다 (설계 §5). 같은 실패에 `ownership` 만
-// 갈아 끼워 본다 — 다른 것은 하나도 안 바뀌므로, 갈림이 여기서 나온다는 것이 드러난다.
-describe('치유 ② — 우리 것이냐로 갈린다', () => {
-  function afterReconnectFail(ownership: 'ours' | 'theirs') {
+// 한때 `ownership` 이 칸을 갈랐다(`heal-restart-server` / `heal-adopt-server`). 갈래를
+// 세운 대가로 「갈아타기」가 고른 조치(`start`)가 세션이 살아 있을 때 **아무 일도 안 했다**
+// (실측 2026-08-16). 조치 층이 이미 두 경우를 갈라 주고 있었다 — `pool.stop` 은 우리 자식만
+// 끈다. 그래서 여기서는 **`ownership` 이 무엇이든 같은 칸이 서는지**를 본다.
+describe('치유 ② — 주인이 무엇이든 칸은 하나다', () => {
+  function afterReconnectFail(ownership?: 'ours' | 'theirs') {
     return advance(toHeal(), bad('재확인 시간 안에 연결되지 않았습니다'), false, ownership)
   }
 
-  it('우리가 띄운 서버면 재시작이다', () => {
+  it('우리 것이든 남의 것이든 heal-restart-server 다', () => {
     expect(afterReconnectFail('ours').next).toBe('heal-restart-server')
+    expect(afterReconnectFail('theirs').next).toBe('heal-restart-server')
+    // 안 넘겨도 같다 — 기본값이 조치를 바꾸지 않는다
+    expect(afterReconnectFail().next).toBe('heal-restart-server')
   })
 
-  it('남이 띄운 서버면 갈아타기다 — 끄지 않고 우리 것을 새로 띄운다', () => {
-    expect(afterReconnectFail('theirs').next).toBe('heal-adopt-server')
+  // **갈리는 것은 로그 문장뿐이다.** 사용자가 볼 말이 달라야 하는 이유는 두 경우가 실제로
+  // 다른 일이기 때문이다 — 앞은 있던 것을 접었다 띄우고, 뒤는 없던 것을 세운다.
+  it('주인에 따라 말이 갈린다 — 조치가 아니라 문구다', () => {
+    expect(afterReconnectFail('ours').log.join('\n')).toContain('접었다 다시 띄웁니다')
+    expect(afterReconnectFail('theirs').log.join('\n')).toContain('이 프로젝트용 서버를 띄웁니다')
   })
 
-  // **모르면 남의 것으로 본다.** 인자를 안 넘기는 배선 실수가 남의 프로세스를 끄는 쪽으로
-  // 가면 안 된다 — 기본값이 안전 장치다.
-  it('주인을 안 넘기면 갈아타기다 (안전한 쪽으로 틀린다)', () => {
-    const state = advance(toHeal(), bad('재확인 시간 안에 연결되지 않았습니다'), false)
-    expect(state.next).toBe('heal-adopt-server')
-  })
-
-  it('서버 진단 실패에서도 같은 갈래가 선다', () => {
-    expect(advance(initPipeline(false), bad('연결 거부'), false, 'ours').next).toBe(
-      'heal-restart-server',
-    )
-    expect(advance(initPipeline(false), bad('연결 거부'), false, 'theirs').next).toBe(
-      'heal-adopt-server',
-    )
+  it('서버 진단 실패에서도 같은 칸이 선다', () => {
+    for (const ownership of ['ours', 'theirs'] as const) {
+      expect(advance(initPipeline(false), bad('연결 거부'), false, ownership).next).toBe(
+        'heal-restart-server',
+      )
+    }
   })
 })
 
-// ⭐ **③ — 서버를 되살렸다고 세션이 저절로 붙지는 않는다.**
-// 이 칸이 없으면 "서버는 초록인데 대화는 여전히 안 되는" 상태로 끝난다 (설계 §1).
-describe('치유 ③ — 서버를 되살린 뒤 세션을 다시 붙인다', () => {
+// ⭐ **③ — 재연결이 아니라 재확인이다.**
+//
+// *"서버를 되살렸다고 세션이 저절로 붙지는 않는다"* 고 보고 여기서 ①과 같은 재연결을
+// 다시 불렀다. **틀렸다** (실측 2026-08-16): ②가 타는 경로는 세션을 새로 만들고 핸드셰이크
+// ready 까지 기다렸다가 돌아온다. 그 위에 재연결을 또 부르면 **멀쩡한 세션을 접었다 붙이는
+// 것**이고, 그 재조립이 실패하면 ②가 고쳐 놨는데도 사다리가 실패로 끝난다.
+//
+// 칸은 남는다 — 사다리가 「고쳤다」고 스스로 단정하지 않고 **검산한다.**
+describe('치유 ③ — 되살린 뒤 검산만 한다', () => {
   function afterServerHeal(ownership: 'ours' | 'theirs', serverOk: boolean) {
     const second = advance(toHeal(), bad('재연결 실패'), false, ownership)
     return advance(second, serverOk ? ok('서버가 떴습니다') : bad('실행 파일을 찾지 못했습니다'), false)
   }
 
-  it('서버가 뜨면 재연결을 한 번 더 붙인다', () => {
+  it('서버가 뜨면 검산 칸이 붙는다 — 재연결이 아니다', () => {
     const state = afterServerHeal('ours', true)
-    expect(state.next).toBe('heal-reconnect')
+    expect(state.next).toBe('heal-verify')
     expect(ids(state)).toEqual([
       'server',
       'model',
       'session',
       'heal-reconnect',
       'heal-restart-server',
-      'heal-reconnect',
+      'heal-verify',
     ])
+    // 재연결 칸이 두 번 서면 그것이 곧 「멀쩡한 세션을 다시 접는」 배선이다
+    expect(ids(state).filter((id) => id === 'heal-reconnect')).toHaveLength(1)
   })
 
   it('서버를 못 띄우면 거기서 manual 이다', () => {
@@ -120,9 +129,15 @@ describe('치유 ③ — 서버를 되살린 뒤 세션을 다시 붙인다', ()
     expect(state.next).toBeNull()
   })
 
-  it('③이 성공하면 healed 다', () => {
+  it('검산이 통과하면 healed 다', () => {
     const state = advance(afterServerHeal('ours', true), ok('살아났습니다'), true)
     expect(state.verdict).toBe('healed')
+  })
+
+  it('검산이 실패하면 manual 이다 — 여기서 조치를 더 하지 않는다', () => {
+    const state = advance(afterServerHeal('ours', true), bad('여전히 안 붙는다'), false)
+    expect(state.verdict).toBe('manual')
+    expect(state.next).toBeNull()
   })
 })
 
@@ -134,11 +149,11 @@ describe('한 바퀴가 상한이다 — 사다리는 ②로 되돌아가지 않
   function fullLadder(ownership: 'ours' | 'theirs') {
     let state = advance(toHeal(), bad('①실패'), false, ownership)
     state = advance(state, ok('서버가 떴습니다'), false, ownership)
-    // ③ 도 실패한다 — 여기서 ②로 돌아가면 루프다
+    // ③(검산) 도 실패한다 — 여기서 ②로 돌아가면 루프다
     return advance(state, bad('③실패'), false, ownership)
   }
 
-  it('②를 지난 뒤의 재연결 실패는 manual 로 끝난다', () => {
+  it('②를 지난 뒤의 검산 실패는 manual 로 끝난다', () => {
     for (const ownership of ['ours', 'theirs'] as const) {
       const state = fullLadder(ownership)
       expect(state.verdict).toBe('manual')
