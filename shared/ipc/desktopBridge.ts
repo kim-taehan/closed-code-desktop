@@ -14,6 +14,7 @@ import type {
   DiagnosticsPayload,
   FileListPayload,
   HistoryIdPayload,
+  HistoryListPayload,
   HistoryRenamePayload,
   HistoryStatePayload,
   ModelCheckResultPayload,
@@ -110,7 +111,8 @@ export interface DesktopBridge extends GitHistoryBridge, ExtensionRegistryBridge
   onPermissionMode(handler: ProjectHandler<PermissionModePayload>): () => void
   /** 현재 세션 작업 경로 push (ADR-036) */
   onWorkingDir(handler: ProjectHandler<WorkingDirPayload>): () => void
-  requestHistoryList(): Promise<void>
+  /** 안 주면 전체. `search` 를 주면 **서버가** 제목으로 거른 목록이 온다. */
+  requestHistoryList(payload?: HistoryListPayload): Promise<void>
   loadHistory(payload: HistoryIdPayload): Promise<void>
   removeHistory(payload: HistoryIdPayload): Promise<void>
   renameHistory(payload: HistoryRenamePayload): Promise<void>

@@ -1143,6 +1143,44 @@ body {
   font-size: 12px;
 }
 
+/* 검색칸은 「새 대화」와 같은 폭으로 둔다 — 목록 위의 두 줄이 어긋나 보이지 않게 */
+.history-search {
+  display: block;
+  width: calc(100% - 16px);
+  margin: 0 8px 6px;
+  padding: 6px 10px;
+  font: inherit;
+  font-size: 12px;
+  border-radius: var(--dc-radius-sm);
+  color: var(--dc-text);
+  background: var(--dc-bg);
+  border: 1px solid var(--dc-border);
+}
+
+.history-search:focus {
+  outline: none;
+  border-color: var(--dc-accent);
+}
+
+/* 접어 둔 빈 대화를 여는 줄. 목록 항목이 아니라 각주라 옅게 둔다 */
+.history-folded {
+  display: block;
+  width: calc(100% - 12px);
+  margin: 6px;
+  padding: 6px 4px;
+  font: inherit;
+  font-size: 11px;
+  text-align: left;
+  background: none;
+  border: none;
+  color: var(--dc-text-muted);
+  cursor: pointer;
+}
+
+.history-folded:hover {
+  color: var(--dc-text);
+}
+
 /* 줄마다 실선을 긋는 대신 여백으로 떼고, 눌린 자리만 면으로 든다 */
 .history-item {
   display: flex;

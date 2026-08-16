@@ -194,9 +194,11 @@ export class OpencodeClient {
    *
    * ⚠️ **`directory` 를 빼면 서버가 아는 세션이 전부 온다** — 다른 프로젝트 것까지
    * (실측·사유는 `historyApi.ts` 머리말).
+   *
+   * `search` 는 **서버가 제목으로 거른다** (실측한 성질은 `historyApi.ts` — 본문은 안 뒤진다).
    */
-  async listSessions(directory: string | null): Promise<OpencodeSession[]> {
-    return listSessions((path) => this.get(path), directory)
+  async listSessions(directory: string | null, search?: string): Promise<OpencodeSession[]> {
+    return listSessions((path) => this.get(path), directory, search)
   }
 
   /** 대화 한 건의 전체 내용. **레거시에만 있다** — 신규는 이벤트 로그를 준다 (`historyApi.ts`). */

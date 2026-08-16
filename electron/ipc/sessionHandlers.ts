@@ -6,6 +6,7 @@ import {
   type ChatSendPayload,
   type LocalNoticePayload,
   type HistoryIdPayload,
+  type HistoryListPayload,
   type HistoryRenamePayload,
   type PermissionModePayload,
   type ReviewDecidePayload,
@@ -64,8 +65,8 @@ export function registerSessionHandlers(active: () => ProjectSession | null): vo
     ipcMain.handle(Channel.PERMISSION_MODE_SET, (_event, payload: PermissionModePayload) => {
     active()?.setPermissionMode(payload.mode)
     })
-    ipcMain.handle(Channel.HISTORY_LIST, () => {
-    active()?.requestHistoryList()
+    ipcMain.handle(Channel.HISTORY_LIST, (_event, payload?: HistoryListPayload) => {
+    active()?.requestHistoryList(payload?.search)
     })
     ipcMain.handle(Channel.HISTORY_LOAD, (_event, payload: HistoryIdPayload) => {
     active()?.loadHistory(payload.chatId)

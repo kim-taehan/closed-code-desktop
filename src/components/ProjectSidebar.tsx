@@ -182,7 +182,14 @@ export function ProjectSidebar(props: ProjectSidebarProps) {
                 ? props.onToast(t('이미 선택된 대화입니다'))
                 : void window.davis.loadHistory({ chatId })
             }
-            onRemove={(chatId) => void window.davis.removeHistory({ chatId })}
+            // 거르기는 **서버가 한다** — 검색어를 그대로 실어 목록을 다시 받는다
+            onSearch={(query) => void window.davis.requestHistoryList(query ? { search: query } : undefined)}
+            onRemove={(chatId) => {
+              // 지운 대화는 **못 되살린다** (`DELETE /session/:id`). 되돌릴 수 없는 것은
+              // 한 번 묻는 것이 이 레포의 규칙이다 (`useGitActions.ts` 의 되돌리기와 같은 결).
+              if (!window.confirm(t('이 대화를 지울까요? 되돌릴 수 없습니다.'))) return
+              void window.davis.removeHistory({ chatId })
+            }}
           />
         )}
         {target !== null && (

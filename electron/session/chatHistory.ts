@@ -81,8 +81,19 @@ export class ChatHistoryController {
     return this.send(Action.CHAT_HISTORY_ADD, {})
   }
 
-  requestList(): boolean {
-    return this.send(Action.CHAT_HISTORY_LIST, {})
+  /**
+   * 목록을 다시 받아 온다. `search` 를 주면 **거르기는 서버가 한다.**
+   *
+   * ⚠️ **이 인자는 davis 계약에 없던 것이다** (2026-08-16에 더했다). 이 레포의 전제는
+   * "어댑터가 번역하고 `session/*` 은 안 고친다" 인데, 검색어만은 그 규칙으로 못 푼다 —
+   * 값이 **화면에서 나서** 어댑터까지 가야 하고, 어댑터가 위층에서 받는 것은 이 봉투뿐이라
+   * 실을 자리가 여기 말고 없다. 대신 **더하기만 한다**: 기존 action 에 선택 키 하나이고,
+   * davis runtime 은 모르는 키를 그냥 버렸을 것이라 옛 계약을 깨지 않는다.
+   * 무엇을 어떻게 거르는지는 opencode 의 `search=` 실측이 정본이다
+   * (`electron/opencode/historyApi.ts` — **제목만** 본다).
+   */
+  requestList(search?: string): boolean {
+    return this.send(Action.CHAT_HISTORY_LIST, search ? { search } : {})
   }
 
   load(chatId: string): boolean {

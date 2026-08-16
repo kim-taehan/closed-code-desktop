@@ -83,6 +83,14 @@ export interface HistoryIdPayload {
 }
 
 /**
+ * 이력 목록 요청. `search` 는 **서버가 제목으로 거른다** — 화면에서 다시 거르지 않는다
+ * (실측한 성질은 `electron/opencode/historyApi.ts`).
+ */
+export interface HistoryListPayload {
+  search?: string
+}
+
+/**
  * 데스크톱 MCP 서버의 `open_file` 도구가 연 파일 (`electron/mcp/openFile.ts`).
  * 경로는 **프로젝트 루트 기준 상대경로**다 — 화면은 이 모양으로만 파일을 연다.
  */

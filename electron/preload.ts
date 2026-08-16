@@ -14,6 +14,7 @@ import {
   type PermissionModePayload,
   type WorkingDirPayload,
   type HistoryIdPayload,
+  type HistoryListPayload,
   type HistoryRenamePayload,
   type HistoryStatePayload,
   type ReviewDecidePayload,
@@ -127,7 +128,8 @@ const bridge: DesktopBridge = {
     subscribe<PermissionModePayload>(Channel.PERMISSION_MODE_CHANGED, handler),
   onWorkingDir: (handler: ProjectHandler<WorkingDirPayload>) =>
     subscribe<WorkingDirPayload>(Channel.WORKING_DIR_CHANGED, handler),
-  requestHistoryList: () => ipcRenderer.invoke(Channel.HISTORY_LIST) as Promise<void>,
+  requestHistoryList: (payload?: HistoryListPayload) =>
+    ipcRenderer.invoke(Channel.HISTORY_LIST, payload) as Promise<void>,
   loadHistory: (payload: HistoryIdPayload) => ipcRenderer.invoke(Channel.HISTORY_LOAD, payload) as Promise<void>,
   removeHistory: (payload: HistoryIdPayload) => ipcRenderer.invoke(Channel.HISTORY_REMOVE, payload) as Promise<void>,
   renameHistory: (payload: HistoryRenamePayload) =>

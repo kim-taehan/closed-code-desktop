@@ -240,8 +240,9 @@ export class ProjectSession {
     this.mcp?.test(serverName, credentials)
   }
 
-  requestHistoryList(): void {
-    this.history?.requestList()
+  /** `search` 를 주면 목록을 서버에서 걸러 받는다 (`chatHistory.ts` 의 requestList 주석). */
+  requestHistoryList(search?: string): void {
+    this.history?.requestList(search)
   }
 
   loadHistory(chatId: string): void {

@@ -1,4 +1,5 @@
 import { Action, Kind } from '../../shared/protocol/kinds'
+import { verifyEmptyChats } from './emptyChats'
 import type { OpencodeSession } from './historyApi'
 import { replayFrames } from './historyReplay'
 import type { Frame } from './translate'
@@ -22,6 +23,11 @@ import type { OpencodeClient } from './client'
 // **davis 개념 하나가 여기 없다: `message_count`.** `GET /session` 이 턴 수를 주지 않는다
 // (`tokens`·`cost` 는 준다). 지어내지 않고 뺀다 — `ChatHistoryEntry.messageCount` 가
 // optional 이고 화면도 없으면 그 자리를 비운다.
+//
+// **예외가 하나 생겼다: 0.** 말 한 번 안 걸린 세션에는 `message_count: 0` 을 싣는다
+// (2026-08-16). 실제로 세어 확인한 것만이고, 판정 규칙과 그 비대칭은 `emptyChats.ts` 가
+// 정본이다. 화면은 그 0 을 근거로 껍데기 대화를 접는다 — **제목으로 짐작하지 않는다.**
+// 0 이 아닌 세션의 턴 수는 여전히 안 싣는다 (세려면 대화 전체를 받아야 하고, 그건 비싸다).
 
 /** `chatHistory.ts` 가 쓰는 클라이언트 표면. 넷 다 레거시 세대다 (`historyApi.ts`). */
 type HistoryClient = Pick<
@@ -57,7 +63,7 @@ export async function chatHistoryFrame(
   emit: (frame: Frame) => void,
 ): Promise<string | null> {
   if (action === Action.CHAT_HISTORY_LIST) {
-    emit(await listFrame(deps))
+    emit(await listFrame(deps, data))
     return null
   }
   if (action === Action.CHAT_HISTORY_ADD) return await addChat(deps, emit)
@@ -67,13 +73,24 @@ export async function chatHistoryFrame(
   return null
 }
 
-async function listFrame(deps: HistoryDeps): Promise<Frame> {
-  const sessions = await deps.client.listSessions(deps.directory)
+/**
+ * 목록 — 검색어가 실려 있으면 그대로 서버에 넘긴다.
+ *
+ * **거르기를 여기서 짜지 않는다.** `GET /session` 이 `search=` 를 서버에서 처리하고
+ * (contract-qa 실측 — `search=인사` 로 1건), 그 파라미터의 성질은 `historyApi.ts` 에
+ * 실측대로 적혀 있다. 클라이언트에서 다시 거르면 서버와 판정이 갈려, 같은 낱말로
+ * 검색했는데 화면과 서버 응답이 다른 자리가 생긴다.
+ */
+async function listFrame(deps: HistoryDeps, data: Record<string, unknown>): Promise<Frame> {
+  const search = typeof data['search'] === 'string' ? data['search'] : ''
+  const sessions = await deps.client.listSessions(deps.directory, search || undefined)
+  // 말 한 번 안 걸린 세션은 **세어서** 가려낸다 (`emptyChats.ts` — 후보만 센다)
+  const empty = await verifyEmptyChats(sessions, (id) => deps.client.sessionMessages(id))
   return {
     kind: Kind.CHAT_HISTORY,
     action: Action.CHAT_HISTORY_LIST,
     // 순서는 opencode 가 준 그대로다 — 최근 것이 먼저 온다 (실측). 다시 정렬하지 않는다.
-    data: { chats: sessions.map(toChat) },
+    data: { chats: sessions.map((session) => toChat(session, empty)) },
   }
 }
 
@@ -82,7 +99,7 @@ function isoAt(value: number | undefined): string | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? new Date(value).toISOString() : undefined
 }
 
-function toChat(session: OpencodeSession): Record<string, unknown> {
+function toChat(session: OpencodeSession, empty: Set<string>): Record<string, unknown> {
   const created = isoAt(session.time?.created)
   const updated = isoAt(session.time?.updated)
   return {
@@ -91,6 +108,8 @@ function toChat(session: OpencodeSession): Record<string, unknown> {
     ...(session.title ? { title: session.title } : {}),
     ...(created ? { created_at: created } : {}),
     ...(updated ? { updated_at: updated } : {}),
+    // 0 만 싣는다 — 세어 확인한 것이고, 나머지는 「모른다」로 남는다 (머리말)
+    ...(session.id && empty.has(session.id) ? { message_count: 0 } : {}),
   }
 }
 

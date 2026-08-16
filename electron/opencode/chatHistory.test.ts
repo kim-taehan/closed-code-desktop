@@ -9,6 +9,11 @@ import type { Frame } from './translate'
 // 아래 두 건은 `GET /session?directory=` 가 준 항목에서 목록이 쓰는 필드만 남긴 것이다.
 // **`time` 이 epoch ms 숫자라는 점이 그대로 옮겨져 있다** — 여기를 문자열 fixture 로 바꾸면
 // 이 파일의 날짜 시험이 통째로 헛초록이 된다 (화면은 `Date.parse` 로 읽는다).
+//
+// ⚠️ **둘 다 `updated > created` 다** — 말이 오간 세션이라는 뜻이고, 그래서 빈 대화 판정이
+// 이 둘을 세지 않는다 (`emptyChats.ts`). 여기서 `updated` 를 `created` 와 같게 바꾸면
+// 목록 시험들이 갑자기 `sessionMessages` 를 부르게 된다 — 그 자리를 겨누는 케이스는 아래
+// 「빈 대화」 절에 따로 있다.
 const SESSIONS = [
   { id: 'ses_ffbb7f66', title: '프로젝트 분석', directory: '/proj', time: { created: 1786778225117, updated: 1786778241150 } },
   { id: 'ses_ffbd2cee', title: '인사', directory: '/proj', time: { created: 1786777558000, updated: 1786777628988 } },
@@ -83,6 +88,60 @@ describe('chat_history_list', () => {
     const api = client({ listSessions: vi.fn(async () => [{ id: 'ses_bare', time: {} }]) })
     const { frames } = await run(Action.CHAT_HISTORY_LIST, {}, api)
     expect(parseHistoryList(frames[0]?.['data'])[0]?.title).toBe('대화 ses_bare')
+  })
+})
+
+describe('chat_history_list 의 검색', () => {
+  /**
+   * **거르는 것은 서버다** (`GET /session?search=` — contract-qa 실측). 여기서 다시 거르면
+   * 같은 낱말에 판정이 둘 생긴다. 잴 수 있는 것은 "그 값이 질의에 실렸는가" 하나다.
+   */
+  it('검색어를 목록 질의에 그대로 싣는다', async () => {
+    const { api } = await run(Action.CHAT_HISTORY_LIST, { search: '인사' })
+    expect(api['listSessions']?.mock.calls[0]).toEqual(['/proj', '인사'])
+  })
+
+  /** 빈 값은 안 싣는다 — 실물이 빈 `search=` 를 「안 거름」으로 읽지만 뜻을 흐리지 않는다. */
+  it('검색어가 비면 인자를 싣지 않는다', async () => {
+    const { api } = await run(Action.CHAT_HISTORY_LIST, { search: '' })
+    expect(api['listSessions']?.mock.calls[0]).toEqual(['/proj', undefined])
+  })
+
+  /** 검색어와 프로젝트는 **함께** 간다 — directory 가 빠지면 남의 대화가 검색 결과로 뜬다. */
+  it('검색해도 프로젝트는 계속 싣는다', async () => {
+    const { api } = await run(Action.CHAT_HISTORY_LIST, { search: '인사' })
+    expect(api['listSessions']?.mock.calls[0]?.[0]).toBe('/proj')
+  })
+})
+
+describe('chat_history_list 의 빈 대화', () => {
+  const NEVER_SPOKEN = { id: 'ses_empty', title: 'New session - 2026-08-16T00:04:52.896Z', directory: '/proj', time: { created: 1786780000000, updated: 1786780000000 } }
+
+  /**
+   * 껍데기 세션은 **어댑터가 세어** 0 을 실어야 화면이 접을 수 있다. 안 실으면 화면에
+   * 남는 근거는 제목뿐이고, 제목으로 접는 것은 짐작이다 (`emptyChats.ts` 머리말).
+   */
+  it('말 한 번 안 걸린 대화에는 message_count 0 이 실린다', async () => {
+    const api = client({ listSessions: vi.fn(async () => [NEVER_SPOKEN]), sessionMessages: vi.fn(async () => []) })
+    const { frames } = await run(Action.CHAT_HISTORY_LIST, {}, api)
+    // 위층 파서를 그대로 태운다 — snake_case 를 어기면 여기서 undefined 가 된다
+    expect(parseHistoryList(frames[0]?.['data'])[0]?.messageCount).toBe(0)
+  })
+
+  /** 0 이 아닌 턴 수는 안 싣는다 — 세려면 대화 전체를 받아야 하고, 화면도 안 쓴다. */
+  it('말이 오간 대화에는 message_count 를 싣지 않는다', async () => {
+    const { frames } = await run(Action.CHAT_HISTORY_LIST)
+    expect(parseHistoryList(frames[0]?.['data'])[0]?.messageCount).toBeUndefined()
+  })
+
+  /** 후보인데 메시지가 있으면 딱지가 붙으면 안 된다 — 진짜 대화가 접힌다. */
+  it('세어 봤더니 메시지가 있으면 0 을 싣지 않는다', async () => {
+    const api = client({
+      listSessions: vi.fn(async () => [NEVER_SPOKEN]),
+      sessionMessages: vi.fn(async () => [{ info: { id: 'm1', role: 'user' }, parts: [] }]),
+    })
+    const { frames } = await run(Action.CHAT_HISTORY_LIST, {}, api)
+    expect(parseHistoryList(frames[0]?.['data'])[0]?.messageCount).toBeUndefined()
   })
 })
 

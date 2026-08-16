@@ -16,6 +16,15 @@ import type { ServerResponse } from 'node:http'
 //   4. `time` 은 **epoch ms 숫자다** (ISO 문자열이 아니다). 어댑터가 ISO 로 옮기는지를
 //      겨누는 자리라 여기서 문자열로 바꾸면 그 시험이 통째로 헛초록이 된다.
 //   5. 삭제는 `200` 에 본문 `true`, 제목 변경(PATCH)은 `200` 이다.
+//   6. **`?search=` 를 서버가 거른다** — 제목의 이어진 부분문자열, 대소문자 무시, 빈 값은
+//      안 거름 (2026-08-16 실측, 성질의 정본은 `electron/opencode/historyApi.ts`). 여기서
+//      안 거르면 어댑터가 검색어를 안 실어도 초록이 난다.
+//      ⚠️ 실물은 `%`·`_` 를 SQL LIKE 와일드카드로 흘리는데 **그건 흉내내지 않는다** —
+//      어댑터가 그 값을 손대지 않고 그대로 넘기는 것이 계약이라, 이 가짜가 겨눌 자리가 없다.
+//   7. **`time.updated` 는 메시지가 쌓일 때 움직인다.** 갓 만든 세션은 `created` 와 같고
+//      **제목 PATCH 로는 안 움직인다** (실측: 사용자 서버 8건 중 메시지 있는 4건만 delta>0).
+//      여기서 무조건 `created + 100` 을 주면 빈 대화 판정(`emptyChats.ts`)이 후보를 하나도
+//      못 잡아, 그 시험이 통째로 헛초록이 된다.
 
 /** `GET /session/:id/message` 한 건. parts 는 테스트가 필요한 만큼만 심는다. */
 export interface FakeMessage {
@@ -28,6 +37,8 @@ interface FakeSession {
   directory: string
   title: string
   created: number
+  /** 메시지가 쌓일 때만 움직인다 (머리말 7). 제목 변경으로는 안 움직인다. */
+  updated: number
   messages: FakeMessage[]
 }
 
@@ -45,6 +56,8 @@ export class FakeHistoryStore {
       directory,
       title: `New session - ${new Date(1786778000000 + counter).toISOString()}`,
       created: 1786778000000 + counter,
+      // 갓 만든 세션은 `created` 와 같다 — 아직 아무 일도 없었다는 뜻이다 (머리말 7)
+      updated: 1786778000000 + counter,
       messages: [],
     })
     return id
@@ -60,6 +73,8 @@ export class FakeHistoryStore {
     if (!session) throw new Error(`없는 세션에 이력을 심었다: ${id}`)
     session.title = title
     session.messages = messages
+    // 말이 오갔으면 `updated` 가 움직인다 (머리말 7). 빈 것을 심으면 그대로 둔다.
+    if (messages.length > 0) session.updated = session.created + 100
   }
 
   matches(method: string, url: string): boolean {
@@ -68,12 +83,16 @@ export class FakeHistoryStore {
 
   handle(method: string, url: string, body: unknown, response: ServerResponse): void {
     const [path, query = ''] = url.split('?')
-    const directory = new URLSearchParams(query).get('directory')
+    const params = new URLSearchParams(query)
+    const directory = params.get('directory')
 
     if (method === 'GET' && path === '/session') {
       // **`?directory=` 를 실제로 거른다** (머리말 2). 없으면 전부 준다 — 실물 그대로다.
       const listed = [...this.sessions.values()].filter((s) => directory === null || s.directory === directory)
-      return json(response, 200, listed.reverse().map(toSummary))
+      // **`?search=` 도 서버가 거른다** (머리말 6) — 제목의 부분문자열, 대소문자 무시
+      const search = (params.get('search') ?? '').toLowerCase()
+      const found = search ? listed.filter((s) => s.title.toLowerCase().includes(search)) : listed
+      return json(response, 200, found.reverse().map(toSummary))
     }
 
     const messages = /^\/session\/([^/]+)\/message$/.exec(path ?? '')
@@ -94,13 +113,13 @@ export class FakeHistoryStore {
   }
 }
 
-/** 목록 항목. **`time` 은 숫자다** (머리말 4). */
+/** 목록 항목. **`time` 은 숫자다** (머리말 4). `updated` 규칙은 머리말 7. */
 function toSummary(session: FakeSession): Record<string, unknown> {
   return {
     id: session.id,
     title: session.title,
     directory: session.directory,
-    time: { created: session.created, updated: session.created + 100 },
+    time: { created: session.created, updated: session.updated },
   }
 }
 

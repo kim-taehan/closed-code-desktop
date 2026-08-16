@@ -53,9 +53,36 @@ function sessionPath(suffix: string, directory: string | null): string {
   return `/session${suffix}${directory ? `?directory=${encodeURIComponent(directory)}` : ''}`
 }
 
-/** 이 프로젝트의 대화 목록. **`directory` 를 빼지 말 것** (머리말 — 남의 목록이 온다). */
-export async function listSessions(get: Getter, directory: string | null): Promise<OpencodeSession[]> {
-  const sessions = await get<OpencodeSession[]>(sessionPath('', directory))
+/**
+ * 이 프로젝트의 대화 목록. **`directory` 를 빼지 말 것** (머리말 — 남의 목록이 온다).
+ *
+ * `search` 는 **서버가 거른다** — 클라이언트에서 다시 거르지 않는다. 실측한 성질
+ * (2026-08-16, 1.18.18, 세션 4건을 심어 놓고 질의를 바꿔 가며 잼):
+ *
+ *   대상   **제목뿐이다.** 같은 세션의 user 메시지에 든 낱말("오소리감투")로는 0건이고,
+ *          그 세션 제목의 조각("New")으로는 1건이다 — **본문은 안 뒤진다.**
+ *   대소문자 무시 — `hello`·`HELLO`·`Hello` 가 전부 "인사 Hello World" 를 맞힌다
+ *   모양   **이어진 부분문자열**이다 (낱말로 쪼개지 않는다). "Hello World" 는 맞히고
+ *          "프로젝트 Report" 는 0건 — 둘 다 같은 제목 안에 있지만 뒤엣것은 안 이어져 있다
+ *   빈 값  거르지 않는다 (= 전체). 그래서 아래에서 빈 문자열이면 인자를 아예 안 싣는다
+ *   ⚠️ **`%`·`_` 가 이스케이프 없이 새어 SQL LIKE 와일드카드가 된다** — `search=%` 하나로
+ *      전부 오고 `H_llo` 가 "Hello" 를 맞힌다. **여기서 막지 않는다**: LIKE 의 ESCAPE 절을
+ *      우리가 정할 수 없어 올바로 이스케이프할 방법이 없고, 서버가 고쳐지면 두 번
+ *      이스케이프된 값을 보내게 된다. 사용자가 `%` 를 치면 전부 보이는 것이 지금의 진실이다
+ *
+ * `?directory=` 와 **함께** 쓴다 — search 만 싣고 directory 를 빼면 남의 프로젝트 대화가
+ * 검색 결과로 뜬다 (머리말의 격리 규칙은 검색에도 그대로다).
+ */
+export async function listSessions(
+  get: Getter,
+  directory: string | null,
+  search?: string,
+): Promise<OpencodeSession[]> {
+  const params = new URLSearchParams()
+  if (directory) params.set('directory', directory)
+  if (search) params.set('search', search)
+  const query = params.toString()
+  const sessions = await get<OpencodeSession[]>(`/session${query ? `?${query}` : ''}`)
   return Array.isArray(sessions) ? sessions : []
 }
 

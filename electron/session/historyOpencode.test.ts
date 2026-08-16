@@ -147,6 +147,48 @@ describe('이력 목록 (M1)', () => {
   })
 })
 
+describe('이력 검색·빈 대화', () => {
+  /**
+   * 검색은 **서버가 한다** (`GET /session?search=`). 여기서 겨누는 것은 그 값이 실제로
+   * 서버까지 가서 목록을 줄이는가다 — 어댑터가 안 실으면 전부 그대로 돌아온다.
+   */
+  it('검색어를 주면 제목이 맞는 대화만 온다', async () => {
+    const fixture = await connect()
+    await vi.waitFor(() => expect(entriesOf(fixture.history).length).toBeGreaterThan(0))
+    server.history.seed(entriesOf(fixture.history)[0]!.chatId, '인사', pastChat())
+    // 대화를 하나 더 만들어 둔다 — 하나뿐이면 안 걸러도 1건이라 시험이 헛돈다.
+    // 말을 먼저 걸어야 「새 대화」가 세션을 새로 만든다 (`opencode/chatHistory.ts` 의 addChat).
+    fixture.session.send('첫 질문')
+    await vi.waitFor(() => expect(server.calls.some((call) => call.url.endsWith('/prompt_async'))).toBe(true))
+    fixture.session.reset()
+    await vi.waitFor(() => expect(entriesOf(fixture.history)).toHaveLength(2))
+
+    fixture.session.requestHistoryList('인사')
+    await vi.waitFor(() => expect(entriesOf(fixture.history)).toHaveLength(1))
+    expect(entriesOf(fixture.history)[0]?.title).toBe('인사')
+  })
+
+  /**
+   * 붙는 것만으로 세션이 하나 생긴다 (`workspace.ts`) — 아무 말도 안 걸면 목록이 그것으로
+   * 도배된다 (실측: 32건 중 26건). 접을 근거는 **센 결과**여야 하고, 그 결과가 여기까지
+   * 와야 화면이 접는다. 제목으로 가르면 사용자가 그 제목 그대로 둔 대화가 함께 접힌다.
+   */
+  it('말 한 번 안 걸린 대화는 message_count 0 을 달고 온다', async () => {
+    const fixture = await connect()
+    await vi.waitFor(() => expect(entriesOf(fixture.history).length).toBeGreaterThan(0))
+    expect(entriesOf(fixture.history)[0]?.messageCount).toBe(0)
+  })
+
+  it('대화가 있으면 빈 대화로 찍히지 않는다', async () => {
+    const fixture = await connect()
+    await vi.waitFor(() => expect(entriesOf(fixture.history).length).toBeGreaterThan(0))
+    server.history.seed(entriesOf(fixture.history)[0]!.chatId, '지난 대화', pastChat())
+    fixture.session.requestHistoryList()
+    await vi.waitFor(() => expect(entriesOf(fixture.history)[0]?.title).toBe('지난 대화'))
+    expect(entriesOf(fixture.history)[0]?.messageCount).toBeUndefined()
+  })
+})
+
 describe('이력 열기 (M2)', () => {
   async function seeded(): Promise<{ fixture: Fixture; chatId: string }> {
     const fixture = await connect()
