@@ -4,12 +4,13 @@ import { parseInbound } from '../../shared/protocol/envelope'
 import { HandlerSet, type CloseInfo, type Transport, type Unsubscribe } from '../ws/transport'
 import { OpencodeClient } from './client'
 import { chatHistoryFrame } from './chatHistory'
-import { sendChatRequest } from './chatRequest'
-import { failureFrames } from './failFrames'
+import { interruptTurn, sendChatRequest } from './chatRequest'
+import { failureFrames, noSessionFrame } from './failFrames'
 import { replyApproval, replyUserAnswer } from './replies'
 import { SessionModel } from './models'
 import { applyPermissionMode } from './agents'
 import { mcpConfigFrame } from './mcpConfig'
+import { nextSession, reusableSession, type SessionState } from './sessionSwitch'
 import { SseStream } from './sse'
 import { translate, type TranslateContext } from './translate'
 import { syncWorkspace } from './workspace'
@@ -123,7 +124,9 @@ export class OpencodeTransport implements Transport {
   private async dispatch(kind: string, action: string, data: Record<string, unknown>): Promise<void> {
     try {
       if (kind === Kind.AUTH && action === Action.AUTH_REQUEST) return this.onAuthRequest()
-      if (kind === Kind.WORKSPACE && action === Action.WORKSPACE_SYNC) return await this.onWorkspaceSync(data)
+      if (kind === Kind.WORKSPACE && action === Action.WORKSPACE_SYNC) {
+        return await this.onWorkspaceSync(data)
+      }
       if (kind === Kind.CHAT && action === Action.CHAT_REQUEST) return this.onChatRequest(data)
       if (kind === Kind.CHAT && action === Action.STREAM_CANCEL) return await this.onCancel()
       if (kind === Kind.CHAT && action === Action.TOOL_APPROVAL_RESPONSE) {
@@ -135,7 +138,9 @@ export class OpencodeTransport implements Transport {
         return
       }
       if (kind === Kind.LLM_CONFIG && action === Action.LLM_CONFIG_STATUS) return await this.onLlmStatus()
-      if (kind === Kind.WORKSPACE && action === Action.SET_PERMISSION_MODE) return await this.onPermissionMode(data)
+      if (kind === Kind.WORKSPACE && action === Action.SET_PERMISSION_MODE) {
+        return await this.onPermissionMode(data)
+      }
       if (kind === Kind.MCP_CONFIG) {
         // 커넥터 다이얼로그. 번역과 실측 근거는 `mcpConfig.ts` 가 정본이다.
         const frame = await mcpConfigFrame(this.client, this.directory, action, data)
@@ -187,11 +192,7 @@ export class OpencodeTransport implements Transport {
   private onChatRequest(data: Record<string, unknown>): void {
     const sessionId = this.sessionId
     if (!sessionId) {
-      this.emit({
-        kind: Kind.CHAT,
-        action: Action.ERROR,
-        data: { code: 'NO_SESSION', message: '세션이 아직 없습니다 (workspace_sync 선행 필요)' },
-      })
+      this.emit(noSessionFrame())
       return
     }
     this.streamId = randomUUID()
@@ -207,24 +208,20 @@ export class OpencodeTransport implements Transport {
   }
 
   /**
-   * 대화 이력. 번역과 실측 근거는 `chatHistory.ts` 가 정본이다.
-   *
-   * **여기서만 할 수 있는 일이 하나 있다: 세션 갈아타기.** 과거 대화를 열거나 새 대화를
-   * 시작하면 다음 프롬프트가 갈 곳이 바뀐다 — 그 자리를 아는 것은 어댑터뿐이다.
-   * 지운 대화가 지금 열려 있던 것이면 세션 id 를 놓는다. 그대로 두면 다음 프롬프트가
-   * 없어진 세션으로 나가고, 증상은 채팅이 404 로 죽는 것뿐이다.
+   * 대화 이력. 봉투 번역은 `chatHistory.ts`, **세션 갈아타기는 `sessionSwitch.ts`** 가 정본이다.
+   * 어느 쪽도 여기서 판단하지 않는다 — 여기는 어댑터의 상태를 읽어 주고 돌려받아 얹는다.
    */
   private async onChatHistory(action: string, data: Record<string, unknown>): Promise<void> {
-    const removed = action === Action.CHAT_HISTORY_REMOVE ? data['chat_id'] : null
-    // 「새 대화」가 재사용해도 되는 세션만 넘긴다 — 말을 건 뒤에는 없다
-    const empty = this.emptySession ? this.sessionId : null
-    const deps = { client: this.client, directory: this.directory, emptySession: empty }
+    const state: SessionState = { sessionId: this.sessionId, emptySession: this.emptySession }
+    const deps = {
+      client: this.client,
+      directory: this.directory,
+      emptySession: reusableSession(state),
+    }
     const next = await chatHistoryFrame(deps, action, data, (frame) => this.emit(frame))
-    if (next) {
-      this.sessionId = next
-      // 불러온 대화는 이미 말이 오간 것이다 — 「새 대화」가 그걸 재사용하면 안 된다
-      this.emptySession = action === Action.CHAT_HISTORY_ADD
-    } else if (removed === this.sessionId) this.sessionId = null
+    const after = nextSession(state, action, data, next)
+    this.sessionId = after.sessionId
+    this.emptySession = after.emptySession
   }
 
   /** 모델 스위처가 목록을 물었다 (davis 는 status → models 두 왕복이었다 — `models.ts`). */
@@ -240,25 +237,26 @@ export class OpencodeTransport implements Transport {
   private async onPermissionMode(data: Record<string, unknown>): Promise<void> {
     const mode = data['mode']
     if (this.sessionId) {
-      this.permissionMode = await applyPermissionMode(this.client, this.sessionId, mode, this.permissionMode)
+      this.permissionMode = await applyPermissionMode(
+        this.client,
+        this.sessionId,
+        mode,
+        this.permissionMode,
+      )
     }
-    this.emit({ kind: Kind.WORKSPACE, action: Action.PERMISSION_MODE_CHANGED, data: { mode: this.permissionMode } })
+    this.emit({
+      kind: Kind.WORKSPACE,
+      action: Action.PERMISSION_MODE_CHANGED,
+      data: { mode: this.permissionMode },
+    })
   }
 
   /**
-   * stream_cancel → `POST …/abort` (레거시 세대 — `legacyChat.ts`).
+   * stream_cancel → 턴 중단. 보내는 일과 그 실측 근거는 `chatRequest.ts` 의 `interruptTurn` 이다.
    *
    * **조용히 버리지 않는다.** 세션이 없으면 보낼 곳이 없는데, 그냥 돌아서면 사용자에겐
    * "중단 버튼이 무시됐다" 로만 보인다. `fail()` 이 같은 사유로 이미 화면까지 올린다 —
    * 그 선례를 따른다 (열려 있는 턴도 stream_end 로 함께 닫는다).
-   *
-   * 성공 경로에서는 **중단을 요청했다는 사실을 기억한다.** 신규 세대는 중단된 턴을
-   * `step.failed` 로 알리고, 그것이 사용자 취소인지 프로바이더 실패인지 구분해 주지
-   * 않았다 — 가르는 근거가 이 플래그뿐이었다 (`translate.ts` 의 STEP_FAILED 분기).
-   *
-   * ⚠️ **지금(레거시)은 이 플래그 없이도 갈린다** — 취소가 `MessageAbortedError` 라는
-   * **이름을 달고** 와서 SESSION_ERROR 가 이름만 보고 판단한다. 그래도 남기는 것은
-   * STEP_FAILED 가 신규 세대로 되돌릴 때의 자리라서다 (지우면 취소가 빨간 오류로 뜬다).
    */
   private async onCancel(): Promise<void> {
     const sessionId = this.sessionId
@@ -266,8 +264,10 @@ export class OpencodeTransport implements Transport {
       this.fail(Kind.CHAT, new Error('세션이 없어 중단 요청을 보내지 못했습니다'))
       return
     }
+    // 중단을 요청했다는 사실은 **여기가** 기억한다 — `translate.ts` 가 취소와 실패를 가르는
+    // 근거이고, 왜 서버 이벤트로 못 가리는지는 `interruptTurn` 의 ⚠️ 절에 있다.
     this.cancelling = true
-    await this.client.interrupt(sessionId)
+    await interruptTurn(this.client, sessionId)
   }
 
   /**

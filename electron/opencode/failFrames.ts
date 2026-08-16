@@ -34,3 +34,18 @@ export function failureFrames(
   }
   return frames
 }
+
+/**
+ * 세션이 아직 없는데 프롬프트가 왔다.
+ *
+ * `failureFrames` 와 달리 **코드를 따로 쓴다** — 이건 어댑터 실패가 아니라 순서 문제라
+ * (`workspace_sync` 가 선행해야 한다) 사유가 다르고, 같은 코드로 묶으면 화면에 "opencode
+ * 오류" 로 뜬다. 열려 있는 턴이 없으니 stream_end 도 없다.
+ */
+export function noSessionFrame(): Record<string, unknown> {
+  return {
+    kind: Kind.CHAT,
+    action: Action.ERROR,
+    data: { code: 'NO_SESSION', message: '세션이 아직 없습니다 (workspace_sync 선행 필요)' },
+  }
+}
