@@ -4,16 +4,26 @@
 // 설계 §5 의 「경계」 그대로다: *판정과 문구는 렌더러 순수 함수에.* 그래야 화면 없이 단언할
 // 수 있고, 자가 복구(`healNotice.ts`)가 이미 같은 모양으로 서 있다.
 //
-// ## 처방은 실측으로만 늘린다 — 지금 **하나뿐**이다
+// ## 처방은 실측으로만 늘린다 — 지금 **하나뿐**이다 (의존성 없음 → 설치)
 //
-// `Cannot find module 'x'` → 의존성 설치. 이것 하나로 시작한 이유는 **실제로 겪은 실패**라서다.
 // 그럴듯한 목록을 미리 만들면 **틀린 처방이 조용히 돈다** (설계 §4 표) — 틀린 처방은 안 도는
-// 것보다 나쁘다: 사용자 프로젝트를 흔들어 놓고 증상은 그대로다.
+// 것보다 나쁘다: 사용자 프로젝트를 흔들어 놓고 증상은 그대로다. 그래서 **직접 재고 넣었다**
+// (Node v22.18.0, 임시 폴더에 `npm run dev` 로 재현, 2026-08-16):
 //
-// **이웃한 변종을 알면서 안 넣는다.** ESM 의 `Cannot find package 'x' imported from …`,
-// 파이썬의 `ModuleNotFoundError`, gradle 의 의존성 해석 실패 — 문구도 처방도 그럴듯하지만
-// 이 앱에서 **한 번도 안 재 봤다.** 재는 날 여기 한 줄씩 는다. 그때까지 그 실패들은
-// 아무 일도 안 일어나고, 사용자가 로그를 직접 본다 (그 편이 옳다).
+// | 무엇이 없나 | 로그에 나오는 문장 | 처방 |
+// |---|---|---|
+// | 의존성 (CJS) | `Error: Cannot find module 'vite'` | 설치 |
+// | 의존성 (ESM) | `Error [ERR_MODULE_NOT_FOUND]: Cannot find package 'vite' imported from …` | 설치 |
+// | 그 프로젝트 안의 파일 (CJS) | `Cannot find module './nope'` | **없음** |
+// | 그 프로젝트 안의 파일 (ESM) | `Cannot find module '/abs/path/nope.js' imported from …` | **없음** |
+//
+// ⚠️ **아래 두 줄이 이 표의 값이다.** ESM 은 낱말이 `package` 로 갈리고(안 재 봤으면 최신
+// 프로젝트 대부분을 놓쳤다), **파일을 못 찾은 ESM 은 낱말이 `module` 인 채 따옴표 안이
+// 절대경로다** — 경로 판정이 없으면 설치가 돌고 아무것도 안 고쳐진다.
+//
+// **아직 못 잰 이웃은 안 넣는다.** 파이썬의 `ModuleNotFoundError`, gradle 의 의존성 해석
+// 실패 — 문구도 처방도 그럴듯하지만 재 본 적이 없다. 재는 날 위 표에 한 줄씩 는다.
+// 그때까지 그 실패들은 아무 일도 안 일어나고, 사용자가 로그를 직접 본다 (그 편이 옳다).
 
 /** 아는 실패 하나. 늘어나면 여기가 유니온이 된다 */
 export interface Prescription {
@@ -112,17 +122,23 @@ export function runHealNotice(
 }
 
 /**
- * 로그에서 못 찾은 모듈 이름을 뽑는다. 없으면 null.
+ * 로그에서 못 찾은 의존성 이름을 뽑는다. 없으면 null.
  *
- * **따옴표 형태만 받는다** — Node 가 내는 문장이 `Cannot find module 'foo'` 라서다.
- * 이름을 못 뽑으면 근거를 화면에 못 적고, 아래 경로 판정도 못 한다.
+ * **낱말이 둘이다** — CJS 는 `module`, ESM 은 `package` 다 (머리말의 표, 실측). 하나만
+ * 보면 요즘 프로젝트 대부분(`"type": "module"`)에서 아무 일도 안 일어난다.
+ *
+ * **따옴표 형태만 받는다** — Node 가 내는 문장이 그렇고, 이름을 못 뽑으면 근거를 화면에
+ * 못 적고 아래 경로 판정도 못 한다.
  */
 function missingModule(output: string): string | null {
-  const hit = /Cannot find module '([^']+)'/.exec(stripAnsi(output))
+  const hit = /Cannot find (?:module|package) '([^']+)'/.exec(stripAnsi(output))
   const spec = hit?.[1] ?? ''
   // ⚠️ **상대·절대 경로는 설치로 안 고쳐진다** — 그 프로젝트 안의 파일을 못 찾은 것이다.
   // 안 가르면 `npm install` 이 멀쩡히 성공한 뒤 같은 실패가 그대로 다시 나고, 사용자는
   // 우리가 왜 아무 소용 없는 짓을 했는지 모른다.
+  //
+  // **절대경로 갈래는 지어낸 걱정이 아니다** — ESM 에서 `./nope.js` 를 못 찾으면 따옴표
+  // 안이 통째로 절대경로가 된다 (머리말의 표, 실측). 이 한 줄이 그 경우를 막는다.
   if (spec === '' || spec.startsWith('.') || spec.startsWith('/')) return null
   return spec
 }

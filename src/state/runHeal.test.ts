@@ -5,8 +5,14 @@ import { fixLine, prescribe, runHealNotice, type Prescription } from './runHeal'
 // 틀린 처방은 안 도는 것보다 나쁘다: 사용자 프로젝트에 설치를 돌려 놓고 증상은 그대로다
 // (설계 2026-08-16 §4 「처방은 실측으로만 늘린다」).
 
-/** Node 가 실제로 내는 문장 (CJS 로더) */
+// 아래 문장들은 **실측 원문**이다 (Node v22.18.0, 임시 폴더에 `npm run dev`, 2026-08-16).
+// 지어낸 문장으로 잠그면 매칭이 초록인 채로 실물을 못 알아본다.
+
+/** 의존성이 없다 — CJS 로더 */
 const MISSING = "Error: Cannot find module 'vite'\n    at Module._resolveFilename"
+/** 의존성이 없다 — ESM 로더. **낱말이 `package` 로 갈린다** */
+const MISSING_ESM =
+  "Error [ERR_MODULE_NOT_FOUND]: Cannot find package 'vite' imported from /tmp/probe/index.mjs"
 
 describe('처방 — 아는 실패', () => {
   it("`Cannot find module 'x'` 를 의존성 설치로 읽는다", () => {
@@ -26,6 +32,16 @@ describe('처방 — 아는 실패', () => {
     expect(prescribe(MISSING, command)?.fix).toBe(fix)
   })
 
+  // ⭐ **ESM 은 낱말이 `package` 다.** 이 줄이 없으면 요즘 프로젝트 대부분
+  // (`"type": "module"`)에서 오토힐링이 통째로 안 돈다 — 실측하고서야 알았다.
+  it('ESM 의 다른 낱말도 같은 처방으로 읽는다', () => {
+    expect(prescribe(MISSING_ESM, 'npm run dev')).toEqual({
+      id: 'missing-module',
+      missing: 'vite',
+      fix: 'npm install',
+    })
+  })
+
   // 색이 섞여 들어온다 — 버퍼가 ANSI 를 일부러 안 벗기기 때문이다 (`outputBuffer.ts`)
   it('색이 섞여 있어도 알아본다', () => {
     const colored = "\u001b[31mError: Cannot find module 'vite'\u001b[0m"
@@ -36,8 +52,15 @@ describe('처방 — 아는 실패', () => {
 describe('처방 — 안 걸려야 하는 것', () => {
   // ⭐ 설치로 안 고쳐지는 실패다. 걸리면 `npm install` 이 멀쩡히 성공한 뒤 같은 실패가
   // 그대로 다시 나고, 사용자는 우리가 왜 아무 소용 없는 짓을 했는지 모른다.
-  it.each(["'./missing'", "'../lib/x'", "'/abs/path'"])('경로 %s 는 처방이 없다', (spec) => {
-    expect(prescribe(`Cannot find module ${spec}`, 'npm run dev')).toBeNull()
+  //
+  // **절대경로 갈래는 실측이다** — ESM 에서 `./nope.js` 를 못 찾으면 낱말은 `module` 인 채
+  // 따옴표 안이 통째로 절대경로가 된다. 지어낸 걱정이 아니라 실제로 오는 모양이다.
+  it.each([
+    "Cannot find module './missing'",
+    "Cannot find module '../lib/x'",
+    "Error [ERR_MODULE_NOT_FOUND]: Cannot find module '/tmp/probe/nope.js' imported from /tmp/probe/index.mjs",
+  ])('경로를 못 찾은 것에는 처방이 없다: %s', (output) => {
+    expect(prescribe(output, 'npm run dev')).toBeNull()
   })
 
   // 모르면 아무것도 안 한다 — `make dev` 가 속으로 npm 을 쓰더라도 우리는 모른다
@@ -46,9 +69,9 @@ describe('처방 — 안 걸려야 하는 것', () => {
     expect(prescribe(MISSING, './gradlew bootRun')).toBeNull()
   })
 
-  // ⭐ **알면서 안 넣은 이웃들.** 실측하는 날 여기가 초록에서 빨강으로 바뀌고, 그게 신호다
+  // ⭐ **아직 못 잰 이웃들.** 실측하는 날 여기가 초록에서 빨강으로 바뀌고, 그게 신호다.
+  // (ESM 은 여기 있었다 — 재 보니 실제로 오는 모양이라 위쪽 「아는 실패」로 옮겼다.)
   it.each([
-    "Cannot find package 'vite' imported from /app/x.js",
     "ModuleNotFoundError: No module named 'flask'",
     'Could not resolve dependency: com.example:lib:1.0',
   ])('아직 안 재 본 변종은 조용하다: %s', (output) => {
