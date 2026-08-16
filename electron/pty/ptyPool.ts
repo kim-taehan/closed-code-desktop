@@ -1,6 +1,8 @@
 import type { PtyClient } from './client'
 import { isSendableSize } from './client'
 import { OutputBuffer, type OutputSnapshot } from './outputBuffer'
+import { paneKey, PaneQueue } from './paneQueue'
+import type { PaneOpenResult, PtyPoolOptions } from './poolSurface'
 import { PtySocket } from './socket'
 
 // **프로젝트마다 pty 여럿, 이름으로 관리한다.**
@@ -80,42 +82,19 @@ interface Pane {
   resizeTimer: NodeJS.Timeout | null
 }
 
-export interface PtyPoolEvents {
-  /**
-   * 소켓 핸드셰이크가 끝났다 — **이제 써도 된다.**
-   *
-   * `open()` 이 돌아온 시점의 소켓은 아직 CONNECTING 이고, 그때 쓴 바이트는 아무 흔적 없이
-   * 사라진다 (`PtySocket.open` 의 실측). 「맡아 둔 명령」이 이 신호를 기다린다.
-   */
-  onOpen(projectId: string, name: string): void
-  onData(projectId: string, name: string, chunk: string): void
-  onExit(projectId: string, name: string, exitCode: number | null): void
-}
-
-export interface PtyPoolOptions {
-  /** 그 프로젝트의 서버에 붙는 클라이언트. 서버가 아직 없으면 거절한다 (`drawerBridge`) */
-  clientFor: () => Promise<PtyClient>
-  events: PtyPoolEvents
-}
-
-export interface PaneOpenResult {
-  /**
-   * **이 칸은 이미 돌고 있었다** — 우리가 새로 띄운 것이 아니다.
-   *
-   * 두 경로가 여기로 모인다: 우리 표에 이미 있었거나(같은 판에서 두 번 열었다), 서버에
-   * 우리 제목의 pty 가 살아 있어 되찾았거나(앱을 껐다 켰다). 부르는 쪽에서는 **둘 다 같은
-   * 뜻**이다 — 명령을 또 밀어 넣으면 개발 서버가 둘이 된다 (`run_project` 의 「겹쳐 띄우지
-   * 않는다」, 설계 §3).
-   *
-   * 셸 칸에서는 이 값이 늘 참에 가깝고 그게 정상이다 — 되찾기가 셸 칸의 설계다(머리말의 표).
-   * 그래서 화면에서 칸을 펴는 쪽(`drawerBridge.open`)은 이 값을 보지 않는다.
-   */
-  reclaimed: boolean
-}
+export type { PaneOpenResult, PtyPoolEvents, PtyPoolOptions } from './poolSurface'
 
 export class PtyPool {
   /** projectId → (name → 칸) */
   private readonly panes = new Map<string, Map<string, Pane>>()
+  /**
+   * 한 칸의 **여닫기를 도착한 순서로** 돌린다 (`paneQueue.ts` — 왜 필요한지가 거기 있다).
+   *
+   * 요지: 여는 길이 async 라 그 사이 도착한 `detach` 가 표에서 접을 소켓을 못 찾고,
+   * 뒤이은 `open` 이 같은 pty 에 소켓을 하나 더 붙인다. 실물은 붙어 있는 소켓 전부에
+   * 출력을 뿌리므로 화면에 에코가 두 벌 그려진다 (`paneLifecycle.test.ts` 가 그걸 잠근다).
+   */
+  private readonly queue = new PaneQueue()
 
   constructor(private readonly options: PtyPoolOptions) {}
 
@@ -133,6 +112,13 @@ export class PtyPool {
    * 않는다」의 판정이다.
    */
   async open(project: { id: string; root: string }, name: string): Promise<PaneOpenResult> {
+    return await this.queue.run(paneKey(project.id, name), () => this.openNow(project, name))
+  }
+
+  private async openNow(
+    project: { id: string; root: string },
+    name: string,
+  ): Promise<PaneOpenResult> {
     if (this.paneOf(project.id, name) !== undefined) return { reclaimed: true }
 
     const client = await this.options.clientFor()
@@ -219,17 +205,24 @@ export class PtyPool {
     return this.paneOf(projectId, name)?.buffer.snapshot() ?? null
   }
 
-  /** 그 칸에서 손을 뗀다. **pty 는 죽이지 않는다** (머리말의 표). */
+  /**
+   * 그 칸에서 손을 뗀다. **pty 는 죽이지 않는다** (머리말의 표).
+   *
+   * 줄을 서는 이유는 `open` 과 같다 — 여는 왕복이 도는 중이면 여기서 접을 소켓이 아직
+   * 표에 없다. 그때 그냥 돌아가면 그 소켓은 아무도 안 접는 채 남는다.
+   */
   detach(projectId: string, name: string): void {
-    this.forget(projectId, name)
+    void this.queue.run(paneKey(projectId, name), async () => this.forget(projectId, name))
   }
 
-  /** 탭의 ✕ — **프로세스도 멈춘다.** */
+  /** 탭의 ✕ — **프로세스도 멈춘다.** 붙는 중이면 다 붙은 뒤에 거둔다 (`detach` 와 같은 이유). */
   async close(projectId: string, name: string): Promise<void> {
-    const pane = this.paneOf(projectId, name)
-    if (pane === undefined) return
-    this.forget(projectId, name)
-    await this.remove(pane)
+    await this.queue.run(paneKey(projectId, name), async () => {
+      const pane = this.paneOf(projectId, name)
+      if (pane === undefined) return
+      this.forget(projectId, name)
+      await this.remove(pane)
+    })
   }
 
   /** 프로젝트 탭을 닫았다 — 그 프로젝트의 칸을 통째로 거둔다. */
@@ -237,7 +230,12 @@ export class PtyPool {
     await Promise.all(this.namesOf(projectId).map((name) => this.close(projectId, name)))
   }
 
-  /** 앱을 끈다. **되찾을 수 없는 칸만 거둔다** (머리말의 표). */
+  /**
+   * 앱을 끈다. **되찾을 수 없는 칸만 거둔다** (머리말의 표).
+   *
+   * 여기만 줄을 안 선다 — 여는 왕복이 도는 중이었다면 그 소켓은 이 뒤에 붙는다. 앱이
+   * 끝나는 자리라 곧 프로세스와 함께 사라지고, 기다리면 종료가 서버 응답에 묶인다.
+   */
   async dispose(): Promise<void> {
     const doomed: Pane[] = []
     for (const projectId of [...this.panes.keys()]) {

@@ -130,6 +130,9 @@ describe('PtyDrawerBridge — 떠날 때의 신원', () => {
     active = B
     // 그 뒤에야 A 의 정리 함수가 돌아 detach 가 도착한다
     listeners.get('pty:detach')!({}, { projectId: 'A', name: 'shell' })
+    // 접기는 그 칸의 줄에 서서 돈다 — 여는 왕복이 도는 중일 수도 있어서다
+    // (`paneQueue.ts`). 그 차례가 돌기를 기다린다.
+    await new Promise(setImmediate)
 
     expect(closed).toEqual(['ws://fake/pty_A'])
     await bridge.dispose()
@@ -145,6 +148,7 @@ describe('PtyDrawerBridge — 떠날 때의 신원', () => {
     closed.length = 0
 
     listeners.get('pty:detach')!({}, { projectId: 'A', name: 'shell' })
+    await new Promise(setImmediate)
 
     expect(closed).toEqual(['ws://fake/pty_A'])
     await bridge.dispose()

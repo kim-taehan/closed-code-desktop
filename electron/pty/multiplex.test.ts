@@ -252,6 +252,8 @@ describe('pty 다중화 — 한 프로젝트의 칸 둘', () => {
     await open('dev')
 
     listeners.get('pty:detach')!({}, { projectId: 'A', name: 'dev' })
+    // 접기는 그 칸의 줄에 서서 돈다 (`paneQueue.ts` — 여는 왕복 중에 도착할 수 있어서다)
+    await new Promise(setImmediate)
 
     expect(closed).toEqual(['ws://fake/pty_closed-code-desktop 드로어:dev'])
     expect(removed).toEqual([])
