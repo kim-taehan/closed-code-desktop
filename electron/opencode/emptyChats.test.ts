@@ -34,6 +34,7 @@ describe('빈 대화 판정', () => {
   /**
    * `time.updated` 는 메시지 없이도 움직인다 (`setModel`·`setAgent` 가 올린다 — 실측).
    * 그래서 후보 판정은 **건너뛰기 용도로만** 쓴다. 건너뛴 세션에는 딱지가 안 붙는다.
+   * 반대 방향(delta=0 인데 메시지 있음)은 저장소 2550건에서 **0건**이다 (`emptyChats.ts`).
    */
   it('말이 오간 흔적이 있으면 세지도 않는다 — 조회를 아예 안 부른다', async () => {
     const fetchMessages = vi.fn(async () => [])
