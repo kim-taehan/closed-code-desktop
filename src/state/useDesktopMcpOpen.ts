@@ -17,6 +17,7 @@ export function useDesktopMcpOpen(
   activeProjectId: string | null,
   open: (path: string, revealLine?: number) => void,
   openTerminal: () => void,
+  showPane: (name: string) => void,
 ): void {
   useEffect(
     () =>
@@ -37,5 +38,18 @@ export function useDesktopMcpOpen(
         openTerminal()
       }),
     [activeProjectId, openTerminal],
+  )
+
+  // `run_project` — **탭만 만든다.** pty 도 명령도 main 이 이 프레임보다 먼저 끝냈다
+  // (`electron/mcp/appWiring.ts`). 그래도 탭이 반드시 떠야 하는 이유는 **멈추는 문이
+  // 거기뿐**이기 때문이다: 정지·재시작은 사람만 하고(설계 §3), 사람이 쓰는 문이 탭의 ✕ 다.
+  // 뒤에 있는 프로젝트 것을 걸러내는 이유는 위 둘과 같다.
+  useEffect(
+    () =>
+      window.davis.onDesktopMcpRunProject((payload, projectId) => {
+        if (projectId !== activeProjectId) return
+        showPane(payload.name)
+      }),
+    [activeProjectId, showPane],
   )
 }

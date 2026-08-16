@@ -67,6 +67,27 @@ export function desktopMcpPorts(deps: DesktopMcpDeps): McpToolPorts {
       window.webContents.send(Channel.DESKTOP_MCP_OPEN_TERMINAL, { projectId, payload: { command } })
       return true
     },
+    /**
+     * **띄우는 것이 먼저, 화면에 알리는 것이 나중이다.** 순서를 뒤집으면 화면이 그 탭을
+     * 그리면서 같은 이름으로 칸을 열고(`pty:open`), 그러면 `run` 이 "이미 돌고 있다" 로
+     * 읽어 명령을 영영 안 넣는다.
+     */
+    runProject: async (projectId, name, command) => {
+      const drawer = deps.ptyDrawer()
+      if (drawer === null) return { ok: false, error: '셸 배선이 아직 없습니다' }
+
+      const result = await drawer.run(projectId, name, command)
+      const window = deps.window()
+      if (!result.ok || window === null || window.isDestroyed()) return result
+
+      // 이미 돌고 있던 것이어도 알린다 — 화면에 탭이 없으면 사용자가 멈출 문이 없다
+      // (앱을 껐다 켜서 되찾은 경우가 그렇다).
+      window.webContents.send(Channel.DESKTOP_MCP_RUN_PROJECT, { projectId, payload: { name } })
+      return result
+    },
+    // **앞에 나와 있지 않아도 읽힌다** — 출력을 붙들고 있는 것은 main 이라 창도 필요 없다
+    // (`tools.ts` 의 `read_logs` 갈래에 그 근거가 있다).
+    readLogs: (projectId, name) => deps.ptyDrawer()?.logs(projectId, name) ?? null,
   }
 }
 

@@ -43,6 +43,17 @@ export const Channel = {
    */
   DESKTOP_MCP_OPEN_TERMINAL: 'desktopMcp:openTerminal',
   /**
+   * main → renderer: **`run_project` 도구가 그 이름의 칸을 띄웠다** (`electron/mcp/runProject.ts`).
+   *
+   * 화면이 하는 일은 **탭을 만들어 앞에 놓는 것뿐**이다. pty 를 띄우고 명령을 넣는 일은
+   * 이 프레임보다 **먼저** main 이 끝낸다 (`appWiring.ts` — 순서를 뒤집으면 화면이 연 칸을
+   * main 이 "이미 돌고 있다" 로 읽어 명령이 영영 안 들어간다).
+   *
+   * 탭이 반드시 떠야 하는 이유는 **멈추는 문이 거기뿐**이기 때문이다 — 정지·재시작은
+   * 사람만 하고(설계 §3), 사람이 쓰는 문이 탭의 ✕ 다.
+   */
+  DESKTOP_MCP_RUN_PROJECT: 'desktopMcp:runProject',
+  /**
    * main → renderer: **확장이 채팅으로 물었다** (`code.chat.ask`).
    *
    * 확장 질의는 사용자 입력과 **같은 큐**를 타야 한다 — 그 큐는 렌더러에 있다

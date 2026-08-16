@@ -10,6 +10,7 @@ import type {
 } from '../../shared/ipc/ptyPayloads'
 import { PtyClient } from './client'
 import type { OutputSnapshot } from './outputBuffer'
+import { PendingWrites } from './pendingWrites'
 import { PtyPool, SHELL_PANE } from './ptyPool'
 
 // 셸 드로어의 IPC 배선. **수명과 표는 `ptyPool.ts` 가 쥔다** — 여기는 채널과 겉봉뿐이다.
@@ -62,6 +63,9 @@ const CLEAR_LINE = '\x05\x15'
 
 const HANDLED = [Channel.PTY_OPEN, Channel.PTY_RESIZE, Channel.PTY_CLOSE]
 
+/** `run` 의 결과. **started 가 거짓이면 이미 돌고 있던 것**이고, 우리는 아무것도 안 했다. */
+export type PaneRunResult = { ok: true; started: boolean } | { ok: false; error: string }
+
 export interface PtyDrawerOptions {
   window: BrowserWindow
   /** 지금 앞에 나와 있는 프로젝트. 없으면 드로어를 열 수 없다. */
@@ -80,11 +84,15 @@ export interface PtyDrawerOptions {
 export class PtyDrawerBridge {
   private readonly pool: PtyPool
   /**
-   * 아직 못 넣은 명령. **프로젝트마다 하나**이고 언제나 셸 칸으로 간다 — 뒤엣것이 앞엣것을
-   * 덮는다 (`fill`). 칸이 여럿이 돼도 채울 곳은 셸 칸뿐이다: `open_terminal` 은 사용자가
-   * 보고 엔터를 치라고 여는 것이라, 개발 서버가 도는 칸에 넣으면 칠 자리가 없다.
+   * 아직 못 넣은 바이트 (`pendingWrites.ts`). **칸마다 하나**다.
+   *
+   * 예전에는 프로젝트마다 하나였고 언제나 셸 칸으로 갔다 — 채우는 쪽(`open_terminal`)이
+   * 하나뿐이었기 때문이다. `run_project` 가 들어오면서 **셸이 아닌 칸에도 맡길 것이 생겼다**
+   * (설계 §3).
    */
-  private readonly pending = new Map<string, string>()
+  private readonly pending = new PendingWrites((projectId, name, bytes) =>
+    this.pool.write(projectId, name, bytes),
+  )
 
   private readonly onInput = (_event: unknown, payload: PtyInputPayload): void => this.write(payload)
   private readonly onDetach = (_event: unknown, payload: PtyDetachPayload): void =>
@@ -96,9 +104,7 @@ export class PtyDrawerBridge {
       events: {
         // 맡아 둔 명령은 **여기서** 들어간다. `open()` 이 돌아온 시점은 아직 CONNECTING 이라
         // 그때 쓰면 사라진다 (`PtySocket.open` 의 실측).
-        onOpen: (projectId, name) => {
-          if (name === SHELL_PANE) this.flush(projectId)
-        },
+        onOpen: (projectId, name) => this.pending.flush(projectId, name),
         onData: (projectId, name, chunk) => this.push(Channel.PTY_DATA, projectId, { name, chunk }),
         onExit: (projectId, name, exitCode) =>
           this.push(Channel.PTY_EXIT, projectId, { name, exitCode }),
@@ -161,8 +167,42 @@ export class PtyDrawerBridge {
    * 엉뚱한 곳으로 가지는 않는다(키가 프로젝트다). 탭을 닫으면 함께 버린다.
    */
   fill(projectId: string, command: string): void {
-    this.pending.set(projectId, command)
-    this.flush(projectId)
+    this.pending.enqueue(projectId, SHELL_PANE, CLEAR_LINE + command)
+  }
+
+  /**
+   * 그 이름의 칸에서 명령을 **돌린다** (`run_project`, 설계 §3). `fill` 과 갈리는 지점이
+   * 두 군데다: 칸이 셸이 아니고, **개행이 붙는다.**
+   *
+   * ⚠️ **이미 돌고 있으면 아무것도 하지 않는다** — `started: false` 로 그 사실만 돌려준다.
+   * 개발 서버가 둘이 뜨면 뒤엣것은 포트를 못 잡고 죽거나(무슨 일인지 화면에 안 보인다),
+   * 다른 포트를 잡아 사용자가 보던 주소가 조용히 어긋난다.
+   *
+   * **멈추거나 다시 띄우는 길은 여기 없다.** 사용자가 보고 있던 것을 없애는 행동이라
+   * 사람만 한다 (설계 §3 — 탭의 ✕ 가 그 문이다).
+   *
+   * 신원을 활성 프로젝트와 대조한다: 칸을 그리는 것은 화면이고 화면의 드로어는 앞에 나와
+   * 있는 프로젝트의 것뿐이라, 뒤에서 띄우면 **아무도 못 보는 프로세스**가 된다 — 못 보면
+   * 탭의 ✕ 도 없어 멈출 방법이 사라진다.
+   */
+  async run(projectId: string, name: string, command: string): Promise<PaneRunResult> {
+    const project = this.options.activeProject()
+    if (project === null || project.id !== projectId) {
+      return { ok: false, error: '이 프로젝트가 앞에 나와 있지 않습니다' }
+    }
+
+    try {
+      const { reclaimed } = await this.pool.open(project, name)
+      if (reclaimed) return { ok: true, started: false }
+    } catch (error) {
+      // 서버가 안 떴을 때가 가장 흔하다. 사유를 그대로 모델에게 올린다.
+      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    }
+
+    // **개행이 여기 붙는다.** `fill` 과 갈리는 지점이고, 이 한 글자가 「채워만 둔다」와
+    // 「돌린다」를 가른다.
+    this.pending.enqueue(projectId, name, `${command}\n`)
+    return { ok: true, started: true }
   }
 
   /**
@@ -174,13 +214,6 @@ export class PtyDrawerBridge {
    */
   logs(projectId: string, name: string): OutputSnapshot | null {
     return this.pool.snapshot(projectId, name)
-  }
-
-  /** 맡아 둔 명령을 넣는다. 못 넣었으면(아직 안 열렸다) 그대로 두고 다음 기회를 기다린다. */
-  private flush(projectId: string): void {
-    const command = this.pending.get(projectId)
-    if (command === undefined) return
-    if (this.pool.write(projectId, SHELL_PANE, CLEAR_LINE + command)) this.pending.delete(projectId)
   }
 
   /**
@@ -208,9 +241,7 @@ export class PtyDrawerBridge {
 
   /** 프로젝트 탭을 닫았다 — 그 프로젝트의 셸을 통째로 거둔다. 안 그러면 서버에 죽은 셸이 쌓인다. */
   async closeProject(projectId: string): Promise<void> {
-    // 맡아 둔 명령도 여기서 버린다. 남겨 두면 그 프로젝트를 다시 열었을 때
-    // 사용자가 잊은 명령이 유령처럼 채워진다.
-    this.pending.delete(projectId)
+    this.pending.clearProject(projectId)
     await this.pool.closeProject(projectId)
   }
 

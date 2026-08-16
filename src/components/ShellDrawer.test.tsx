@@ -45,6 +45,7 @@ function drawer(over: Partial<DrawerState> = {}): DrawerState {
     addTab: () => {},
     closeTab: () => {},
     showShell: () => {},
+    showPane: () => {},
     ...over,
   }
 }

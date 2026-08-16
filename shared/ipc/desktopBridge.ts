@@ -10,6 +10,7 @@ import type {
   ChatSnapshotPayload,
   DesktopMcpOpenFilePayload,
   DesktopMcpOpenTerminalPayload,
+  DesktopMcpRunProjectPayload,
   ExtensionChatAskPayload,
   DiagnosticsPayload,
   FileListPayload,
@@ -200,6 +201,11 @@ export interface DesktopBridge
    * 명령을 pty 에 넣는 것은 main 이다 (`DesktopMcpOpenTerminalPayload`).
    */
   onDesktopMcpOpenTerminal(handler: ProjectHandler<DesktopMcpOpenTerminalPayload>): () => void
+  /**
+   * 같은 서버의 `run_project` 도구가 그 이름의 칸을 띄웠다. **화면은 탭만 만든다** —
+   * pty 도 명령도 main 이 이미 끝냈다 (`DesktopMcpRunProjectPayload`).
+   */
+  onDesktopMcpRunProject(handler: ProjectHandler<DesktopMcpRunProjectPayload>): () => void
   /**
    * 확장이 `chat.ask` 로 물었다 — **화면이 사용자 입력과 같은 큐에 넣어야 한다.**
    * main 이 직접 보내지 않는 이유는 그 큐가 렌더러에 있기 때문이다 (`useSendQueue`).

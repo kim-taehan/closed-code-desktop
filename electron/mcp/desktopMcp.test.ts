@@ -23,6 +23,8 @@ const ports = {
   activeFile: () => null,
   openInView: () => false,
   openTerminal: () => false,
+  runProject: () => Promise.resolve({ ok: false as const, error: '이 시험은 도구를 안 부른다' }),
+  readLogs: () => null,
 }
 
 function make(options: { enabled?: boolean; status?: string } = {}): {

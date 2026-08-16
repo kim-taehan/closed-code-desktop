@@ -98,6 +98,21 @@ export interface PtyPoolOptions {
   events: PtyPoolEvents
 }
 
+export interface PaneOpenResult {
+  /**
+   * **이 칸은 이미 돌고 있었다** — 우리가 새로 띄운 것이 아니다.
+   *
+   * 두 경로가 여기로 모인다: 우리 표에 이미 있었거나(같은 판에서 두 번 열었다), 서버에
+   * 우리 제목의 pty 가 살아 있어 되찾았거나(앱을 껐다 켰다). 부르는 쪽에서는 **둘 다 같은
+   * 뜻**이다 — 명령을 또 밀어 넣으면 개발 서버가 둘이 된다 (`run_project` 의 「겹쳐 띄우지
+   * 않는다」, 설계 §3).
+   *
+   * 셸 칸에서는 이 값이 늘 참에 가깝고 그게 정상이다 — 되찾기가 셸 칸의 설계다(머리말의 표).
+   * 그래서 화면에서 칸을 펴는 쪽(`drawerBridge.open`)은 이 값을 보지 않는다.
+   */
+  reclaimed: boolean
+}
+
 export class PtyPool {
   /** projectId → (name → 칸) */
   private readonly panes = new Map<string, Map<string, Pane>>()
@@ -112,9 +127,13 @@ export class PtyPool {
    *
    * 실패는 삼키지 않고 던진다. 사유가 그대로 화면에 올라가야 한다 — 빈 터미널만 보여 주면
    * 사용자가 자기 탓으로 여긴다.
+   *
+   * **이미 돌고 있었는지를 돌려준다** (`PaneOpenResult`). 화면에서 칸을 펴는 쪽은 그 값을
+   * 안 보지만, 거기에 명령을 밀어 넣는 쪽(`run_project`)에게는 그것이 곧 「겹쳐 띄우지
+   * 않는다」의 판정이다.
    */
-  async open(project: { id: string; root: string }, name: string): Promise<void> {
-    if (this.paneOf(project.id, name) !== undefined) return
+  async open(project: { id: string; root: string }, name: string): Promise<PaneOpenResult> {
+    if (this.paneOf(project.id, name) !== undefined) return { reclaimed: true }
 
     const client = await this.options.clientFor()
     const title = paneServerTitle(name)
@@ -123,6 +142,7 @@ export class PtyPool {
     )
     const pty = existing ?? (await client.create(project.root, { title }))
     this.attach(client, project, name, pty.id)
+    return { reclaimed: existing !== undefined }
   }
 
   private attach(

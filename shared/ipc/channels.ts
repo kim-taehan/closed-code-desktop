@@ -103,6 +103,18 @@ export interface DesktopMcpOpenFilePayload {
 /**
  * 데스크톱 MCP 서버의 `open_terminal` 도구가 셸 칸을 펴라고 했다 (`electron/mcp/openTerminal.ts`).
  */
+/**
+ * `run_project` 도구가 그 이름의 칸을 띄웠다 (`electron/mcp/runProject.ts`).
+ *
+ * 명령은 **싣지 않는다.** 화면은 그것으로 할 일이 없고(pty 에 넣는 일은 이 프레임이 나가기
+ * 전에 main 이 이미 끝냈다), 탭 이름은 `name` 이다. `open_terminal` 쪽이 쓰지도 않는 명령을
+ * 싣는 것은 그쪽 프레임이 "칸만 편 것" 과 구별되어야 해서다 — 여기는 그 구별이 없다.
+ */
+export interface DesktopMcpRunProjectPayload {
+  /** 칸 이름. 화면의 탭 이름이 되고 `read_logs` 가 그대로 쓴다 */
+  name: string
+}
+
 export interface DesktopMcpOpenTerminalPayload {
   /**
    * 채워 둔 명령. 없으면 칸만 편다.

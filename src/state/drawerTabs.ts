@@ -55,6 +55,19 @@ export function removePane(tabs: PaneTabs, name: string): PaneTabs {
   return { names, active: tabs.active === name ? (names[at - 1] ?? SHELL_PANE) : tabs.active }
 }
 
+/**
+ * 이름을 가진 칸 하나를 열어 앞에 놓는다. **이미 있으면 만들지 않고 고르기만 한다** —
+ * `run_project` 가 이미 돌고 있는 것을 다시 부를 때 같은 이름의 탭이 둘이 되면 안 된다.
+ *
+ * `addPane` 과 갈리는 지점은 **이름을 누가 짓는가**다. 저쪽은 "+" 를 누른 사용자를 위해
+ * 빈 번호를 찾아 짓고, 이쪽은 부르는 쪽이 준 이름을 그대로 쓴다 (main 의 pty 제목과 같은
+ * 값이어야 한다 — `electron/pty/ptyPool.ts` 의 `paneServerTitle`).
+ */
+export function openPane(tabs: PaneTabs, name: string): PaneTabs {
+  if (tabs.names.includes(name)) return { ...tabs, active: name }
+  return { names: [...tabs.names, name], active: name }
+}
+
 export function selectPane(tabs: PaneTabs, name: string): PaneTabs {
   return tabs.names.includes(name) ? { ...tabs, active: name } : tabs
 }
@@ -83,8 +96,9 @@ export function belongsToPane(
 /**
  * 화면에 적는 이름. 이름 자체(`shell-2`)는 pty 를 잇는 열쇠지 사람에게 보일 글이 아니다.
  *
- * 다음 회차에 `run_project` 가 들어오면 그 칸의 이름은 AGENTS.md 에서 온 것
- * (`dev`·`test`)이라 **그대로 보여주는 편이 낫다** — 그래서 셸 계열만 번역한다.
+ * `run_project` 가 여는 칸의 이름은 모델이 지은 것(`dev`·`test`)이라 **그대로 보여주는
+ * 편이 낫다** — 그래서 셸 계열만 번역한다. (그 이름을 AGENTS.md 에서 읽어 오는 길은
+ * 아직 없다. 지금은 도구 인자로 온다 — `electron/mcp/runProject.ts`.)
  */
 export function tabLabel(name: string): string {
   if (name === SHELL_PANE) return '셸'

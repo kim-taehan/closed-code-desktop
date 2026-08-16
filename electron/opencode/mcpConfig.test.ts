@@ -99,7 +99,7 @@ describe('mcpConfigFrame', () => {
     const ours = (await stateOf()).servers.find((s) => s.serverName === 'closed-code-desktop')
     expect(ours?.status).toBe('connected')
     expect(ours?.transport).toBe('unknown')
-    expect(ours?.tools).toEqual(['open_file', 'open_terminal'])
+    expect(ours?.tools).toEqual(['open_file', 'open_terminal', 'run_project', 'read_logs'])
   })
 
   it('남의 서버 도구는 지어내지 않는다', async () => {

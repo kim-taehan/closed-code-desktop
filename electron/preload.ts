@@ -10,6 +10,7 @@ import {
   type ChatSnapshotPayload,
   type DesktopMcpOpenFilePayload,
   type DesktopMcpOpenTerminalPayload,
+  type DesktopMcpRunProjectPayload,
   type ExtensionChatAskPayload,
   type PermissionModePayload,
   type WorkingDirPayload,
@@ -200,6 +201,8 @@ const bridge: DesktopBridge = {
     subscribe<DesktopMcpOpenFilePayload>(Channel.DESKTOP_MCP_OPEN_FILE, handler),
   onDesktopMcpOpenTerminal: (handler: ProjectHandler<DesktopMcpOpenTerminalPayload>) =>
     subscribe<DesktopMcpOpenTerminalPayload>(Channel.DESKTOP_MCP_OPEN_TERMINAL, handler),
+  onDesktopMcpRunProject: (handler: ProjectHandler<DesktopMcpRunProjectPayload>) =>
+    subscribe<DesktopMcpRunProjectPayload>(Channel.DESKTOP_MCP_RUN_PROJECT, handler),
   onExtensionChatAsk: (handler: ProjectHandler<ExtensionChatAskPayload>) =>
     subscribe<ExtensionChatAskPayload>(Channel.EXTENSION_CHAT_ASK, handler),
   requestModelOptions: () => ipcRenderer.invoke(Channel.MODEL_OPTIONS_REQUEST) as Promise<void>,

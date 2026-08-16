@@ -18,6 +18,9 @@ describe('createToolRunner', () => {
     focusedProjectId: () => 'A',
     openInView: openInView as unknown as McpToolPorts['openInView'],
     openTerminal: openTerminal as unknown as McpToolPorts['openTerminal'],
+    // 이 파일은 open_file·open_terminal 만 겨눈다 — 실행·로그는 runAndLogs.test.ts.
+    runProject: () => Promise.resolve({ ok: false as const, error: '여기서는 안 부른다' }),
+    readLogs: () => null,
     ...over,
   })
 
@@ -89,6 +92,9 @@ describe('createToolRunner — open_terminal', () => {
     focusedProjectId: () => 'A',
     openInView: () => true,
     openTerminal: openTerminal as unknown as McpToolPorts['openTerminal'],
+    // 이 파일은 open_file·open_terminal 만 겨눈다 — 실행·로그는 runAndLogs.test.ts.
+    runProject: () => Promise.resolve({ ok: false as const, error: '여기서는 안 부른다' }),
+    readLogs: () => null,
     ...over,
   })
 

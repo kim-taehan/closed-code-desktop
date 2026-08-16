@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   addPane,
   initialTabs,
+  openPane,
   removePane,
   selectPane,
   SHELL_PANE,
@@ -60,6 +61,14 @@ export interface ShellDrawer {
    * 사용자는 채워진 줄을 못 본다.
    */
   showShell: () => void
+  /**
+   * 그 이름의 칸을 만들어(없으면) 앞에 놓고 편다. `run_project`(MCP)가 쓰는 문이다.
+   *
+   * **pty 는 이 호출보다 먼저 떠 있다** — main 이 띄우고 나서 알려 준다
+   * (`electron/mcp/appWiring.ts`). 여기서 하는 일은 사용자에게 보이게 하는 것뿐이고,
+   * 그게 곧 **멈출 수 있게 하는 것**이다 (탭의 ✕ 말고는 멈추는 문이 없다).
+   */
+  showPane: (name: string) => void
   /** ⌘↓ — 셸로 내려간다. 접혀 있으면 펴면서 간다. */
   goDown: () => void
   /** ⌘↑ — 본문으로 올라오면서 **접는다**. 칸은 내려가 있는 동안만 보인다. */
@@ -179,6 +188,14 @@ export function useShellDrawer(projectId: string | null): ShellDrawer {
 
   const showShell = useCallback(() => selectTab(SHELL_PANE), [selectTab])
 
+  const showPane = useCallback(
+    (name: string) => {
+      update((current) => openPane(current, name))
+      goDown()
+    },
+    [update, goDown],
+  )
+
   return {
     open,
     height,
@@ -194,6 +211,7 @@ export function useShellDrawer(projectId: string | null): ShellDrawer {
     addTab,
     closeTab,
     showShell,
+    showPane,
   }
 }
 

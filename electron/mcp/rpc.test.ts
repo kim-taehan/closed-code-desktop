@@ -42,7 +42,7 @@ describe('handleRpc', () => {
   it('도구 목록', async () => {
     const response = await handleRpc({ id: 2, method: 'tools/list' }, never)
     const result = response?.result as { tools: { name: string }[] }
-    expect(result.tools.map((tool) => tool.name)).toEqual(['open_file', 'open_terminal'])
+    expect(result.tools.map((tool) => tool.name)).toEqual(['open_file', 'open_terminal', 'run_project', 'read_logs'])
   })
 
   it('슬래시 커맨드로 open 을 내놓는다', async () => {

@@ -3,6 +3,7 @@ import {
   addPane,
   belongsToPane,
   initialTabs,
+  openPane,
   removePane,
   selectPane,
   SHELL_PANE,
@@ -80,8 +81,21 @@ describe('drawerTabs', () => {
     })
   })
 
+  // `run_project` 가 여는 칸. 이름을 부르는 쪽이 정한다 (main 의 pty 제목과 같아야 한다)
+  describe('openPane', () => {
+    it('없으면 만들어 앞에 놓는다', () => {
+      expect(openPane(initialTabs, 'dev')).toEqual({ names: [SHELL_PANE, 'dev'], active: 'dev' })
+    })
+
+    // 이미 돌고 있는 것을 다시 부를 때 같은 이름의 탭이 둘이 되면 안 된다
+    it('이미 있으면 고르기만 한다', () => {
+      const opened = openPane(initialTabs, 'dev')
+      expect(openPane(opened, 'dev')).toEqual(opened)
+    })
+  })
+
   // 이름(`shell-2`)은 pty 를 잇는 열쇠지 사람에게 보일 글이 아니다.
-  // 다음 회차의 `run_project` 는 AGENTS.md 에서 온 이름을 쓰므로 그대로 보인다.
+  // `run_project` 가 여는 칸의 이름은 모델이 지은 것이라 그대로 보인다.
   it('화면 이름은 셸 계열만 번역한다', () => {
     expect(tabLabel(SHELL_PANE)).toBe('셸')
     expect(tabLabel('shell-2')).toBe('셸 2')

@@ -79,6 +79,56 @@ export const TOOLS = [
       required: [],
     },
   },
+  {
+    name: 'run_project',
+    description:
+      '개발 서버·테스트 감시처럼 **안 끝나는 명령**을 Open Code Desktop 이 붙들고 돌린다. 셸 도구는 명령이 끝나야 출력이 나와서 이런 것을 못 돌린다 — 이 도구는 시작만 하고 곧바로 돌아오며, 출력은 read_logs 로 읽는다. 같은 이름이 이미 돌고 있으면 겹쳐 띄우지 않고 그 사실을 알려준다. **멈추거나 다시 띄우는 기능은 없다** — 사용자가 보고 있던 것을 없애는 일이라 사용자가 직접 탭을 닫아야 한다. 사용자가 다른 프로젝트를 보고 있으면 띄우지 못하며, 그 사실을 결과로 알려준다.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: {
+          type: 'string',
+          description:
+            '이 프로세스를 부를 짧은 이름 (dev · test · build 등). 화면의 탭 이름이 되고, read_logs 로 로그를 물을 때 이 이름을 쓴다. 사용자의 셸 칸 이름(shell…)은 쓸 수 없다.',
+        },
+        command: {
+          type: 'string',
+          description:
+            '프로젝트 루트에서 돌릴 명령 한 줄 (예: `npm run dev`). **개행을 넣지 마라** — 여러 개를 이어 돌리려면 `&&` 로 한 줄에 쓴다.',
+        },
+      },
+      required: ['name', 'command'],
+    },
+  },
+  {
+    name: 'read_logs',
+    description:
+      'run_project 로 띄워 **지금 돌고 있는** 프로세스가 그동안 뱉은 출력을 읽는다. 셸 도구가 명령을 새로 돌리는 것과 다르다 — 이쪽은 이미 돌고 있는 것을 들여다볼 뿐이라 아무것도 실행하지 않는다. 개발 서버가 떴는지, 방금 고친 파일이 다시 컴파일됐는지, 무슨 오류가 났는지를 볼 때 쓴다. **결과는 반드시 잘려서 오고 전체 줄 수가 함께 온다** — 잘렸으면 tail·level·since 로 좁혀 다시 부른다.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: {
+          type: 'string',
+          description: 'run_project 로 띄울 때 준 이름.',
+        },
+        tail: {
+          type: 'number',
+          description: '마지막 몇 줄을 볼지. 기본 100줄, 최대 1000줄.',
+        },
+        level: {
+          type: 'string',
+          description:
+            '`error` 면 오류로 보이는 줄만, `warn` 이면 경고까지, `all`(기본)이면 전부. 수천 줄에서 문제만 집을 때 쓴다. 낱말로 짐작하는 것이라 놓치는 줄이 있을 수 있다.',
+        },
+        since: {
+          type: 'number',
+          description:
+            '여기부터 뒤만 본다. **지난번 답의 마지막 줄에 실린 값을 그대로 주면** 그 뒤에 새로 나온 것만 온다 — 고치고 다시 물을 때 같은 것을 두 번 읽지 않는 길이다.',
+        },
+      },
+      required: ['name'],
+    },
+  },
 ] as const
 
 /**

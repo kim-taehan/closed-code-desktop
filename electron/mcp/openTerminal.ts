@@ -11,8 +11,12 @@
  *
  * `\r` 도 `\n` 과 같이 실행이고, ESC·탭도 셸에서 제 뜻대로 움직인다(완성·키 바인딩).
  * 넓게 막는 쪽이 안전하다 — 사람이 읽을 한 줄 명령에 제어문자가 필요할 일이 없다.
+ *
+ * `run_project` 도 같은 것을 쓴다 (`runProject.ts`). **막는 이유는 거기서 다르다** —
+ * 이쪽은 사용자가 보기 전에 실행되어 버리는 것을, 저쪽은 명령이 여럿으로 쪼개져 우리가
+ * 돌려준 문장과 실제로 돈 것이 어긋나는 것을 막는다. 규칙이 같아 한 벌만 둔다.
  */
-const CONTROL = /[\u0000-\u001f\u007f]/
+export const CONTROL_CHARS = /[\u0000-\u001f\u007f]/
 
 /**
  * 채울 명령을 꺼낸다. 없으면 `null` — 그때는 칸만 편다.
@@ -29,7 +33,7 @@ export function commandOf(args: Record<string, unknown>): string | null {
 
   const command = asked.trim()
   if (command === '') return null
-  if (CONTROL.test(command)) {
+  if (CONTROL_CHARS.test(command)) {
     throw new Error(
       '여러 줄 명령이나 제어문자는 채울 수 없습니다 — 셸에 들어가는 즉시 실행되어 버려서, 사용자가 눈으로 확인할 기회가 사라집니다. 한 줄짜리 명령으로 다시 부르세요.',
     )
