@@ -75,4 +75,54 @@ describe('빈 대화 판정', () => {
     })
     expect(empty.size).toBe(0)
   })
+
+  // 후보가 2289건이던 실측이 있다 (머리말 분포). 상한이 없으면 그만큼이 한 프레임에 뜬다.
+  describe('팬아웃 상한', () => {
+    /** 조회를 손으로 풀어 **동시에 몇 개가 떠 있는지** 잰다 */
+    function gated(count: number) {
+      const release: Array<() => void> = []
+      let inflight = 0
+      let peak = 0
+      const asked: string[] = []
+      const fetchMessages = async (id: string): Promise<OpencodeMessage[]> => {
+        asked.push(id)
+        inflight += 1
+        peak = Math.max(peak, inflight)
+        await new Promise<void>((resolve) => release.push(resolve))
+        inflight -= 1
+        return []
+      }
+      const sessions = Array.from({ length: count }, (_, index) => session(`ses_${index}`))
+      return { sessions, fetchMessages, asked, drain: () => release.splice(0).forEach((fn) => fn()), peak: () => peak }
+    }
+
+    it('한꺼번에 8개까지만 띄운다', async () => {
+      const g = gated(40)
+      const done = verifyEmptyChats(g.sessions, g.fetchMessages)
+      // 다 풀릴 때까지 돌린다 — 매번 최대 8개만 떠 있어야 한다
+      for (let round = 0; round < 40; round += 1) {
+        await Promise.resolve()
+        g.drain()
+      }
+      await done
+
+      expect(g.peak()).toBeLessThanOrEqual(8)
+      expect(g.peak()).toBeGreaterThan(1)
+    })
+
+    // ⚠️ **상한을 넣으면서 세는 단계를 걷어내면** 그날 진짜 대화가 사라진다
+    // (`looksEmpty` 의 반례). 후보는 하나도 빠짐없이 세어져야 한다.
+    it('상한이 있어도 후보는 전부 센다', async () => {
+      const g = gated(40)
+      const done = verifyEmptyChats(g.sessions, g.fetchMessages)
+      for (let round = 0; round < 40; round += 1) {
+        await Promise.resolve()
+        g.drain()
+      }
+      const empty = await done
+
+      expect(g.asked).toHaveLength(40)
+      expect(empty.size).toBe(40)
+    })
+  })
 })

@@ -71,6 +71,22 @@ function looksEmpty(session: OpencodeSession): boolean {
 }
 
 /**
+ * 한 번에 띄우는 조회 수.
+ *
+ * ⚠️ **세는 단계를 줄이는 것이 아니다** — 후보는 여전히 **전부** 세어 본다 (안 그러면
+ * `looksEmpty` 의 ⚠️ 절이 말하는 반례에서 진짜 대화가 사라진다). 동시에 띄우는 수만 묶는다.
+ *
+ * 상한이 없으면 후보 수만큼 한꺼번에 나갔다. 실측 규모가 그걸 정당화하지 않는다:
+ * 세션 2550건 중 **후보가 2289건**이었다(위 분포) — 대화 목록을 한 번 여는 데 fetch 2289개가
+ * 한 프레임에 뜬다. 증상은 "목록이 안 뜬다" 이고, 원인이 목록 코드가 아니라 여기다.
+ *
+ * 8 인 근거는 계측이 아니라 **자리**다: 이 조회는 목록을 그리는 길목이라 한 줄씩 하면
+ * 2289번 왕복이 되고(느려서 못 쓴다), 동시에 사용자가 아무것도 안 눌렀는데 나가는 요청이라
+ * 서버를 두들길 자격도 없다. 재서 고칠 값이면 여기만 고치면 된다.
+ */
+const MAX_INFLIGHT = 8
+
+/**
  * 메시지가 **0건인 것이 확인된** 세션 id 들.
  *
  * 조회가 실패하면 그 세션은 빼고 넘어간다 — 못 셌다는 이유로 「빈 대화」 딱지를 붙이면,
@@ -85,14 +101,23 @@ export async function verifyEmptyChats(
     .map((session) => session.id)
     .filter((id): id is string => typeof id === 'string' && id !== '')
 
-  const counted = await Promise.all(
-    candidates.map(async (id) => {
+  const empty = new Set<string>()
+  let next = 0
+
+  // 일꾼 여럿이 **같은 줄에서 하나씩** 집어 간다. 후보를 미리 토막으로 쪼개 나누지 않는
+  // 이유: 세션마다 메시지 수가 크게 달라(최대 302건 실측) 토막마다 걸리는 시간이 갈리고,
+  // 그러면 빠른 토막이 끝난 뒤 놀게 된다.
+  const worker = async (): Promise<void> => {
+    for (let id = candidates[next++]; id !== undefined; id = candidates[next++]) {
       try {
-        return (await fetchMessages(id)).length === 0 ? id : null
+        if ((await fetchMessages(id)).length === 0) empty.add(id)
       } catch {
-        return null
+        // 못 셌다 — 빼고 넘어간다 (위 주석). 「빈 대화」로는 절대 안 찍는다.
       }
-    }),
-  )
-  return new Set(counted.filter((id): id is string => id !== null))
+    }
+  }
+
+  const workers = Math.min(MAX_INFLIGHT, candidates.length)
+  await Promise.all(Array.from({ length: workers }, worker))
+  return empty
 }
