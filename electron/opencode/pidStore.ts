@@ -22,6 +22,24 @@ import { readFileSync, writeFileSync } from 'node:fs'
 // 남는 위험은 "그 사이 같은 opencode 바이너리로 사용자가 손수 띄운 것이 하필 그 PID 를
 // 물려받은" 경우뿐이고, 그건 받아들인다. **`pkill -f opencode` 같은 넓은 종료는 절대 안 쓴다** —
 // 그건 사용자가 손으로 띄운 서버를 반드시 죽인다.
+//
+// ## ⚠️ 이 대조가 통하는 **성립 조건** (실측 2026-08-16, contract-qa)
+//
+// 진짜 `opencode serve` 로 재 보면 맞는다:
+//
+//     ps  → /Users/…/.bun/bin/opencode serve --hostname 127.0.0.1
+//     bin → /Users/…/.bun/bin/opencode                     ✓ includes · ✓ serve
+//
+// **맞는 이유는 `ps` 의 argv[0] 이 우리가 spawn 에 넘긴 그 문자열 그대로이기 때문이다.**
+// 우리가 넘기는 것은 `binary.ts` 가 찾은 경로(`join(dir, 'opencode')`)이고, 그것을 그대로
+// `bin` 으로 적는다 — 두 문자열이 같은 출처라 부분문자열 대조가 통한다.
+//
+// **그 조건이 깨지는 날이 있다.** `binary.ts` 가 나중에 realpath 로 심볼릭 링크를 풀어
+// (`~/.bun/install/global/node_modules/.bin/opencode` 같은 실체 경로로) 적기 시작하면,
+// argv[0] 은 여전히 링크 경로라 텍스트가 갈리고 이 대조는 **조용히 거짓**이 된다.
+// 그때의 증상은 "우리 서버가 남의 것으로 보인다" 이고, 화면에는
+// **"서버가 자꾸 하나씩 는다"** 로만 나타난다 — 회수도 안 되고 재시작도 안 된다.
+// `binary.ts` 의 경로 해석을 고칠 때는 반드시 이 자리를 함께 본다.
 
 /** 우리가 띄운 서버 하나의 흔적. 파일에 그대로 적힌다. */
 export interface ServerRecord {

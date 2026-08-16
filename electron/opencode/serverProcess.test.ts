@@ -141,3 +141,26 @@ describe('startOpencodeServer', () => {
     expect(child.signals).toEqual(['SIGTERM'])
   })
 })
+
+// ⭐⭐ **`pidStore` 의 명령줄 대조가 여기에 매달려 있다** (실측 2026-08-16, contract-qa).
+//
+// 회수(`reap`)와 주인 판정(`owns`)은 `ps -p <pid> -o command=` 의 argv[0] 이 우리가 적어 둔
+// `bin` 을 **부분문자열로 품는지**로 판정한다. 그게 통하는 이유는 딱 하나다 —
+// **spawn 에 넘긴 문자열과 기록하는 문자열이 같은 출처**라서다.
+//
+// 둘이 갈리는 날(예: 여기서 realpath 로 심볼릭 링크를 풀어 적으면) 대조는 **조용히 거짓**이
+// 되고, 증상은 "우리 서버가 남의 것으로 보인다" → **서버가 자꾸 하나씩 는다** 로만 나온다.
+// 회수도 재시작도 안 되는데 어느 테스트도 안 빨개진다. 그래서 그 동일성을 여기서 잠근다.
+describe('bin 은 spawn 에 넘긴 그 문자열이다', () => {
+  it('기록하는 bin 과 spawn 이 받은 binPath 가 같다', async () => {
+    const { spawnImpl, child, calls } = fakeSpawn()
+    const started = startOpencodeServer({ binPath: '/opt/bun/bin/opencode', cwd: '/p/a', spawnImpl })
+    child.stdout.write('listening on http://127.0.0.1:55640\n')
+    const server = await started
+
+    const spawned = (calls[0] as { binPath: string }).binPath
+    expect(server.bin).toBe(spawned)
+    // 대조가 실제로 통하는 모양인지까지 본다 — `isOurServer` 가 하는 것과 같은 물음이다
+    expect(`${spawned} serve --hostname 127.0.0.1`).toContain(server.bin)
+  })
+})
