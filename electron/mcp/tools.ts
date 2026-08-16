@@ -3,6 +3,7 @@ import { openTargetOf, type OpenTarget } from './openFile'
 import { commandOf } from './openTerminal'
 import { formatLogs, readLogsQuery } from './readLogs'
 import { runProjectInput } from './runProject'
+import { runCommandsInput, saveRunCommands } from './saveRunCommands'
 import type { RunProjectTool } from './server'
 
 // 프로젝트 신원 하나로 도구를 돌리는 자리. `server.ts` 가 URL 에서 읽어 넘겨준다.
@@ -10,8 +11,12 @@ import type { RunProjectTool } from './server'
 // **앱 상태를 직접 알지 않는다.** 레지스트리도 창도 여기서 import 하지 않고 포트로 받는다 —
 // 그래야 테스트가 진짜 프로젝트 없이 이 판단만 겨눌 수 있고, `electron` 을 안 물어 온다.
 //
-// 도구가 하는 일은 **화면에 알리는 것뿐**이다 — 파일을 직접 읽거나 고치지 않는다.
 // 프로젝트 신원은 요청이 스스로 주장하는 것이 아니라 우리가 등록할 때 정해 준 주소로 정해진다.
+//
+// ⚠️ 여기에는 **"도구가 하는 일은 화면에 알리는 것뿐이고 파일을 고치지 않는다"** 고 적혀
+// 있었다. 도구 넷일 때는 참이었고 `save_run_commands` 가 들어오며 거짓이 됐다 — 그것은
+// AGENTS.md 를 **쓴다.** 그래서 규칙을 고쳐 적는다: **파일을 고치는 도구는 자기 파일 조작을
+// 자기 모듈에 두고**(`saveRunCommands.ts`), 이 파일은 갈래와 돌려줄 문장만 정한다.
 
 export interface McpToolPorts {
   /** 열려 있는 프로젝트의 루트. 모르는(닫힌) 프로젝트면 null */
@@ -37,6 +42,14 @@ export interface McpToolPorts {
   ): Promise<{ ok: true; started: boolean } | { ok: false; error: string }>
   /** 그 칸이 붙들고 있는 지나간 출력. 그런 칸이 없으면 null (`outputBuffer.ts`) */
   readLogs(projectId: string, name: string): OutputSnapshot | null
+  /**
+   * AGENTS.md 의 「실행」 절이 방금 바뀌었다 — **화면에 알린다.**
+   *
+   * 파일을 고치는 것은 `saveRunCommands` 가 이미 끝냈고 여기서는 알리기만 한다. 안 알리면
+   * 사이드바가 20초 전에 읽어 둔 목록을 그대로 들고 있어, 사용자에게는 「찾을까요?」를
+   * 눌렀는데 아무 일도 안 일어난 것으로 보인다 (사용자가 ↻ 를 누를 때까지).
+   */
+  runListChanged(projectId: string): void
 }
 
 export function createToolRunner(ports: McpToolPorts): RunProjectTool {
@@ -60,6 +73,9 @@ export function createToolRunner(ports: McpToolPorts): RunProjectTool {
     // main 이 붙들고 있어(`outputBuffer`) 어느 탭을 보고 있든 그대로 읽힌다. 사용자가 탭을
     // 옮겼다는 이유로 "못 읽는다" 를 돌려주면 모델이 고칠 수 없는 벽이 된다.
     if (name === 'read_logs') return runReadLogs(ports, projectId, args)
+    // **적는 것도 앞에 나와 있지 않아도 된다** — 파일에 적는 일이고 화면을 건드리지 않는다.
+    // 사용자가 다른 탭을 보는 동안 적어 둬도 그 프로젝트로 돌아오면 그대로 있다.
+    if (name === 'save_run_commands') return await runSaveRunCommands(ports, projectId, root, args)
     throw new Error(`모르는 도구입니다: ${name}`)
   }
 }
@@ -154,4 +170,24 @@ function runReadLogs(
     return `\`${query.name}\` 이라는 이름으로 도는 것이 없습니다 — 아직 안 띄웠거나(run_project), 사용자가 그 탭을 닫았습니다. 로그가 있었더라도 탭을 닫는 순간 함께 사라집니다.`
   }
   return formatLogs(query, snapshot)
+}
+
+/**
+ * 알아낸 실행 방법을 AGENTS.md 에 적는다 (설계 §2 — **파일이 곧 캐시다**).
+ *
+ * 위 셋과 달리 **아무것도 실행하지 않는다.** 돌려주는 문장이 그 사실을 분명히 해야 한다 —
+ * 모델이 "띄웠다" 로 읽고 사용자에게 그렇게 말하면, 사용자는 뜨지도 않은 서버를 찾는다.
+ */
+async function runSaveRunCommands(
+  ports: McpToolPorts,
+  projectId: string,
+  root: string,
+  args: Record<string, unknown>,
+): Promise<string> {
+  const saved = await saveRunCommands(root, runCommandsInput(args))
+  ports.runListChanged(projectId)
+
+  const list = saved.entries.map((entry) => `${entry.name}(\`${entry.command}\`)`).join(' · ')
+  const verb = saved.replaced ? '고쳐 적었습니다' : '적었습니다'
+  return `${saved.path} 의 「실행」 절에 ${saved.entries.length}개를 ${verb}: ${list}. **아무것도 실행하지 않았습니다** — 사용자가 사이드바 「실행」 패널에서 ▶ 로 띄웁니다. 지금 바로 돌려야 하는 것이 있으면 run_project 를 따로 부르세요.`
 }

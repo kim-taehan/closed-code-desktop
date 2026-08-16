@@ -24,6 +24,7 @@ describe('사이드바 패널 선택기', () => {
       '프로젝트',
       '소스 관리',
       '채팅이력',
+      '실행',
     ])
   })
 
@@ -74,7 +75,7 @@ describe('확장이 등록한 패널', () => {
     { id: 'ext:sample-ext:sampleExt.results' as const, title: '샘플 확장' },
   ]
 
-  it('내장 3개 뒤에 붙는다 — 순서는 설치 목록 순서다', () => {
+  it('내장 넷 뒤에 붙는다 — 순서는 설치 목록 순서다', () => {
     render(<SidebarPanelSelect panel="files" extensionPanels={PANELS} onChange={() => {}} />)
 
     fireEvent.click(screen.getByRole('button'))
@@ -82,16 +83,17 @@ describe('확장이 등록한 패널', () => {
       '프로젝트',
       '소스 관리',
       '채팅이력',
+      '실행',
       '파일 크기',
       '샘플 확장',
     ])
   })
 
-  it('확장이 없으면 내장 3개 그대로다 — 빈 구분선도 그리지 않는다', () => {
+  it('확장이 없으면 내장 넷 그대로다 — 빈 구분선도 그리지 않는다', () => {
     const { container } = render(<SidebarPanelSelect panel="files" onChange={() => {}} />)
 
     fireEvent.click(screen.getByRole('button'))
-    expect(screen.getAllByRole('option')).toHaveLength(3)
+    expect(screen.getAllByRole('option')).toHaveLength(4)
     expect(container.querySelector('.dc-panel-select__rule')).toBeNull()
   })
 

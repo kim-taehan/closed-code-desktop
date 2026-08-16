@@ -136,6 +136,21 @@ export const Channel = {
   PTY_DATA: 'pty:data',
   /** main → renderer: 셸이 끝났다. 종료 코드는 프레임에 없어 main 이 다시 물어 온다 */
   PTY_EXIT: 'pty:exit',
+  /**
+   * renderer → main: **사이드바 「실행」 패널의 ▶** — 그 칸에서 명령을 돌린다.
+   * `PTY_OPEN` 과 갈리는 지점은 **개행**이고, `run_project` 도구와 **같은 함수**를 탄다
+   * (`PtyDrawerBridge.run`) — 문이 둘이어도 「겹쳐 띄우지 않는다」는 한 곳에서 판정한다.
+   *
+   * ⚠️ **화면은 이 왕복이 끝난 뒤에 탭을 만든다.** 먼저 만들면 그 탭이 같은 이름으로 칸을 열고
+   * (`PTY_OPEN`) main 이 「이미 돌고 있다」로 읽어 명령이 영영 안 들어간다 (`appWiring.ts`).
+   */
+  PTY_RUN: 'pty:run',
+  /**
+   * main → renderer: **AGENTS.md 의 「실행」 절이 바뀌었다** (`save_run_commands`).
+   * 목록은 안 싣는다 — 정본은 파일이고(설계 §2 「파일이 곧 캐시다」) 화면이 다시 읽는다.
+   * 실어 보내면 정본이 둘이 되고, 사람이 손으로 고친 경우가 다른 길을 타게 된다.
+   */
+  RUN_LIST_CHANGED: 'run:listChanged',
   /** renderer → main: 대화에 붙일 것을 고른다 (이미지·파일 구분 없이) */
   ATTACH_PICK: 'attach:pick',
   ATTACH_RESOLVE: 'attach:resolve', // 드래그드롭 경로 판별 (다이얼로그 없이)

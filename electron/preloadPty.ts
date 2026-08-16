@@ -9,6 +9,8 @@ import type {
   PtyOpenPayload,
   PtyOpenResult,
   PtyResizePayload,
+  PtyRunPayload,
+  PtyRunResult,
 } from '../shared/ipc/ptyPayloads'
 
 // 셸 드로어 배선. `preloadGit.ts` 와 같은 자리·같은 이유다 — preload.ts 가 300줄 상한에
@@ -34,6 +36,10 @@ type PtyBridge = Pick<
   | 'closeShellPane'
   | 'onShellData'
   | 'onShellExit'
+  // 사이드바 「실행」 패널의 둘. 같은 pty 배선을 타므로 여기 함께 둔다 —
+  // 표면만 `runBridgeSurface.ts` 로 갈라져 있다 (그쪽 머리말).
+  | 'runShellPane'
+  | 'onRunListChanged'
 >
 
 export function ptyBridge(subscribe: Subscribe): PtyBridge {
@@ -52,5 +58,10 @@ export function ptyBridge(subscribe: Subscribe): PtyBridge {
       subscribe<PtyDataPayload>(Channel.PTY_DATA, handler),
     onShellExit: (handler: ProjectHandler<PtyExitPayload>) =>
       subscribe<PtyExitPayload>(Channel.PTY_EXIT, handler),
+    // ▶ 도 `invoke` 다 — 화면은 이 왕복이 끝난 **뒤에** 탭을 만들어야 한다 (`PTY_RUN` 머리말)
+    runShellPane: (payload: PtyRunPayload) =>
+      ipcRenderer.invoke(Channel.PTY_RUN, payload) as Promise<PtyRunResult>,
+    onRunListChanged: (handler: ProjectHandler<Record<string, never>>) =>
+      subscribe<Record<string, never>>(Channel.RUN_LIST_CHANGED, handler),
   }
 }

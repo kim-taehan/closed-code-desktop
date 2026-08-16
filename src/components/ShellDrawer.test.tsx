@@ -36,6 +36,8 @@ function drawer(over: Partial<DrawerState> = {}): DrawerState {
     everOpened: true,
     focus: 'drawer',
     tabs: initialTabs,
+    // 종료 코드 표는 「실행」 패널의 점이 쓴다 — 드로어 자신은 안 본다
+    exits: { exitOf: () => undefined, clear: () => {} },
     goDown: () => {},
     goUp: () => {},
     close: () => {},

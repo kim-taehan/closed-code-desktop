@@ -7,11 +7,13 @@ import { useShellDrawer } from './useShellDrawer'
 const KEY = 'davis.shellDrawerHeight'
 
 const closeShellPane = vi.fn()
+/** 종료 신호를 듣는 자리가 이 훅 안으로 들어왔다 (`usePaneExits`) — 없으면 마운트가 터진다 */
+const onShellExit = vi.fn().mockReturnValue(() => {})
 
 beforeEach(() => {
   localStorage.clear()
   closeShellPane.mockClear()
-  window.davis = { closeShellPane } as never
+  window.davis = { closeShellPane, onShellExit } as never
 })
 
 describe('useShellDrawer', () => {

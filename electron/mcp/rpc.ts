@@ -1,3 +1,5 @@
+import { TOOLS } from './toolSchemas'
+
 // MCP 요청 하나를 응답 하나로 바꾸는 자리.
 //
 // ⚠️ **`electron/session/mcpConfig.ts` 와 다른 것이다.** 저쪽은 앱이 MCP **클라이언트**로서
@@ -5,7 +7,11 @@
 // **서버**가 되어 에이전트가 앱을 조작하게 여는 문이다. 같은 낱말이 두 뜻으로 쓰인다.
 //
 // **HTTP 를 모른다.** 소켓·헤더·토큰은 옆의 server.ts 가 보고, 여기는 JSON-RPC 객체만
-// 다룬다. 프로토콜은 손으로 쓴다 — 메서드 몇 개에 도구 둘이라 SDK 를 들일 만큼이 아니다.
+// 다룬다. 프로토콜은 손으로 쓴다 — 메서드 몇 개에 도구 몇이라 SDK 를 들일 만큼이 아니다.
+// (처음 적을 때는 "도구 둘" 이었다. 도구는 늘었고 판단은 그대로다.)
+//
+// **도구 목록은 `toolSchemas.ts` 에 있다** — 이 파일이 300줄 상한에 닿아 갈랐다.
+// `TOOLS` 는 여기서 그대로 다시 내보낸다: 부르는 쪽들이 이 이름으로 알고 있다.
 //
 // `develop-desktop/electron/mcp/rpc.ts` 를 옮겨 왔다. 바뀐 것은 서버 이름과 도구 설명뿐이고
 // 프로토콜 처리는 그대로다 — 상대가 claude 든 opencode 든 같은 JSON-RPC 다.
@@ -42,94 +48,7 @@ export interface RpcResponse {
 /** 도구를 실제로 돌리는 쪽. 실패는 던져서 알린다 — 그 말이 그대로 모델에게 간다. */
 export type RunTool = (name: string, args: Record<string, unknown>) => Promise<string>
 
-export const TOOLS = [
-  {
-    name: 'open_file',
-    description:
-      '이 프로젝트의 파일을 Open Code Desktop 화면에 연다. 사용자가 파일을 눈으로 보고 싶어 할 때 쓴다. 사용자가 다른 프로젝트를 보고 있으면 열지 못하며, 그 사실을 결과로 알려준다.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        path: {
-          type: 'string',
-          description: '프로젝트 루트 기준 상대경로. 절대경로도 받지만 루트 밖이면 거부한다.',
-        },
-        line: {
-          type: 'number',
-          description: '열면서 옮겨 갈 줄 번호 (1부터). 없으면 파일 첫머리를 연다.',
-        },
-      },
-      required: ['path'],
-    },
-  },
-  {
-    name: 'open_terminal',
-    description:
-      'Open Code Desktop 화면 아래 셸 칸을 펴고, 명령을 **채워만 둔다 — 실행하지 않는다.** 사용자가 화면에서 눈으로 확인하고 직접 엔터를 친다. 지우거나 되돌리기 어려운 명령, 사용자가 판단해야 하는 명령을 제안할 때 쓴다. 결과가 곧바로 필요하면 이 도구가 아니라 셸을 직접 실행하는 도구를 쓴다 — 여기서는 아무것도 돌아가지 않는다. 사용자가 다른 프로젝트를 보고 있으면 열지 못하며, 그 사실을 결과로 알려준다.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        command: {
-          type: 'string',
-          description:
-            '채울 명령 한 줄. 없으면 칸만 편다. **개행을 넣지 마라** — 셸에 들어가는 즉시 실행되어 사용자가 확인할 기회가 사라지므로 거절한다.',
-        },
-      },
-      // command 는 없어도 된다 — "터미널 좀 열어 줘" 만으로도 뜻이 있다
-      required: [],
-    },
-  },
-  {
-    name: 'run_project',
-    description:
-      '개발 서버·테스트 감시처럼 **안 끝나는 명령**을 Open Code Desktop 이 붙들고 돌린다. 셸 도구는 명령이 끝나야 출력이 나와서 이런 것을 못 돌린다 — 이 도구는 시작만 하고 곧바로 돌아오며, 출력은 read_logs 로 읽는다. 같은 이름이 이미 돌고 있으면 겹쳐 띄우지 않고 그 사실을 알려준다. **멈추거나 다시 띄우는 기능은 없다** — 사용자가 보고 있던 것을 없애는 일이라 사용자가 직접 탭을 닫아야 한다. 사용자가 다른 프로젝트를 보고 있으면 띄우지 못하며, 그 사실을 결과로 알려준다.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        name: {
-          type: 'string',
-          description:
-            '이 프로세스를 부를 짧은 이름 (dev · test · build 등). 화면의 탭 이름이 되고, read_logs 로 로그를 물을 때 이 이름을 쓴다. 사용자의 셸 칸 이름(shell…)은 쓸 수 없다.',
-        },
-        command: {
-          type: 'string',
-          description:
-            '프로젝트 루트에서 돌릴 명령 한 줄 (예: `npm run dev`). **개행을 넣지 마라** — 여러 개를 이어 돌리려면 `&&` 로 한 줄에 쓴다.',
-        },
-      },
-      required: ['name', 'command'],
-    },
-  },
-  {
-    name: 'read_logs',
-    description:
-      'run_project 로 띄워 **지금 돌고 있는** 프로세스가 그동안 뱉은 출력을 읽는다. 셸 도구가 명령을 새로 돌리는 것과 다르다 — 이쪽은 이미 돌고 있는 것을 들여다볼 뿐이라 아무것도 실행하지 않는다. 개발 서버가 떴는지, 방금 고친 파일이 다시 컴파일됐는지, 무슨 오류가 났는지를 볼 때 쓴다. **결과는 반드시 잘려서 오고 전체 줄 수가 함께 온다** — 잘렸으면 tail·level·since 로 좁혀 다시 부른다.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        name: {
-          type: 'string',
-          description: 'run_project 로 띄울 때 준 이름.',
-        },
-        tail: {
-          type: 'number',
-          description: '마지막 몇 줄을 볼지. 기본 100줄, 최대 1000줄.',
-        },
-        level: {
-          type: 'string',
-          description:
-            '`error` 면 오류로 보이는 줄만, `warn` 이면 경고까지, `all`(기본)이면 전부. 수천 줄에서 문제만 집을 때 쓴다. 낱말로 짐작하는 것이라 놓치는 줄이 있을 수 있다.',
-        },
-        since: {
-          type: 'number',
-          description:
-            '여기부터 뒤만 본다. **지난번 답의 마지막 줄에 실린 값을 그대로 주면** 그 뒤에 새로 나온 것만 온다 — 고치고 다시 물을 때 같은 것을 두 번 읽지 않는 길이다.',
-        },
-      },
-      required: ['name'],
-    },
-  },
-] as const
+export { TOOLS }
 
 /**
  * 슬래시 커맨드로 나가는 것들.

@@ -24,6 +24,26 @@ export interface PtyOpenResult {
   error?: string
 }
 
+/**
+ * 사이드바 「실행」 패널의 ▶ — 그 이름의 칸에서 명령을 **돌린다** (`PtyOpenPayload` 와 갈리는
+ * 지점은 개행이다).
+ *
+ * **명령은 화면이 싣는다.** 어디서 읽었는지도 화면이 안다 — AGENTS.md 의 「실행」 절이고
+ * (`shared/run/runSection.ts`), 그 파일을 읽는 것은 렌더러다. main 이 다시 읽으면 화면이
+ * 보여 준 줄과 실제로 도는 명령이 갈릴 수 있다: 사용자가 목록을 보고 ▶ 를 누른 그 순간
+ * 사이에 파일이 바뀌었으면, 사용자는 자기가 안 고른 것을 띄우게 된다.
+ */
+export interface PtyRunPayload {
+  name: string
+  command: string
+}
+
+/**
+ * ▶ 의 결과. **`started` 가 거짓이면 이미 돌고 있던 것**이고 우리는 아무것도 안 했다
+ * (설계 §3 「겹쳐 띄우지 않는다」 — 화면은 그 탭으로 옮겨 가기만 한다).
+ */
+export type PtyRunResult = { ok: true; started: boolean } | { ok: false; error: string }
+
 /** 사용자가 누른 키. **원시 바이트다** — JSON 봉투로 감싸면 그 JSON 이 셸에 타이핑된다 (실측). */
 export interface PtyInputPayload {
   name: string

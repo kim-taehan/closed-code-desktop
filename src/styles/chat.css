@@ -5135,3 +5135,140 @@ body {
 .drawer__term {
   height: 100%;
 }
+
+
+/* ── 사이드바 「실행」 패널 (설계 2026-08-16 §1) ────────── */
+
+/* 목록·빈 자리·출처 세 덩이가 세로로 쌓이고, **출처는 늘 바닥**이다 —
+   목록이 틀렸을 때 사용자가 갈 곳이라 목록 길이에 따라 자리가 옮겨 다니면 안 된다. */
+.dc-run {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 4px 6px;
+}
+
+.dc-run__bar {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.dc-run__refresh {
+  background: none;
+  border: none;
+  color: var(--dc-text-muted);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 2px 4px;
+}
+
+.dc-run__refresh:hover {
+  color: var(--dc-text);
+}
+
+.dc-run__list {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.dc-run__row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border-radius: 4px;
+}
+
+.dc-run__row:hover {
+  background: var(--dc-surface);
+}
+
+.dc-run__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex: none;
+  background: var(--dc-text-muted);
+}
+
+.dc-run__dot--running {
+  background: var(--dc-status-success);
+}
+
+.dc-run__dot--error {
+  background: var(--dc-status-error);
+}
+
+/* 이름이 길면 잘린다 — 명령 전문은 title 로 본다 (좁은 사이드바에서 두 줄을 쓰면
+   목록이 세 줄만 보인다) */
+.dc-run__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+.dc-run__label {
+  font-size: 11px;
+  color: var(--dc-text-muted);
+  white-space: nowrap;
+}
+
+.dc-run__start,
+.dc-run__stop {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--dc-text-muted);
+  font-size: 11px;
+  padding: 0 2px;
+}
+
+.dc-run__start:hover,
+.dc-run__stop:hover {
+  color: var(--dc-text);
+}
+
+.dc-run__empty {
+  padding: 8px 6px;
+}
+
+.dc-run__hint {
+  margin: 0;
+  font-size: 11px;
+  color: var(--dc-text-muted);
+}
+
+.dc-run__stale {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 6px;
+  margin: 4px 0;
+  border: 1px solid color-mix(in srgb, var(--dc-status-warn) 45%, transparent);
+  border-radius: 4px;
+  font-size: 11px;
+}
+
+.dc-run__ask,
+.dc-run__edit {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  color: var(--dc-accent);
+  font-size: 11px;
+  text-decoration: underline;
+}
+
+/* 출처 한 줄. 목록이 틀렸을 때 어디를 고치면 되는지가 여기 있다 */
+.dc-run__source {
+  padding: 6px;
+  border-top: 1px solid var(--dc-border);
+  font-size: 11px;
+  color: var(--dc-text-muted);
+}

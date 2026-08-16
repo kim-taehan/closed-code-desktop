@@ -6,6 +6,8 @@ import { HistoryList } from './HistoryList'
 import { GitPanel } from './GitPanel'
 import type { GitBranchMenu } from './GitBranchChip'
 import { SidebarPanelSelect } from './SidebarPanelSelect'
+import { RunPanel } from './RunPanel'
+import type { ShellDrawer } from '../state/useShellDrawer'
 import { ExtensionViewPanel } from './ExtensionViewPanel'
 import { useExtensionPanel } from '../state/useExtensionPanel'
 import { useSidebarPanel } from '../state/useSidebarPanel'
@@ -68,6 +70,11 @@ export interface ProjectSidebarProps {
   /** 본문에 소스 관리 탭을 연다. ⚙ 메뉴의 `onScm` 과 **같은 함수**다. */
   onOpenScm?: () => void
   history: HistoryStatePayload
+  /**
+   * 하단 셸 드로어 (`useShellDrawer`). 「실행」 패널이 ▶ 로 띄운 칸을 여기 탭으로 띄우고,
+   * ■ 로 닫는다 — **탭이 곧 멈추는 문**이라 목록과 드로어가 같은 상태를 봐야 한다.
+   */
+  shell: ShellDrawer
   onToast: (text: string) => void
   /** 대화가 준비됐는지 — 새 대화 버튼 활성 근거 */
   newChatDisabled?: boolean
@@ -169,6 +176,16 @@ export function ProjectSidebar(props: ProjectSidebarProps) {
               : {})}
             {...(props.branchMenu ? { branchMenu: props.branchMenu } : {})}
             {...(props.onOpenScm ? { onOpenScm: props.onOpenScm } : {})}
+          />
+        )}
+        {panel === 'run' && (
+          <RunPanel
+            // 프로젝트를 옮기면 목록을 처음부터 읽는다 — 남의 프로젝트 명령을 여기서 띄우면 안 된다
+            key={props.project.id}
+            projectId={props.project.id}
+            shell={props.shell}
+            onOpenFile={props.onOpenFile}
+            onToast={props.onToast}
           />
         )}
         {panel === 'history' && (

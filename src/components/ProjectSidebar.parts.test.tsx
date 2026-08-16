@@ -61,6 +61,8 @@ describe('프로젝트 사이드바', () => {
     onOpenDiff: () => {},
     gitActions: { onRevert: () => {}, onPull: () => {}, onCommit: () => {}, onPush: () => {} },
     history: { entries: [], loading: false, loadingChatId: null, current: null },
+    // 「실행」 패널은 이 시험이 안 그린다 — 여기서 겨누는 것은 이력·즐겨찾기·상태다
+    shell: {} as never,
     onToast: () => {},
     onOpenHtml: () => {},
     onSetup: () => {},

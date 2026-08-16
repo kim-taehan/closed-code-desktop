@@ -8,6 +8,7 @@ import {
   SHELL_PANE,
   type PaneTabs,
 } from './drawerTabs'
+import { usePaneExits, type PaneExits } from './usePaneExits'
 
 // 본문 밑에 붙는 셸 칸. 펴고 접고, 높이를 재고, 어디에 포커스가 갈지를 쥔다.
 //
@@ -49,6 +50,13 @@ export interface ShellDrawer {
   focus: 'main' | 'drawer'
   /** 이 프로젝트의 탭. 셸이 맨 앞이고 그 뒤로 사용자가 연 순서다 */
   tabs: PaneTabs
+  /**
+   * 끝난 칸의 종료 코드 (`usePaneExits`). 사이드바 「실행」 패널의 점이 이걸로 갈린다.
+   *
+   * **여기 있는 이유는 수명이다** — 이 훅은 앱이 사는 동안 마운트돼 있고, 종료 신호는
+   * 사용자가 그 칸을 안 보고 있을 때도 온다.
+   */
+  exits: PaneExits
   /** 탭을 고른다. **포커스도 함께 내려간다** — 고른 칸이 키를 받아야 한다 */
   selectTab: (name: string) => void
   /** "+" — 셸 칸 하나를 더 연다 */
@@ -93,6 +101,7 @@ export function useShellDrawer(projectId: string | null): ShellDrawer {
   // 미리 채워 넣지 않는다: 열어 본 적도 없는 프로젝트의 탭 상태를 들고 있을 이유가 없다.
   const [byProject, setByProject] = useState<Record<string, PaneTabs>>({})
   const tabs = (projectId === null ? undefined : byProject[projectId]) ?? initialTabs
+  const exits = usePaneExits(projectId)
 
   /** 지금 프로젝트의 표만 갈아 끼운다. 프로젝트가 없으면 아무 일도 안 한다. */
   const update = useCallback(
@@ -182,8 +191,11 @@ export function useShellDrawer(projectId: string | null): ShellDrawer {
     (name: string) => {
       if (projectId !== null) void window.davis.closeShellPane({ projectId, name })
       update((current) => removePane(current, name))
+      // 지난번 종료 코드는 이제 사실이 아니다 — 탭이 없어졌으니 「멈춤」이고,
+      // 안 지우면 다시 띄우기 전까지 빨간 점이 남는다
+      exits.clear(name)
     },
-    [projectId, update],
+    [projectId, update, exits],
   )
 
   const showShell = useCallback(() => selectTab(SHELL_PANE), [selectTab])
@@ -191,9 +203,13 @@ export function useShellDrawer(projectId: string | null): ShellDrawer {
   const showPane = useCallback(
     (name: string) => {
       update((current) => openPane(current, name))
+      // 방금 다시 띄운 것이라 지난번 종료는 지운다. **여기서 지우는 이유**는 이 문이
+      // 띄우는 두 길(도구의 `run_project` · 사이드바의 ▶)이 모두 지나는 자리라서다 —
+      // 각자 지우게 두면 한쪽을 빠뜨린 날 그 줄만 빨간 점으로 남는다.
+      exits.clear(name)
       goDown()
     },
-    [update, goDown],
+    [update, goDown, exits],
   )
 
   return {
@@ -202,6 +218,7 @@ export function useShellDrawer(projectId: string | null): ShellDrawer {
     everOpened,
     focus,
     tabs,
+    exits,
     goDown,
     goUp,
     close,

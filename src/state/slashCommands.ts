@@ -44,6 +44,22 @@ export function setSendToRuntime(handler: (text: string) => void): void {
   sendToRuntime = handler
 }
 
+/**
+ * 화면의 버튼이 **사용자가 친 것과 같은 큐로** 말을 넣는다 (사이드바 「실행」 패널의
+ * "실행 방법을 찾을까요?").
+ *
+ * 이 통로를 다시 쓰는 이유는 큐가 하나여야 하기 때문이다 — 버튼이 `sendChat` 을 직접
+ * 부르면 사용자가 방금 넣은 줄을 새치기한다 (`useComposerSendBridges` 머리말의 판단 그대로).
+ *
+ * **입력창이 아직 안 붙었으면 `false`** 다. 부르는 쪽이 사용자에게 알려야 한다 — 조용히
+ * 넘기면 버튼을 눌러도 아무 일이 안 일어난 것으로 보인다.
+ */
+export function sendUserText(text: string): boolean {
+  if (sendToRuntime === null) return false
+  sendToRuntime(text)
+  return true
+}
+
 // `/logs` 는 로그 탭을 열어야 하는데, 그 탭은 App 이 켜고 끈다(logs 상태 + 탭 선택).
 // 이미 그 동작을 손에 쥔 AppMenu 가 심어 준다 (setOpenFileHandler 와 같은 구조).
 let openLogsHandler: (() => void) | null = null

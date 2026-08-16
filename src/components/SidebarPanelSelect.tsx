@@ -13,7 +13,7 @@ import { isExtensionPanelId, type ExtensionPanelId } from '../state/extensionPan
 // 확장은 여기 고정 칸으로 두지 않는다 — 확장이 **자기 패널을 등록한다.**
 // 「확장」이라는 칸 하나에 전부 몰아넣으면 어느 확장의 결과인지 알 수 없어진다.
 // 설치·삭제 같은 관리는 여전히 설정 창에서 한다.
-type BuiltinPanel = 'files' | 'git' | 'history'
+type BuiltinPanel = 'files' | 'git' | 'history' | 'run'
 
 export type SidebarPanel = BuiltinPanel | ExtensionPanelId
 
@@ -21,10 +21,16 @@ export const PANEL_LABEL: Record<BuiltinPanel, string> = {
   files: '프로젝트',
   git: '소스 관리',
   history: '채팅이력',
+  run: '실행',
 }
 
-/** 표시 순서. 기본값은 맨 앞이다. 확장 패널은 이 뒤에 붙는다. */
-const PANELS: BuiltinPanel[] = ['files', 'git', 'history']
+/**
+ * 표시 순서. 기본값은 맨 앞이다. 확장 패널은 이 뒤에 붙는다.
+ *
+ * 「실행」은 **내장**이다 (설계 2026-08-16 §0) — 확장으로 하면 확장 API 에 프로세스 실행을
+ * 더해야 하고, 실행은 모든 프로젝트가 늘 쓰는 것이라 「선택 설치」의 값이 안 나온다.
+ */
+const PANELS: BuiltinPanel[] = ['files', 'git', 'history', 'run']
 
 /** 확장이 등록한 패널 하나. `title` 은 매니페스트의 뷰 제목이라 번역하지 않는다. */
 export interface ExtensionPanelOption {

@@ -10,8 +10,10 @@ import { setOpenFileHandler } from './state/slashCommands'
 import { AppDialogs } from './components/AppDialogs'
 import { useAppSettings } from './state/useAppSettings'
 import { useMcpState } from './state/useMcpState'
-import { useShortcuts } from './state/useShortcuts'
-import { activeReviewOf, sendReviewDecision } from './state/activeReview'
+import { useAppShortcuts } from './state/useAppShortcuts'
+// 판정을 보내는 쪽(`sendReviewDecision`)은 `useAppShortcuts` 로 함께 갔다 — 카드 버튼은
+// 원래 자기가 부른다 (`activeReview.ts` — 두 문이 같은 경로를 쓴다).
+import { activeReviewOf } from './state/activeReview'
 import { ProjectRail } from './components/ProjectRail'
 import { ProjectSidebar } from './components/ProjectSidebar'
 import { AppLauncherGate } from './components/AppLauncherGate'
@@ -128,36 +130,21 @@ export function App() {
   const reviewKeys =
     reviewTarget !== null && openFiles.active === 'chat' && !overlay ? reviewTarget.actions : []
 
-  useShortcuts(
-    {
-      onQuickOpen: () => setPalette('quickOpen'),
-      onSearch: () => setPalette('search'),
-      onNewChat: () => void window.davis.resetChat(),
-      onSettings: () => setSettings(true),
-      // 크롬식 탭 조작. 닫을 탭이 없으면(대화만) 무시 — 창을 닫지 않는다 (사용자 결정)
-      onCloseTab: () => nav.closeActive(),
-      onNextTab: () => nav.next(),
-      onPrevTab: () => nav.prev(),
-      onNextProject: projectNav.next,
-      onPrevProject: projectNav.prev,
-      onProjectAt: projectNav.at,
-      onShellDown: shell.goDown,
-      onShellUp: shell.goUp,
-      onCancelTurn: () => void window.davis.cancelChat(),
-      onAcceptReview: () => {
-        if (reviewTarget) sendReviewDecision(reviewTarget.review.turnId, 'accept')
-      },
-      // ⌘L 은 개발자 모드에서만 넘긴다 — ⚙ 메뉴의 「로그 보기」와 같은 조건이어야 한다
-      ...(appSettings.value.developerMode ? { onLogs: openLogs } : {}),
-    },
-    // 넷 다 프로젝트가 있어야 뜻이 있다 (설정 창도 프로젝트 라이선스를 다룬다).
-    // 없을 때 켜 두면 눌러도 아무 일이 없어 사용자가 자기 탓으로 여긴다.
-    projects.activeId !== null,
-    {
-      streaming: isStreaming,
-      canAcceptReview: reviewKeys.includes('accept'),
-    },
-  )
+  // 단축키 배선은 `useAppShortcuts` 로 갈라 뒀다 (이 파일이 300줄 상한에 닿았다).
+  // 판단은 그쪽으로 안 갔다 — 무엇이 지금 키를 받는가(overlay·reviewKeys)는 여기 남아 있다.
+  useAppShortcuts({
+    activeProjectId: projects.activeId,
+    streaming: isStreaming,
+    developerMode: appSettings.value.developerMode,
+    openPalette: setPalette,
+    openSettings: () => setSettings(true),
+    openLogs,
+    nav,
+    projectNav,
+    shell,
+    reviewTarget,
+    canAcceptReview: reviewKeys.includes('accept'),
+  })
 
   const ready = (session?.handshake.stage ?? 'idle') === 'ready'
 
@@ -205,6 +192,7 @@ export function App() {
           branchMenu={branchMenu}
           onOpenScm={openScm}
           history={history}
+          shell={shell}
           onToast={toasts.show}
           newChatDisabled={!ready || isStreaming}
         />

@@ -7,6 +7,8 @@ import type {
   PtyOpenPayload,
   PtyOpenResult,
   PtyResizePayload,
+  PtyRunPayload,
+  PtyRunResult,
 } from '../../shared/ipc/ptyPayloads'
 import { PtyClient } from './client'
 import type { OutputSnapshot } from './outputBuffer'
@@ -61,10 +63,11 @@ export { DRAWER_TITLE, SHELL_PANE } from './ptyPool'
  */
 const CLEAR_LINE = '\x05\x15'
 
-const HANDLED = [Channel.PTY_OPEN, Channel.PTY_RESIZE, Channel.PTY_CLOSE]
+const HANDLED = [Channel.PTY_OPEN, Channel.PTY_RESIZE, Channel.PTY_CLOSE, Channel.PTY_RUN]
 
-/** `run` 의 결과. **started 가 거짓이면 이미 돌고 있던 것**이고, 우리는 아무것도 안 했다. */
-export type PaneRunResult = { ok: true; started: boolean } | { ok: false; error: string }
+// `run` 의 결과 타입(`PtyRunResult`)은 **`shared/ipc/ptyPayloads.ts` 에 있다** — 이 값이
+// 화면까지 그대로 가기 때문이다 (사이드바 「실행」 패널의 ▶). 여기 있던 `PaneRunResult` 는
+// 그 이름의 사본이었고, 두 벌이면 한쪽만 늘어난 날 조용히 어긋난다.
 
 export interface PtyDrawerOptions {
   window: BrowserWindow
@@ -116,6 +119,9 @@ export class PtyDrawerBridge {
     ipcMain.handle(Channel.PTY_OPEN, (_event, payload: PtyOpenPayload) => this.open(payload))
     ipcMain.handle(Channel.PTY_RESIZE, (_event, payload: PtyResizePayload) => this.resize(payload))
     ipcMain.handle(Channel.PTY_CLOSE, (_event, payload: PtyClosePayload) => this.close(payload))
+    // 사이드바 「실행」 패널의 ▶. **도구가 타는 길과 같은 `run`** 이라 「겹쳐 띄우지 않는다」
+    // 판정이 한 곳에 남는다 — 문이 둘이라고 규칙이 둘이 되면 개발 서버가 둘 뜬다.
+    ipcMain.handle(Channel.PTY_RUN, (_event, payload: PtyRunPayload) => this.runFromView(payload))
     // 키 입력은 `on` 이지 `handle` 이 아니다 — 글자마다 도는 자리라 왕복을 기다리면
     // 타이핑이 IPC 지연만큼 느려진다 (`extensionActiveFile.ts` 와 같은 판단).
     // **`removeAllListeners` 가 아니라 이 참조로 푼다** — 채널의 다른 청자까지 걷어내지 않게.
@@ -185,7 +191,7 @@ export class PtyDrawerBridge {
    * 있는 프로젝트의 것뿐이라, 뒤에서 띄우면 **아무도 못 보는 프로세스**가 된다 — 못 보면
    * 탭의 ✕ 도 없어 멈출 방법이 사라진다.
    */
-  async run(projectId: string, name: string, command: string): Promise<PaneRunResult> {
+  async run(projectId: string, name: string, command: string): Promise<PtyRunResult> {
     const project = this.options.activeProject()
     if (project === null || project.id !== projectId) {
       return { ok: false, error: '이 프로젝트가 앞에 나와 있지 않습니다' }
@@ -203,6 +209,21 @@ export class PtyDrawerBridge {
     // 「돌린다」를 가른다.
     this.pending.enqueue(projectId, name, `${command}\n`)
     return { ok: true, started: true }
+  }
+
+  /**
+   * 화면에서 온 ▶. **신원은 여기서 푼다** — 들어오는 요청에 projectId 를 싣지 않는 이 파일의
+   * 규칙 그대로다(머리말). 도구 쪽(`run`)이 신원을 받는 것과 갈리는 이유는 부르는 자리가
+   * 달라서다: 저쪽은 뒤에 있는 프로젝트에서도 불릴 수 있고, 이쪽은 사용자가 지금 보고 있는
+   * 사이드바다.
+   */
+  private async runFromView(payload: PtyRunPayload): Promise<PtyRunResult> {
+    const project = this.options.activeProject()
+    if (project === null) return { ok: false, error: '열려 있는 프로젝트가 없습니다' }
+    if (typeof payload?.name !== 'string' || typeof payload?.command !== 'string') {
+      return { ok: false, error: '실행할 이름과 명령이 없습니다' }
+    }
+    return await this.run(project.id, payload.name, payload.command)
   }
 
   /**

@@ -21,6 +21,7 @@ describe('createToolRunner', () => {
     // 이 파일은 open_file·open_terminal 만 겨눈다 — 실행·로그는 runAndLogs.test.ts.
     runProject: () => Promise.resolve({ ok: false as const, error: '여기서는 안 부른다' }),
     readLogs: () => null,
+    runListChanged: () => {},
     ...over,
   })
 
@@ -95,6 +96,7 @@ describe('createToolRunner — open_terminal', () => {
     // 이 파일은 open_file·open_terminal 만 겨눈다 — 실행·로그는 runAndLogs.test.ts.
     runProject: () => Promise.resolve({ ok: false as const, error: '여기서는 안 부른다' }),
     readLogs: () => null,
+    runListChanged: () => {},
     ...over,
   })
 

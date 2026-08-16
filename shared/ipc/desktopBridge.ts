@@ -68,6 +68,7 @@ import type { ExtensionRegistryBridge } from './extensionRegistryBridge'
 import type { ExtensionBridgeSurface } from './extensionBridgeSurface'
 import type { GitHistoryBridge } from './gitHistoryBridge'
 import type { PtyBridgeSurface } from './ptyBridgeSurface'
+import type { RunBridgeSurface } from './runBridgeSurface'
 
 // preload 가 renderer 에 노출하는 표면.
 // channels.ts 가 300줄을 넘어 갈라냈다 — 채널 정의와 함께 자랄 이유가 없다.
@@ -83,15 +84,16 @@ export type ProjectHandler<T> = (payload: T, projectId: string) => void
 /**
  * preload 가 renderer 에 노출하는 표면. renderer 는 이 타입만 안다.
  *
- * 히스토리·브랜치·임시저장은 `gitHistoryBridge.ts` 로, 셸 드로어는 `ptyBridgeSurface.ts` 로
- * 갈라 두고 상속한다 — 이 파일이 300줄 상한에 붙어서다.
- * **renderer 쪽 쓰임은 그대로 `window.davis.*`.**
+ * 히스토리·브랜치·임시저장은 `gitHistoryBridge.ts` 로, 셸 드로어는 `ptyBridgeSurface.ts` 로,
+ * 사이드바 「실행」 패널은 `runBridgeSurface.ts` 로 갈라 두고 상속한다 — 이 파일이 300줄
+ * 상한에 붙어서다. **renderer 쪽 쓰임은 그대로 `window.davis.*`.**
  */
 export interface DesktopBridge
   extends GitHistoryBridge,
     ExtensionRegistryBridge,
     ExtensionBridgeSurface,
-    PtyBridgeSurface {
+    PtyBridgeSurface,
+    RunBridgeSurface {
   startSession(): Promise<void>
   sendChat(payload: ChatSendPayload): Promise<void>
   cancelChat(): Promise<void>

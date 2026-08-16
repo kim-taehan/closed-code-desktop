@@ -47,6 +47,8 @@ function renderSidebar(overrides: Partial<Parameters<typeof ProjectSidebar>[0]> 
       onOpenDiff={vi.fn()}
       gitActions={{} as never}
       history={{ entries: [], loading: false } as never}
+      // 「실행」 패널은 이 시험이 안 그린다 — 기본 패널은 프로젝트다
+      shell={{} as never}
       onToast={vi.fn()}
       {...overrides}
     />,

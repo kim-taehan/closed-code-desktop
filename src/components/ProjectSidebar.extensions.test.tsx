@@ -97,6 +97,7 @@ describe('설치된 확장이 사이드바에 자기 패널을 등록한다', ()
         '프로젝트',
         '소스 관리',
         '채팅이력',
+        '실행',
         '샘플 확장',
       ]),
     )
@@ -115,6 +116,7 @@ describe('설치된 확장이 사이드바에 자기 패널을 등록한다', ()
         '프로젝트',
         '소스 관리',
         '채팅이력',
+        '실행',
       ]),
     )
   })
@@ -207,13 +209,13 @@ describe('설치된 확장이 사이드바에 자기 패널을 등록한다', ()
     expect(onOpenFile).toHaveBeenCalledWith('src/App.tsx', undefined)
   })
 
-  it('설치된 확장이 없으면 선택기는 내장 3개 그대로다', async () => {
+  it('설치된 확장이 없으면 선택기는 내장 넷 그대로다', async () => {
     stubDavis([])
     renderSidebar()
 
     fireEvent.click(screen.getByRole('button', { name: /프로젝트/ }))
 
-    await waitFor(() => expect(screen.getAllByRole('option')).toHaveLength(3))
+    await waitFor(() => expect(screen.getAllByRole('option')).toHaveLength(4))
   })
 
   it('프로젝트를 옮기면 선택이 따라오지 않고, 돌아오면 보던 패널로 돌아온다', async () => {

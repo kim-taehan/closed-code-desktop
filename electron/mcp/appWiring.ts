@@ -88,6 +88,13 @@ export function desktopMcpPorts(deps: DesktopMcpDeps): McpToolPorts {
     // **앞에 나와 있지 않아도 읽힌다** — 출력을 붙들고 있는 것은 main 이라 창도 필요 없다
     // (`tools.ts` 의 `read_logs` 갈래에 그 근거가 있다).
     readLogs: (projectId, name) => deps.ptyDrawer()?.logs(projectId, name) ?? null,
+    // 창이 없으면 알릴 곳도 없다. **그래도 파일은 이미 적혔다** — 다음에 그 프로젝트를 열면
+    // 사이드바가 읽는다. 그래서 여기서 실패를 되돌려 주지 않는다(알림은 곁다리다).
+    runListChanged: (projectId) => {
+      const window = deps.window()
+      if (window === null || window.isDestroyed()) return
+      window.webContents.send(Channel.RUN_LIST_CHANGED, { projectId, payload: {} })
+    },
   }
 }
 

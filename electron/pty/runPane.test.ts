@@ -214,4 +214,41 @@ describe('PtyDrawerBridge — run_project', () => {
     expect(bridge.logs('A', '안띄운것')).toBeNull()
     await bridge.dispose()
   })
+
+  // 사이드바 「실행」 패널의 ▶ — **문이 둘이 됐다.** 겨누는 것은 그 둘이 같은 `run` 을
+  // 타는가다: 규칙이 두 벌이 되면 도구로는 안 겹치는데 ▶ 로는 겹쳐 뜬다.
+  describe('pty:run — 사이드바의 ▶', () => {
+    const run = (payload: unknown) => handlers.get('pty:run')!({}, payload)
+
+    it('신원을 안 실어도 활성 프로젝트에서 돈다', async () => {
+      const bridge = await setup()
+      expect(await run({ name: 'dev', command: 'npm run dev' })).toEqual({ ok: true, started: true })
+
+      dev().fireOpen()
+      expect(dev().sent).toEqual(['npm run dev\n'])
+      await bridge.dispose()
+    })
+
+    it('이미 돌고 있으면 명령을 다시 안 넣는다 — 도구와 같은 판정이다', async () => {
+      const bridge = await setup()
+      await run({ name: 'dev', command: 'npm run dev' })
+      dev().fireOpen()
+
+      expect(await run({ name: 'dev', command: 'npm run dev' })).toEqual({ ok: true, started: false })
+      expect(created).toEqual(['closed-code-desktop 드로어:dev'])
+      expect(dev().sent).toEqual(['npm run dev\n'])
+      await bridge.dispose()
+    })
+
+    it('열린 프로젝트가 없으면 사유를 돌려준다 — 던지지 않는다', async () => {
+      const bridge = await setup()
+      active = null
+
+      expect(await run({ name: 'dev', command: 'npm run dev' })).toEqual({
+        ok: false,
+        error: '열려 있는 프로젝트가 없습니다',
+      })
+      await bridge.dispose()
+    })
+  })
 })
