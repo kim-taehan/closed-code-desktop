@@ -24,12 +24,6 @@ import type {
   PermissionModePayload,
   WorkingDirPayload,
   PickedAttachment,
-  PtyDataPayload,
-  PtyDetachPayload,
-  PtyExitPayload,
-  PtyInputPayload,
-  PtyOpenResult,
-  PtyResizePayload,
   ProjectFavoritePayload,
   ProjectIdPayload,
   ProjectOpenPayload,
@@ -72,6 +66,7 @@ import type {
 import type { ExtensionRegistryBridge } from './extensionRegistryBridge'
 import type { ExtensionBridgeSurface } from './extensionBridgeSurface'
 import type { GitHistoryBridge } from './gitHistoryBridge'
+import type { PtyBridgeSurface } from './ptyBridgeSurface'
 
 // preload 가 renderer 에 노출하는 표면.
 // channels.ts 가 300줄을 넘어 갈라냈다 — 채널 정의와 함께 자랄 이유가 없다.
@@ -87,10 +82,15 @@ export type ProjectHandler<T> = (payload: T, projectId: string) => void
 /**
  * preload 가 renderer 에 노출하는 표면. renderer 는 이 타입만 안다.
  *
- * 히스토리·브랜치·임시저장은 `gitHistoryBridge.ts` 로 갈라 두고 상속한다 —
- * 이 파일이 300줄 상한에 붙어서다. **renderer 쪽 쓰임은 그대로 `window.davis.*`.**
+ * 히스토리·브랜치·임시저장은 `gitHistoryBridge.ts` 로, 셸 드로어는 `ptyBridgeSurface.ts` 로
+ * 갈라 두고 상속한다 — 이 파일이 300줄 상한에 붙어서다.
+ * **renderer 쪽 쓰임은 그대로 `window.davis.*`.**
  */
-export interface DesktopBridge extends GitHistoryBridge, ExtensionRegistryBridge, ExtensionBridgeSurface {
+export interface DesktopBridge
+  extends GitHistoryBridge,
+    ExtensionRegistryBridge,
+    ExtensionBridgeSurface,
+    PtyBridgeSurface {
   startSession(): Promise<void>
   sendChat(payload: ChatSendPayload): Promise<void>
   cancelChat(): Promise<void>
@@ -217,24 +217,6 @@ export interface DesktopBridge extends GitHistoryBridge, ExtensionRegistryBridge
   clearLogs(): Promise<void>
   /** 로그는 프로젝트에 매이지 않아 겉봉이 없다 */
   onLogAppend(handler: (entry: LogEntry) => void): () => void
-  /**
-   * 하단 셸 드로어 (⌘↓/⌘↑). 셸은 **opencode 서버가 굴린다** (`/api/pty`).
-   *
-   * `runShell`(`!명령` 한 번 실행 → 대화에 결과를 남긴다)과 성격이 다르다 —
-   * 이쪽은 살아 있는 셸에 붙어 바이트를 주고받는다.
-   * 어느 프로젝트인지는 **main 이 활성 프로젝트로 푼다** (렌더러가 보내지 않는다).
-   */
-  openShellDrawer(): Promise<PtyOpenResult>
-  /** 누른 키를 그대로. **응답을 기다리지 않는다** — 왕복을 기다리면 타이핑이 느려진다 */
-  sendShellInput(payload: PtyInputPayload): void
-  resizeShell(payload: PtyResizePayload): Promise<void>
-  /**
-   * 그 프로젝트의 드로어에서 손을 뗀다. **셸은 죽이지 않는다** — 다시 펴면 스크롤백째 돌아온다.
-   * ⌘↑ 로 접을 때가 아니라 **프로젝트를 옮길 때** 부른다 (`PtyDetachPayload` 머리말).
-   */
-  detachShellDrawer(payload: PtyDetachPayload): void
-  onShellData(handler: ProjectHandler<PtyDataPayload>): () => void
-  onShellExit(handler: ProjectHandler<PtyExitPayload>): () => void
   /** 소스 관리 상태. 저장소가 아니면 isRepo: false 로 온다. */
   gitState(payload: GitProjectPayload): Promise<GitStatePayload>
   onGitState(handler: ProjectHandler<GitStatePayload>): () => void

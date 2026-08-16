@@ -1,15 +1,18 @@
 import { ipcMain, type BrowserWindow } from 'electron'
 import { Channel, type ProjectScoped } from '../../shared/ipc/channels'
 import type {
+  PtyClosePayload,
   PtyDetachPayload,
   PtyInputPayload,
+  PtyOpenPayload,
   PtyOpenResult,
   PtyResizePayload,
 } from '../../shared/ipc/ptyPayloads'
-import { isSendableSize, PtyClient } from './client'
-import { PtySocket } from './socket'
+import { PtyClient } from './client'
+import type { OutputSnapshot } from './outputBuffer'
+import { PtyPool, SHELL_PANE } from './ptyPool'
 
-// 셸 드로어의 IPC 배선과 **프로젝트별 pty 수명**. 만든 자리가 정리하는 자리다.
+// 셸 드로어의 IPC 배선. **수명과 표는 `ptyPool.ts` 가 쥔다** — 여기는 채널과 겉봉뿐이다.
 //
 // **렌더러가 WS 를 직접 열지 않는 이유**가 이 계층의 존재 이유다.
 //   1. `index.html` 의 CSP 가 `default-src 'self'` 이고 `connect-src` 가 따로 없다.
@@ -18,9 +21,14 @@ import { PtySocket } from './socket'
 //   2. 서버 주소·비밀번호 해석 규칙이 main 에 있다 (`opencode/endpoint.ts`·`settings`).
 //      렌더러에 주소를 흘리면 그 규칙이 두 벌이 된다.
 //
-// **드로어는 활성 프로젝트의 것이다.** 렌더러는 projectId 를 보내지 않고, 여기서 활성
-// 프로젝트로 푼다 — 세션 핸들러(`sessionHandlers.ts`)와 같은 규칙이다. 나가는 프레임에는
-// 겉봉을 씌워, 프로젝트를 옮기는 순간 도착한 이전 프로젝트의 출력이 화면에 섞이지 않게 한다.
+// **드로어는 활성 프로젝트의 것이다.** 렌더러는 들어오는 요청에 projectId 를 싣지 않고,
+// 여기서 활성 프로젝트로 푼다 — 세션 핸들러(`sessionHandlers.ts`)와 같은 규칙이다. 나가는
+// 프레임에는 겉봉을 씌워, 프로젝트를 옮기는 순간 도착한 이전 프로젝트의 출력이 화면에
+// 섞이지 않게 한다. **떠나는 프레임(`detach`·`close`)만 예외로 신원을 싣는다** —
+// 그 시점의 활성은 이미 도착한 쪽이라 여기서 풀면 엉뚱한 것을 정리한다 (`PtyDetachPayload`).
+//
+// 프레임마다 `name` 이 함께 온다. **한 프로젝트에 칸이 여럿**이고 탭 하나가 pty 하나다
+// (`ptyPool.ts` 머리말 — 왜 하나로는 안 되는지가 거기 있다).
 //
 // ## cwd 는 **프로젝트 루트**다 (사용자 결정)
 //
@@ -33,15 +41,11 @@ import { PtySocket } from './socket'
 //
 // **이 결정 덕에 pty 격리가 프로젝트 경계와 정확히 일치한다.** 실측(1.17.18):
 // `GET /api/pty?location[directory]=A` 는 A 의 pty 만 주고, 틀린 디렉토리로 하나를 물으면
-// **404** 다. 즉 아래 `open()` 의 "이미 있으면 되찾는다" 가 남의 프로젝트 셸을 집어 올
+// **404** 다. 즉 `PtyPool.open` 의 "이미 있으면 되찾는다" 가 남의 프로젝트 셸을 집어 올
 // 수 없다 — 목록 자체가 이 프로젝트 것뿐이다. 이 성질이 깨지면 되찾기가 곧 유출이 되므로,
 // opencode 를 올릴 때 `electron/pty/isolation.test.ts` 를 먼저 본다.
 
-/** 우리가 만든 pty 를 알아보는 이름. 앱을 껐다 켜도 이걸로 되찾는다. */
-export const DRAWER_TITLE = 'closed-code-desktop 드로어'
-
-/** FitAddon 은 창을 끌 때마다 부른다 — 매번 HTTP 를 때리지 않게 묶는다. */
-const RESIZE_DEBOUNCE_MS = 120
+export { DRAWER_TITLE, SHELL_PANE } from './ptyPool'
 
 /**
  * 채우기 전에 줄을 비우는 바이트 — Ctrl+E(줄 끝으로) + Ctrl+U(줄 지우기).
@@ -56,15 +60,7 @@ const RESIZE_DEBOUNCE_MS = 120
  */
 const CLEAR_LINE = '\x05\x15'
 
-const HANDLED = [Channel.PTY_OPEN, Channel.PTY_RESIZE]
-
-interface DrawerState {
-  ptyId: string
-  root: string
-  socket: PtySocket
-  size: { rows: number; cols: number } | null
-  resizeTimer: NodeJS.Timeout | null
-}
+const HANDLED = [Channel.PTY_OPEN, Channel.PTY_RESIZE, Channel.PTY_CLOSE]
 
 export interface PtyDrawerOptions {
   window: BrowserWindow
@@ -82,19 +78,38 @@ export interface PtyDrawerOptions {
 }
 
 export class PtyDrawerBridge {
-  private readonly drawers = new Map<string, DrawerState>()
-  /** 아직 못 넣은 명령. 프로젝트마다 하나 — 뒤엣것이 앞엣것을 덮는다 (`fill`) */
+  private readonly pool: PtyPool
+  /**
+   * 아직 못 넣은 명령. **프로젝트마다 하나**이고 언제나 셸 칸으로 간다 — 뒤엣것이 앞엣것을
+   * 덮는다 (`fill`). 칸이 여럿이 돼도 채울 곳은 셸 칸뿐이다: `open_terminal` 은 사용자가
+   * 보고 엔터를 치라고 여는 것이라, 개발 서버가 도는 칸에 넣으면 칠 자리가 없다.
+   */
   private readonly pending = new Map<string, string>()
 
   private readonly onInput = (_event: unknown, payload: PtyInputPayload): void => this.write(payload)
   private readonly onDetach = (_event: unknown, payload: PtyDetachPayload): void =>
     this.detach(payload)
 
-  constructor(private readonly options: PtyDrawerOptions) {}
+  constructor(private readonly options: PtyDrawerOptions) {
+    this.pool = new PtyPool({
+      clientFor: () => this.clientFor(),
+      events: {
+        // 맡아 둔 명령은 **여기서** 들어간다. `open()` 이 돌아온 시점은 아직 CONNECTING 이라
+        // 그때 쓰면 사라진다 (`PtySocket.open` 의 실측).
+        onOpen: (projectId, name) => {
+          if (name === SHELL_PANE) this.flush(projectId)
+        },
+        onData: (projectId, name, chunk) => this.push(Channel.PTY_DATA, projectId, { name, chunk }),
+        onExit: (projectId, name, exitCode) =>
+          this.push(Channel.PTY_EXIT, projectId, { name, exitCode }),
+      },
+    })
+  }
 
   register(): void {
-    ipcMain.handle(Channel.PTY_OPEN, () => this.open())
+    ipcMain.handle(Channel.PTY_OPEN, (_event, payload: PtyOpenPayload) => this.open(payload))
     ipcMain.handle(Channel.PTY_RESIZE, (_event, payload: PtyResizePayload) => this.resize(payload))
+    ipcMain.handle(Channel.PTY_CLOSE, (_event, payload: PtyClosePayload) => this.close(payload))
     // 키 입력은 `on` 이지 `handle` 이 아니다 — 글자마다 도는 자리라 왕복을 기다리면
     // 타이핑이 IPC 지연만큼 느려진다 (`extensionActiveFile.ts` 와 같은 판단).
     // **`removeAllListeners` 가 아니라 이 참조로 푼다** — 채널의 다른 청자까지 걷어내지 않게.
@@ -102,24 +117,16 @@ export class PtyDrawerBridge {
     ipcMain.on(Channel.PTY_DETACH, this.onDetach)
   }
 
-  /**
-   * 드로어를 편다. 이미 붙어 있으면 아무 일도 안 한다.
-   *
-   * 서버에 이미 우리 pty 가 있으면 **되찾는다** — 앱을 껐다 켜도 그 셸과 스크롤백이 그대로다
-   * (`cursor=0` 으로 붙으면 서버가 앞부분을 다시 보내 준다, 실측).
-   */
-  private async open(): Promise<PtyOpenResult> {
+  /** 그 이름의 칸을 편다. 사유는 그대로 화면에 올라간다 (`PtyOpenResult`). */
+  private async open(payload: PtyOpenPayload): Promise<PtyOpenResult> {
     const project = this.options.activeProject()
     if (project === null) return { ok: false, error: '열려 있는 프로젝트가 없습니다' }
-    if (this.drawers.has(project.id)) return { ok: true }
+    if (typeof payload?.name !== 'string' || payload.name === '') {
+      return { ok: false, error: '셸 칸 이름이 없습니다' }
+    }
 
     try {
-      const client = await this.clientFor()
-      const existing = (await client.list(project.root)).find(
-        (pty) => pty.title === DRAWER_TITLE && pty.status === 'running',
-      )
-      const pty = existing ?? (await client.create(project.root, { title: DRAWER_TITLE }))
-      this.attach(client, project, pty.id)
+      await this.pool.open(project, payload.name)
       return { ok: true }
     } catch (error) {
       // 서버가 안 떠 있으면 여기로 온다. 사유를 그대로 화면에 올린다 —
@@ -128,36 +135,17 @@ export class PtyDrawerBridge {
     }
   }
 
-  private attach(client: PtyClient, project: { id: string; root: string }, ptyId: string): void {
-    const socket = new PtySocket({
-      url: client.socketUrl(project.root, ptyId),
-      headers: client.headers,
-    })
-    const state: DrawerState = { ptyId, root: project.root, socket, size: null, resizeTimer: null }
-    this.drawers.set(project.id, state)
-
-    // 맡아 둔 명령은 **여기서** 들어간다. `open()` 이 돌아온 시점은 아직 CONNECTING 이라
-    // 그때 쓰면 사라진다 (`PtySocket.open` 의 실측).
-    socket.onOpen(() => this.flush(project.id))
-    socket.onData((chunk) => this.push(Channel.PTY_DATA, project.id, { chunk }))
-    socket.onError((error) => this.push(Channel.PTY_DATA, project.id, { chunk: `\r\n[${error.message}]\r\n` }))
-    // close 는 대개 "셸이 끝났다" 다. 종료 코드는 프레임에 없어 다시 물어봐야 안다 (실측).
-    socket.onClose(() => void this.reportExit(project.id, state))
-    socket.open()
-  }
-
-  private async reportExit(projectId: string, state: DrawerState): Promise<void> {
-    this.forget(projectId)
-    const pty = await this.clientFor()
-      .then((client) => client.get(state.root, state.ptyId))
-      .catch(() => null)
-    this.push(Channel.PTY_EXIT, projectId, { exitCode: pty?.exitCode ?? null })
-  }
-
   private write(payload: PtyInputPayload): void {
-    const state = this.current()
+    const project = this.options.activeProject()
+    if (project === null) return
     // 열리기 전에 친 키는 버린다. 큐에 쌓아 두면 셸이 준비된 뒤 한꺼번에 쏟아진다.
-    state?.socket.write(payload.data)
+    this.pool.write(project.id, payload.name, payload.data)
+  }
+
+  private resize(payload: PtyResizePayload): void {
+    const project = this.options.activeProject()
+    if (project === null) return
+    this.pool.resize(project.id, payload.name, payload)
   }
 
   /**
@@ -168,7 +156,7 @@ export class PtyDrawerBridge {
    * 에이전트가 부르는 시점에 칸은 한 번도 안 펴져 있을 수 있고(`everOpened`), 그러면
    * pty 는 화면이 칸을 그린 **뒤에야** 붙는다. 그 전에 쓴 바이트는 아무 흔적 없이 사라진다.
    *
-   * 맡아 둔 것은 그 프로젝트의 드로어가 열릴 때 들어간다. 사용자가 그 사이에 다른
+   * 맡아 둔 것은 그 프로젝트의 셸 칸이 열릴 때 들어간다. 사용자가 그 사이에 다른
    * 프로젝트로 옮겨 칸을 안 펴면 **남아 있다가 나중에 펼 때 채워진다** — 늦을 뿐
    * 엉뚱한 곳으로 가지는 않는다(키가 프로젝트다). 탭을 닫으면 함께 버린다.
    */
@@ -177,91 +165,60 @@ export class PtyDrawerBridge {
     this.flush(projectId)
   }
 
+  /**
+   * 그 칸이 붙들고 있는 지나간 출력. 없는 칸이면 null.
+   *
+   * **잘렸으면 잘렸다고 말한다** — `dropped`·`total` 이 함께 온다 (`outputBuffer.ts`).
+   * 다음 층(`read_logs`)이 그것을 모델에게 그대로 넘긴다: 조용히 자르면 모델이 "이게 전부"
+   * 로 읽는다 (이 레포의 기존 규칙 `ToolResult.truncated`, 설계 §3).
+   */
+  logs(projectId: string, name: string): OutputSnapshot | null {
+    return this.pool.snapshot(projectId, name)
+  }
+
   /** 맡아 둔 명령을 넣는다. 못 넣었으면(아직 안 열렸다) 그대로 두고 다음 기회를 기다린다. */
   private flush(projectId: string): void {
     const command = this.pending.get(projectId)
-    const state = this.drawers.get(projectId)
-    if (command === undefined || state === undefined) return
-    if (state.socket.write(CLEAR_LINE + command)) this.pending.delete(projectId)
+    if (command === undefined) return
+    if (this.pool.write(projectId, SHELL_PANE, CLEAR_LINE + command)) this.pending.delete(projectId)
   }
 
   /**
-   * 크기 변경. **묶어서 보낸다** — FitAddon 이 창 크기를 끄는 동안 계속 부르는데
-   * 그때마다 HTTP 를 때리면 요청이 수십 개 쌓인다.
-   *
-   * ⚠️ **0 은 보내지 않는다** (`isSendableSize` — 왜 지금은 도달 불가인데도 두는지가 거기 있다).
-   * 여기서 먼저 걸러 디바운스 타이머조차 걸지 않는다. 아래 `.catch(() => {})` 가 실패를
-   * 삼키므로, 못 보낼 값이 여기까지 오면 **아무 흔적 없이 사라진다.**
-   */
-  private resize(payload: PtyResizePayload): void {
-    if (!isSendableSize(payload)) return
-    const project = this.options.activeProject()
-    const state = project === null ? undefined : this.drawers.get(project.id)
-    if (state === undefined) return
-    if (state.size?.rows === payload.rows && state.size.cols === payload.cols) return
-    state.size = { rows: payload.rows, cols: payload.cols }
-
-    if (state.resizeTimer !== null) clearTimeout(state.resizeTimer)
-    state.resizeTimer = setTimeout(() => {
-      state.resizeTimer = null
-      const size = state.size
-      if (size === null) return
-      void this.clientFor()
-        .then((client) => client.resize(state.root, state.ptyId, size))
-        // 크기 조절 실패로 드로어를 죽이지 않는다 — 글자는 계속 흐른다
-        .catch(() => {})
-    }, RESIZE_DEBOUNCE_MS)
-  }
-
-  /**
-   * 그 프로젝트의 드로어에서 손을 뗀다. **pty 는 죽이지 않는다** — 다시 펴면 그 셸이
-   * 스크롤백째 돌아와야 한다. 진짜로 없애는 것은 프로젝트를 닫을 때뿐이다 (`closeProject`).
+   * 그 칸에서 손을 뗀다. **pty 는 죽이지 않는다** — 다시 펴면 그 셸이 스크롤백째 돌아와야 한다.
    *
    * ⚠️ **⌘↑ 로 접을 때는 안 온다.** 접기는 `display:none` 일 뿐 언마운트가 아니라
    * 정리 함수가 안 돈다 (`ShellDrawer` — 내리면 그리던 화면이 날아간다). 접힌 동안에도
    * 소켓은 붙어 있고, 그게 맞다: 그동안 흘러간 출력이 다시 펼 때 화면에 남아 있어야 한다.
    *
-   * 실제로 오는 경로는 **프로젝트를 옮길 때** 하나뿐이다. 그래서 **활성 프로젝트로 풀지
-   * 않는다** — 그 시점에 활성은 이미 도착한 쪽이라, 그러면 떠나온 것 대신 도착한 것을
-   * 정리한다. 떠나는 쪽이 신원을 실어 보낸다 (`PtyDetachPayload`).
+   * 오는 경로는 둘이다 — **프로젝트를 옮길 때**와 **탭을 닫을 때**(그쪽은 `close` 가 pty 까지
+   * 지운 뒤 화면이 언마운트되며 한 번 더 온다. 이미 없는 칸이라 무해하다). 그래서 **활성
+   * 프로젝트로 풀지 않는다**: 프로젝트 이동 시점의 활성은 이미 도착한 쪽이라, 그러면
+   * 떠나온 것 대신 도착한 것을 정리한다. 떠나는 쪽이 신원을 실어 보낸다 (`PtyDetachPayload`).
    */
   private detach(payload: PtyDetachPayload): void {
-    if (typeof payload?.projectId !== 'string') return
-    this.forget(payload.projectId)
+    if (typeof payload?.projectId !== 'string' || typeof payload?.name !== 'string') return
+    this.pool.detach(payload.projectId, payload.name)
   }
 
-  /** 탭을 닫았다 — 셸도 함께 거둔다. 안 그러면 서버에 죽은 셸이 쌓인다. */
+  /** 탭의 ✕ — **프로세스도 멈춘다.** 신원을 싣는 이유는 `detach` 와 같다. */
+  private async close(payload: PtyClosePayload): Promise<void> {
+    if (typeof payload?.projectId !== 'string' || typeof payload?.name !== 'string') return
+    await this.pool.close(payload.projectId, payload.name)
+  }
+
+  /** 프로젝트 탭을 닫았다 — 그 프로젝트의 셸을 통째로 거둔다. 안 그러면 서버에 죽은 셸이 쌓인다. */
   async closeProject(projectId: string): Promise<void> {
     // 맡아 둔 명령도 여기서 버린다. 남겨 두면 그 프로젝트를 다시 열었을 때
     // 사용자가 잊은 명령이 유령처럼 채워진다.
     this.pending.delete(projectId)
-    const state = this.drawers.get(projectId)
-    if (state === undefined) return
-    this.forget(projectId)
-    await this.clientFor()
-      .then((client) => client.remove(state.root, state.ptyId))
-      .catch(() => {})
+    await this.pool.closeProject(projectId)
   }
 
   async dispose(): Promise<void> {
-    for (const projectId of [...this.drawers.keys()]) this.forget(projectId)
     for (const channel of HANDLED) ipcMain.removeHandler(channel)
     ipcMain.removeListener(Channel.PTY_INPUT, this.onInput)
     ipcMain.removeListener(Channel.PTY_DETACH, this.onDetach)
-  }
-
-  private current(): DrawerState | undefined {
-    const project = this.options.activeProject()
-    return project === null ? undefined : this.drawers.get(project.id)
-  }
-
-  /** 소켓을 접고 표에서 지운다. 서버 쪽 pty 는 그대로 둔다. */
-  private forget(projectId: string): void {
-    const state = this.drawers.get(projectId)
-    if (state === undefined) return
-    this.drawers.delete(projectId)
-    if (state.resizeTimer !== null) clearTimeout(state.resizeTimer)
-    state.socket.close()
+    await this.pool.dispose()
   }
 
   /**

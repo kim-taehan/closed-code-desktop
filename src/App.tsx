@@ -57,8 +57,8 @@ export function App() {
   const tree = useFileTree(projects.activeId)
   const toasts = useToasts()
   const sidebar = useSidebarWidth()
-  // 하단 셸 칸 (⌘↓/⌘↑). 앱 전체가 하나를 나눠 쓴다 — 프로젝트마다 다르면 본문 높이가 튄다
-  const shell = useShellDrawer()
+  // 하단 셸 칸 (⌘↓/⌘↑). 펴짐·높이는 앱 하나, **탭 목록만 프로젝트마다**다 (useShellDrawer)
+  const shell = useShellDrawer(projects.activeId)
   const appSettings = useAppSettings()
   const devPhrase = useDevPhrase(appSettings) // 개발자 모드 이스터에그 (스펙 11_spec_devmode)
   // 작업 완료 알림 설정을 그대로 쓴다 — 같은 성격(내 작업 결과)이라 토글을 새로 만들지 않는다
@@ -98,7 +98,7 @@ export function App() {
   // 보고 있는 파일을 확장에 알린다 (`useActiveFileNotice` 머리말)
   useActiveFileNotice(openFiles.chatContext)
   // 에이전트가 open_file·open_terminal 로 시킨 것 (`electron/mcp/`) — 지금 프로젝트 것만 받는다
-  useDesktopMcpOpen(projects.activeId, openFiles.open, shell.goDown)
+  useDesktopMcpOpen(projects.activeId, openFiles.open, shell.showShell)
   // /open 으로 고른 파일 열기 — pdf·zip 라우팅은 이 경로만 탄다 (트리·검색은 뷰어 그대로).
   useEffect(() => setOpenFileHandler(openFiles.openRouted), [openFiles.openRouted])
   // 이미 열려 있으면 탭을 새로 만들지 않고 그 탭으로 간다 (boolean + select).

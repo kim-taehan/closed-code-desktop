@@ -1,10 +1,12 @@
 import { ipcRenderer } from 'electron'
 import { Channel, type DesktopBridge, type ProjectHandler } from '../shared/ipc/channels'
 import type {
+  PtyClosePayload,
   PtyDataPayload,
   PtyDetachPayload,
   PtyExitPayload,
   PtyInputPayload,
+  PtyOpenPayload,
   PtyOpenResult,
   PtyResizePayload,
 } from '../shared/ipc/ptyPayloads'
@@ -25,16 +27,27 @@ type Subscribe = <T>(channel: string, handler: ProjectHandler<T>) => () => void
 
 type PtyBridge = Pick<
   DesktopBridge,
-  'openShellDrawer' | 'sendShellInput' | 'resizeShell' | 'detachShellDrawer' | 'onShellData' | 'onShellExit'
+  | 'openShellDrawer'
+  | 'sendShellInput'
+  | 'resizeShell'
+  | 'detachShellDrawer'
+  | 'closeShellPane'
+  | 'onShellData'
+  | 'onShellExit'
 >
 
 export function ptyBridge(subscribe: Subscribe): PtyBridge {
   return {
-    openShellDrawer: () => ipcRenderer.invoke(Channel.PTY_OPEN) as Promise<PtyOpenResult>,
+    openShellDrawer: (payload: PtyOpenPayload) =>
+      ipcRenderer.invoke(Channel.PTY_OPEN, payload) as Promise<PtyOpenResult>,
     sendShellInput: (payload: PtyInputPayload) => ipcRenderer.send(Channel.PTY_INPUT, payload),
     resizeShell: (payload: PtyResizePayload) =>
       ipcRenderer.invoke(Channel.PTY_RESIZE, payload) as Promise<void>,
     detachShellDrawer: (payload: PtyDetachPayload) => ipcRenderer.send(Channel.PTY_DETACH, payload),
+    // 닫기는 `invoke` 다 — pty 를 서버에서 지우는 왕복이라, 끝나기를 기다려야 화면이
+    // 「닫혔다」로 넘어갈 수 있다 (키 입력과 성격이 반대다)
+    closeShellPane: (payload: PtyClosePayload) =>
+      ipcRenderer.invoke(Channel.PTY_CLOSE, payload) as Promise<void>,
     onShellData: (handler: ProjectHandler<PtyDataPayload>) =>
       subscribe<PtyDataPayload>(Channel.PTY_DATA, handler),
     onShellExit: (handler: ProjectHandler<PtyExitPayload>) =>

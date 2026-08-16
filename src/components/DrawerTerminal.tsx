@@ -5,6 +5,8 @@ import '@xterm/xterm/css/xterm.css'
 import type { ThemeChoice } from '../state/useTheme'
 // 「이 키는 누구 것인가」 판정. 밖에 둔 이유와 그 축이 못 덮는 자리는 그 파일 머리말에 있다.
 import { belongsToApp } from '../state/drawerKeys'
+// 「이 프레임은 누구 것인가」 판정. 밖에 둔 이유는 같다 — 여기는 렌더 시험이 없다.
+import { belongsToPane } from '../state/drawerTabs'
 
 // 셸 드로어 안의 터미널.
 //
@@ -43,13 +45,21 @@ function terminalColors(): { background: string; foreground: string } {
 interface Props {
   /** 프로젝트가 바뀌면 터미널을 새로 세운다 — 남의 프로젝트 스크롤백이 남으면 안 된다 */
   projectId: string
+  /**
+   * 어느 칸인가 (= 어느 pty 인가). 탭 하나가 pty 하나다 (`src/state/drawerTabs.ts`).
+   *
+   * 오가는 프레임이 전부 이 이름을 달고 다니고, **들어오는 것도 이 이름으로 거른다** —
+   * 칸이 여럿이면 출력은 한 채널로 몰려 오므로 여기서 안 가르면 개발 서버 로그가
+   * 셸 화면에 함께 찍힌다.
+   */
+  name: string
   /** 보고 있고 펴져 있는가. 숨은 칸이 키를 가져가면 안 된다. */
   active: boolean
   /** 값 자체는 안 쓰고 "바뀌었다" 는 신호로만 쓴다 — 색은 CSS 에서 읽는다 */
   theme: ThemeChoice
 }
 
-export function DrawerTerminal({ projectId, active, theme }: Props): React.ReactElement {
+export function DrawerTerminal({ projectId, name, active, theme }: Props): React.ReactElement {
   const hostRef = useRef<HTMLDivElement>(null)
   const xtermRef = useRef<Xterm | null>(null)
 
@@ -89,23 +99,24 @@ export function DrawerTerminal({ projectId, active, theme }: Props): React.React
       if (size === undefined || Number.isNaN(size.cols) || size.cols < MIN_COLS) return
       xterm.resize(size.cols, size.rows)
       // 묶어 보내는 일은 main 이 한다 (`drawerBridge` 의 디바운스) — 여기서 또 묶으면 두 겹이 된다
-      void window.davis.resizeShell({ rows: size.rows, cols: size.cols })
+      void window.davis.resizeShell({ name, rows: size.rows, cols: size.cols })
     }
 
-    // **내 프로젝트 것만 받는다.** 겉봉을 벗기는 자리에서 거르지 않으면, 프로젝트를 옮기는
-    // 순간 도착한 이전 프로젝트의 출력이 이 화면에 섞인다.
+    // **내 프로젝트, 내 칸 것만 받는다.** 판정과 그 근거 둘은 `belongsToPane` 에 있다 —
+    // 여기서 다시 적지 않는다 (`drawerKeys.ts` 와 같은 이유로 밖에 뒀다).
+    const pane = { projectId, name }
     const offData = window.davis.onShellData((payload, from) => {
-      if (from === projectId) xterm.write(payload.chunk)
+      if (belongsToPane(payload, from, pane)) xterm.write(payload.chunk)
     })
     const offExit = window.davis.onShellExit((payload, from) => {
-      if (from !== projectId) return
+      if (!belongsToPane(payload, from, pane)) return
       const code = payload.exitCode === null ? '?' : String(payload.exitCode)
       xterm.writeln(`\r\n\x1b[90m[셸이 끝났습니다 — exit ${code}] · ⌘↑ 로 접었다 ⌘↓ 로 다시 여세요\x1b[0m`)
     })
 
-    xterm.onData((data) => window.davis.sendShellInput({ data }))
+    xterm.onData((data) => window.davis.sendShellInput({ name, data }))
 
-    void window.davis.openShellDrawer().then((result) => {
+    void window.davis.openShellDrawer({ name }).then((result) => {
       // 못 띄우면 빈 화면 대신 사유를 적는다 — 서버가 안 떠 있는 것이 가장 흔한 이유다
       if (!result.ok) xterm.writeln(`\x1b[31m${result.error ?? '셸을 띄우지 못했습니다'}\x1b[0m`)
       else applyFit()
@@ -124,11 +135,11 @@ export function DrawerTerminal({ projectId, active, theme }: Props): React.React
       // **내 projectId 를 실어 보낸다.** 이 정리가 도는 시점은 프로젝트를 옮긴 뒤라,
       // main 의 활성 프로젝트는 이미 도착한 쪽이다 — 안 실으면 떠나온 내 소켓이 아니라
       // 도착한 쪽을 정리하고 내 것은 열린 채 표에 남는다 (`PtyDetachPayload`).
-      window.davis.detachShellDrawer({ projectId })
+      window.davis.detachShellDrawer({ projectId, name })
       xterm.dispose()
       xtermRef.current = null
     }
-  }, [projectId])
+  }, [projectId, name])
 
   // 테마를 바꿔도 터미널은 다시 세우지 않는다 — 세우면 화면이 한 번 깜빡인다.
   // 색만 갈아 끼운다.

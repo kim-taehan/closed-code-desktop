@@ -123,13 +123,13 @@ describe('PtyDrawerBridge — 떠날 때의 신원', () => {
     const bridge = await setup()
 
     // A 에서 드로어를 연다
-    await handlers.get('pty:open')!()
+    await handlers.get('pty:open')!({}, { name: 'shell' })
     expect(closed).toEqual([])
 
     // 사용자가 B 로 옮긴다 — main 의 활성은 **이미** B 다
     active = B
     // 그 뒤에야 A 의 정리 함수가 돌아 detach 가 도착한다
-    listeners.get('pty:detach')!({}, { projectId: 'A' })
+    listeners.get('pty:detach')!({}, { projectId: 'A', name: 'shell' })
 
     expect(closed).toEqual(['ws://fake/pty_A'])
     await bridge.dispose()
@@ -138,13 +138,13 @@ describe('PtyDrawerBridge — 떠날 때의 신원', () => {
   // 신원을 안 실으면 이 케이스가 A 대신 B 를 닫았다. 지금은 B 를 건드리면 안 된다.
   it('도착한 쪽의 드로어는 건드리지 않는다', async () => {
     const bridge = await setup()
-    await handlers.get('pty:open')!()
+    await handlers.get('pty:open')!({}, { name: 'shell' })
 
     active = B
-    await handlers.get('pty:open')!() // B 도 연다
+    await handlers.get('pty:open')!({}, { name: 'shell' }) // B 도 연다
     closed.length = 0
 
-    listeners.get('pty:detach')!({}, { projectId: 'A' })
+    listeners.get('pty:detach')!({}, { projectId: 'A', name: 'shell' })
 
     expect(closed).toEqual(['ws://fake/pty_A'])
     await bridge.dispose()
@@ -152,7 +152,7 @@ describe('PtyDrawerBridge — 떠날 때의 신원', () => {
 
   it('신원이 없는 프레임은 아무것도 정리하지 않는다', async () => {
     const bridge = await setup()
-    await handlers.get('pty:open')!()
+    await handlers.get('pty:open')!({}, { name: 'shell' })
 
     listeners.get('pty:detach')!({}, {})
 
@@ -195,7 +195,7 @@ describe('PtyDrawerBridge — 채워 두기', () => {
     // 아직 pty 가 없다 — 여기서 그냥 쓰면 사라진다
     expect(sockets.size).toBe(0)
 
-    await handlers.get('pty:open')!()
+    await handlers.get('pty:open')!({}, { name: 'shell' })
     const socket = sockets.get('ws://fake/pty_A')!
     // 붙는 중(CONNECTING)이라 아직 못 쓴다
     expect(socket.sent).toEqual([])
@@ -207,7 +207,7 @@ describe('PtyDrawerBridge — 채워 두기', () => {
 
   it('이미 열려 있으면 그 자리에서 넣는다', async () => {
     const bridge = await setup()
-    await handlers.get('pty:open')!()
+    await handlers.get('pty:open')!({}, { name: 'shell' })
     const socket = sockets.get('ws://fake/pty_A')!
     socket.fireOpen()
 
@@ -219,7 +219,7 @@ describe('PtyDrawerBridge — 채워 두기', () => {
   // 개행이 붙으면 사용자가 보기도 전에 돌아간다 — 이 도구의 값이 통째로 사라진다
   it('개행을 붙이지 않는다', async () => {
     const bridge = await setup()
-    await handlers.get('pty:open')!()
+    await handlers.get('pty:open')!({}, { name: 'shell' })
     const socket = sockets.get('ws://fake/pty_A')!
     socket.fireOpen()
 
@@ -235,7 +235,7 @@ describe('PtyDrawerBridge — 채워 두기', () => {
     bridge.fill('A', 'A 의 명령')
 
     active = B
-    await handlers.get('pty:open')!()
+    await handlers.get('pty:open')!({}, { name: 'shell' })
     const b = sockets.get('ws://fake/pty_B')!
     b.fireOpen()
 
@@ -249,7 +249,7 @@ describe('PtyDrawerBridge — 채워 두기', () => {
     bridge.fill('A', 'npm test')
     await bridge.closeProject('A')
 
-    await handlers.get('pty:open')!()
+    await handlers.get('pty:open')!({}, { name: 'shell' })
     const socket = sockets.get('ws://fake/pty_A')!
     socket.fireOpen()
 

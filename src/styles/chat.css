@@ -5050,8 +5050,47 @@ body {
   background: var(--dc-surface);
 }
 
-.drawer__title {
+/* 탭 하나가 pty 하나다 (ShellDrawer.tsx 머리말). 이름과 ✕ 가 한 칸에 들어가고,
+   ✕ 는 셸 칸에는 없다 — 그건 드로어 자신이다. */
+.drawer__tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  border-radius: 4px;
+  padding: 0 2px;
+}
+
+.drawer__tab--on {
+  background: var(--dc-bg);
+  color: var(--dc-text);
+}
+
+.drawer__tabName {
+  border: none;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
   font-weight: 600;
+  padding: 2px 4px;
+}
+
+.drawer__tabClose,
+.drawer__tabAdd {
+  border: none;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  font-size: 11px;
+  line-height: 1;
+  padding: 2px 4px;
+  opacity: 0.6;
+}
+
+.drawer__tabClose:hover,
+.drawer__tabAdd:hover {
+  opacity: 1;
+  color: var(--dc-text);
 }
 
 /* 힌트는 남는 자리를 밀어 닫기 버튼을 오른쪽 끝으로 보낸다 */
@@ -5079,6 +5118,18 @@ body {
   flex: 1;
   min-height: 0;
   padding: 4px 8px;
+  /* 칸이 여럿이라 겹쳐 쌓는다. 안 보이는 칸도 **언마운트하지 않는다** —
+     내리면 그때까지 흘러간 로그가 통째로 날아간다 (ShellDrawer.tsx 머리말). */
+  position: relative;
+}
+
+.drawer__pane {
+  position: absolute;
+  inset: 4px 8px;
+}
+
+.drawer__pane--off {
+  display: none;
 }
 
 .drawer__term {

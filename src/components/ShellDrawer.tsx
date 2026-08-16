@@ -1,3 +1,4 @@
+import { PERMANENT_PANES, tabLabel } from '../state/drawerTabs'
 import type { ShellDrawer as DrawerState } from '../state/useShellDrawer'
 import type { ThemeChoice } from '../state/useTheme'
 import { DrawerTerminal } from './DrawerTerminal'
@@ -9,6 +10,16 @@ import { DrawerTerminal } from './DrawerTerminal'
 //
 // 한 번도 편 적 없으면 아예 그리지 않는다 (`everOpened`) — 열어 본 적도 없는 프로젝트마다
 // opencode 서버에 셸이 하나씩 도는 것은 낭비다.
+//
+// ## 탭 — **하나가 pty 하나다** (설계 2026-08-16 §1 A안)
+//
+// 안 보이는 탭도 **언마운트하지 않는다.** 접기와 같은 이유다: 뒤로 돌린 개발 서버 로그가
+// 탭을 옮길 때마다 사라지면 이 기능의 무게중심(=보유)이 통째로 없어진다. 그래서 CSS 로만
+// 숨기고, xterm 은 살려 둔다.
+//
+// 로그를 본문 탭이 아니라 여기 두는 근거는 설계 §1 에 있다 — 요지는 *로그는 정독이 아니라
+// 곁눈질*이라 대화와 같이 보여야 하고, 본문 탭은 프로젝트를 옮기면 비워지는데(`useOpenFiles`)
+// 프로세스는 살아 있어 "탭이 없어졌으니 서버도 죽은 줄" 로 읽힌다는 것이다.
 
 interface Props {
   /**
@@ -42,8 +53,35 @@ export function ShellDrawer({ projectId, drawer, theme }: Props): React.ReactEle
         title="끌어서 높이 조절"
       />
 
-      <div className="drawer__bar">
-        <span className="drawer__title">셸</span>
+      <div className="drawer__bar" role="tablist" aria-label="셸 칸 탭">
+        {drawer.tabs.names.map((name) => (
+          <span key={name} className={`drawer__tab${name === drawer.tabs.active ? ' drawer__tab--on' : ''}`}>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={name === drawer.tabs.active}
+              className="drawer__tabName"
+              onClick={() => drawer.selectTab(name)}
+            >
+              {tabLabel(name)}
+            </button>
+            {/* 셸 칸에는 ✕ 가 없다 — 그건 드로어 자신이라 접는 것(⌘↑)과 다른 일이 아니다 */}
+            {PERMANENT_PANES.includes(name) ? null : (
+              <button
+                type="button"
+                className="drawer__tabClose"
+                // 닫으면 **프로세스도 멈춘다.** 화면에서만 사라지면 띄운 개발 서버가 계속 돈다
+                title={`${tabLabel(name)} 닫기 (프로세스도 멈춥니다)`}
+                onClick={() => drawer.closeTab(name)}
+              >
+                ✕
+              </button>
+            )}
+          </span>
+        ))}
+        <button type="button" className="drawer__tabAdd" onClick={drawer.addTab} title="셸 칸 추가">
+          +
+        </button>
         <span className="drawer__hint">⌘↑ 로 본문으로</span>
         <button type="button" className="drawer__close" onClick={drawer.close} title="셸 칸 접기">
           ⌄
@@ -51,11 +89,21 @@ export function ShellDrawer({ projectId, drawer, theme }: Props): React.ReactEle
       </div>
 
       <div className="drawer__body">
-        <DrawerTerminal
-          projectId={projectId}
-          active={drawer.open && drawer.focus === 'drawer'}
-          theme={theme}
-        />
+        {drawer.tabs.names.map((name) => (
+          <div
+            key={name}
+            className={`drawer__pane${name === drawer.tabs.active ? '' : ' drawer__pane--off'}`}
+          >
+            <DrawerTerminal
+              projectId={projectId}
+              name={name}
+              // **고른 탭 하나만 키를 받는다.** 안 가르면 마운트된 터미널이 전부 focus() 를
+              // 불러 마지막 것이 이기고, 사용자는 안 보이는 칸에 타이핑하게 된다.
+              active={drawer.open && drawer.focus === 'drawer' && name === drawer.tabs.active}
+              theme={theme}
+            />
+          </div>
+        ))}
       </div>
     </div>
   )

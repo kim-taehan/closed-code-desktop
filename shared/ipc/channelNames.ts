@@ -109,12 +109,18 @@ export const Channel = {
    *
    * 렌더러가 WS 를 직접 열지 않는 이유는 `electron/pty/drawerBridge.ts` 머리말 (CSP).
    * projectId 를 renderer 가 보내지 않는다 — main 이 활성 프로젝트로 푼다.
+   *
+   * **모든 프레임에 `name` 이 실린다** — 한 프로젝트에 칸이 여럿이고 탭 하나가 pty 하나다
+   * (`electron/pty/ptyPool.ts`). 예전에는 프로젝트당 하나라 이름이 필요 없었고, 그래서
+   * 개발 서버를 띄우면 셸 칸이 잠겼다.
    */
   PTY_OPEN: 'pty:open',
   PTY_INPUT: 'pty:input',
   PTY_RESIZE: 'pty:resize',
   /** 드로어를 접는다. **셸은 죽이지 않는다** — 다시 펴면 스크롤백째 돌아온다 */
   PTY_DETACH: 'pty:detach',
+  /** 탭의 ✕ — **프로세스도 멈춘다.** `PTY_DETACH` 와 갈리는 지점이다 (`PtyClosePayload`) */
+  PTY_CLOSE: 'pty:close',
   /** main → renderer: 터미널 바이트 (겉봉 있음 — 프로젝트를 옮기면 남의 출력이 섞이면 안 된다) */
   PTY_DATA: 'pty:data',
   /** main → renderer: 셸이 끝났다. 종료 코드는 프레임에 없어 main 이 다시 물어 온다 */
