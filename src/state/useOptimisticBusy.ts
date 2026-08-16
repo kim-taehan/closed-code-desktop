@@ -13,8 +13,11 @@ import { useEffect, useState } from 'react'
  * 정상 경로에서는 `turn_started` 가 이 시간 안에 와서 쓰이지 않는다. 쓰이는 것은
  * 그 이벤트가 **영영 안 오는 경우**뿐이라 — 느린 왕복을 넉넉히 넘기되
  * "굳었다" 고 느끼기 전에는 풀려야 한다.
+ *
+ * 내보내는 이유는 시험 때문이다 (`useAutoHeal` 의 `RECHECK_MS` 와 같은 규칙) — 시험이
+ * 10000 을 손으로 적으면 값을 고친 날 그 시험만 조용히 헛돈다.
  */
-const HANDOFF_MS = 10_000
+export const HANDOFF_MS = 10_000
 
 export interface OptimisticBusy {
   /** 낙관 + 실제를 합친 값. 중지 버튼·전송 큐가 함께 본다. */
