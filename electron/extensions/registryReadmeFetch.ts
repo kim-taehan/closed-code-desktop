@@ -1,3 +1,4 @@
+import { networkFailure } from './fetchFailure'
 import { README_MAX_BYTES } from './readme'
 
 // 배포처가 내놓은 설명(README 마크다운)을 받아온다. 표준 §4.4 "받기 전에 보는 설명".
@@ -56,9 +57,7 @@ export async function fetchRegistryReadme(
       headers: { accept: 'text/markdown, text/plain' },
     })
   } catch (error) {
-    return isTimeout(error)
-      ? { ok: false, reason: 'timeout', detail: `${timeoutMs}ms` }
-      : { ok: false, reason: 'unreachable', detail: describe(error) }
+    return networkFailure(error, timeoutMs)
   }
 
   // 404 를 "설명 없음" 으로 바꾸지 않는다. 배포처가 readme 주소를 실어 놓고 404 를 주는 것은
@@ -76,26 +75,11 @@ export async function fetchRegistryReadme(
   try {
     text = await response.text()
   } catch (error) {
-    return isTimeout(error)
-      ? { ok: false, reason: 'timeout', detail: `${timeoutMs}ms` }
-      : { ok: false, reason: 'unreachable', detail: describe(error) }
+    return networkFailure(error, timeoutMs)
   }
 
   const bytes = Buffer.byteLength(text, 'utf8')
   if (bytes > README_MAX_BYTES) return { ok: false, reason: 'too_large', detail: `${bytes}B` }
 
   return { ok: true, text }
-}
-
-function isTimeout(error: unknown): boolean {
-  return (
-    error !== null &&
-    typeof error === 'object' &&
-    ((error as { name?: unknown }).name === 'TimeoutError' ||
-      (error as { name?: unknown }).name === 'AbortError')
-  )
-}
-
-function describe(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
 }

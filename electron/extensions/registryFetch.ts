@@ -3,6 +3,7 @@ import {
   type RegistryIndex,
   type RegistryParseFailure,
 } from '../../shared/extensions/registryIndex'
+import { networkFailure } from './fetchFailure'
 
 // 배포처 목록 문서를 받아온다. 표준 §4.4.
 //
@@ -66,10 +67,7 @@ export async function fetchRegistryIndex(
       headers: { accept: 'application/json' },
     })
   } catch (error) {
-    // 시간 초과와 아예 못 닿는 것은 사용자가 할 일이 다르다 (기다렸다 다시 / 주소·망 확인)
-    return isTimeout(error)
-      ? { ok: false, reason: 'timeout', detail: `${timeoutMs}ms` }
-      : { ok: false, reason: 'unreachable', detail: describe(error) }
+    return networkFailure(error, timeoutMs)
   }
 
   if (!response.ok) {
@@ -92,17 +90,4 @@ export async function fetchRegistryIndex(
   if (!parsed.ok) return { ok: false, reason: parsed.reason }
 
   return { ok: true, index: parsed.index }
-}
-
-function isTimeout(error: unknown): boolean {
-  return (
-    error !== null &&
-    typeof error === 'object' &&
-    ((error as { name?: unknown }).name === 'TimeoutError' ||
-      (error as { name?: unknown }).name === 'AbortError')
-  )
-}
-
-function describe(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
 }

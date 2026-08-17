@@ -1,6 +1,7 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { describeError, networkFailure } from './fetchFailure'
 
 // 배포처에서 확장 패키지 바이트를 받아 임시 파일로 떨군다. 표준 §4.4 "내려받기".
 //
@@ -85,9 +86,7 @@ export async function downloadPackage(
     // 본문 읽기도 같은 try 안이다 — 다 받기 전에 끊기는 것이 실제로 흔하다
     body = await response.arrayBuffer()
   } catch (error) {
-    return isTimeout(error)
-      ? { ok: false, reason: 'timeout', detail: `${timeoutMs}ms` }
-      : { ok: false, reason: 'unreachable', detail: describe(error) }
+    return networkFailure(error, timeoutMs)
   }
 
   let dir: string
@@ -97,7 +96,7 @@ export async function downloadPackage(
     path = join(dir, PACKAGE_FILENAME)
     await writeFile(path, Buffer.from(body))
   } catch (error) {
-    return { ok: false, reason: 'write_failed', detail: describe(error) }
+    return { ok: false, reason: 'write_failed', detail: describeError(error) }
   }
 
   return { ok: true, path, dir, bytes: body.byteLength }
@@ -109,17 +108,4 @@ export async function downloadPackage(
  */
 export async function discardDownload(dir: string): Promise<void> {
   await rm(dir, { recursive: true, force: true }).catch(() => {})
-}
-
-function isTimeout(error: unknown): boolean {
-  return (
-    error !== null &&
-    typeof error === 'object' &&
-    ((error as { name?: unknown }).name === 'TimeoutError' ||
-      (error as { name?: unknown }).name === 'AbortError')
-  )
-}
-
-function describe(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
 }
