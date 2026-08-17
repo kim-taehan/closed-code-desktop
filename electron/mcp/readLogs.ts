@@ -1,4 +1,5 @@
 import type { OutputSnapshot } from '../pty/outputBuffer'
+import { stripAnsi } from '../../shared/pty/stripAnsi'
 
 // `read_logs` 가 받은 인자를 검사하고, 붙들어 둔 출력을 **잘라서** 모델이 읽을 글로 만든다.
 // 순수 함수만 있다 — 프로세스도 앱 상태도 모른다 (`openFile.ts`·`openTerminal.ts` 와 같은 결).
@@ -155,13 +156,6 @@ function render(text: string): string {
   const line = stripAnsi(text)
   if (line.length <= MAX_LINE_CHARS) return line
   return `${line.slice(0, MAX_LINE_CHARS)}… (이 줄은 ${line.length - MAX_LINE_CHARS}자 더 있습니다)`
-}
-
-/** CSI(색·커서)와 OSC(창 제목) 둘만 벗긴다 — 터미널 출력에서 실제로 오는 것이 이 둘이다. */
-function stripAnsi(text: string): string {
-  return text
-    .replace(/\u001b\[[0-9;?]*[ -/]*[@-~]/g, '')
-    .replace(/\u001b\][^\u0007\u001b]*(?:\u0007|\u001b\\)/g, '')
 }
 
 function tailOf(asked: unknown): number {

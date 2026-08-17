@@ -1,3 +1,5 @@
+import { stripAnsi } from '../../shared/pty/stripAnsi'
+
 // 돌다가 깨지면 스스로 고친다 — **판정과 문구**만 여기 있다 (설계 2026-08-16 §4).
 //
 // 언제 시작하나 · 몇 번 도나 · 실패한 뒤엔 뭘 하나는 `useRunHeal.ts` 다. 가른 자리가
@@ -159,18 +161,4 @@ const MANAGERS: readonly string[] = ['npm', 'pnpm', 'yarn', 'bun']
 function packageManagerOf(command: string): string | null {
   const head = command.trim().split(/\s+/)[0] ?? ''
   return MANAGERS.includes(head) ? head : null
-}
-
-/**
- * 색을 벗긴다. 로그는 pty 바이트 그대로라 이스케이프가 섞여 있다 (`outputBuffer.ts` 가
- * 일부러 안 벗긴다 — 벗기는 것은 읽는 층의 일이다).
- *
- * `electron/mcp/readLogs.ts` 에 같은 함수가 있다. **합치지 않는다** — 저쪽은 main, 이쪽은
- * 렌더러라 tsconfig 가 갈려 있고, 공유하려면 `shared/` 로 옮겨야 하는데 그 이사는 이 두
- * 줄이 값을 못 한다. (세 번째 사본이 생기면 그때 옮긴다.)
- */
-function stripAnsi(text: string): string {
-  return text
-    .replace(/\u001b\[[0-9;?]*[ -/]*[@-~]/g, '')
-    .replace(/\u001b\][^\u0007\u001b]*(?:\u0007|\u001b\\)/g, '')
 }
