@@ -1,4 +1,5 @@
 import { writeFile } from 'node:fs/promises'
+import { describeError } from '../../shared/errors/describeError'
 import { dialog, type BrowserWindow } from 'electron'
 import type {
   ExtensionExportCsvPayload,
@@ -35,6 +36,6 @@ export async function exportExtensionCsv(
     await writeFile(picked.filePath, `﻿${payload.csv}`, 'utf8')
     return { ok: true, path: picked.filePath }
   } catch (error) {
-    return { ok: false, reason: error instanceof Error ? error.message : String(error) }
+    return { ok: false, reason: describeError(error) }
   }
 }

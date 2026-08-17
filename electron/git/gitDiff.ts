@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises'
+import { describeError } from '../../shared/errors/describeError'
 import { join } from 'node:path'
 import { runGit, succeeded } from './gitRunner'
 import type { GitDiffResultPayload } from '../../shared/ipc/gitPayloads'
@@ -56,6 +57,6 @@ async function readContent(root: string, path: string): Promise<GitDiffResultPay
     return { ok: true, diff: text.slice(0, MAX_BYTES), untracked: true }
   } catch (error) {
     // 방금 지워졌거나 바이너리일 수 있다. 사유를 그대로 넘긴다.
-    return { ok: false, diff: '', reason: error instanceof Error ? error.message : String(error) }
+    return { ok: false, diff: '', reason: describeError(error) }
   }
 }

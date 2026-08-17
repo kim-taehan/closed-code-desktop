@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { describeError } from '../../shared/errors/describeError'
 import {
   extensionHtmlDoc,
   isCommandRequest,
@@ -62,7 +63,7 @@ export function ExtensionHtmlView({ html, onOpen, onCommand }: ExtensionHtmlView
       })
       .catch((error: unknown) => {
         // 조용히 빈 화면으로 두면 "확장이 아무것도 안 냈다" 와 구분되지 않는다
-        if (alive) setSource({ state: 'failed', reason: error instanceof Error ? error.message : String(error) })
+        if (alive) setSource({ state: 'failed', reason: describeError(error) })
       })
     return () => {
       alive = false

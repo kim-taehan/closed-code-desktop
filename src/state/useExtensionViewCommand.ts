@@ -1,4 +1,5 @@
 import { useCallback } from 'react'
+import { describeError } from '../../shared/errors/describeError'
 
 // 확장 화면(본문 탭)이 `data-command` 로 부른 명령을 main 으로 보낸다.
 //
@@ -31,6 +32,6 @@ export function useExtensionViewCommand(
 
 /** `ipcMain.handle` 거부가 붙이는 앞머리를 뗀다 (`useExtensionPanel.ts` 의 같은 함수). */
 function describe(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error)
+  const message = describeError(error)
   return message.replace(/^Error invoking remote method '[^']*':\s*/, '').replace(/^Error:\s*/, '')
 }

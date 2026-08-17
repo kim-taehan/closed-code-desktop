@@ -1,4 +1,5 @@
 import type { ExtensionScan } from './registry'
+import { describeError } from '../../shared/errors/describeError'
 
 // "지금 어느 확장이 켜져 있나" 한 가지만 다룬다. `service.ts` 가 300줄 상한에 붙어 갈라냈고,
 // 판정이 두 자리(목록에 표시 / 실을 것 고르기)에서 쓰이므로 규칙을 한곳에 둔다 —
@@ -19,7 +20,7 @@ export async function disabledNames(
   try {
     return new Set(await read())
   } catch (error) {
-    onError(`꺼둔 목록을 못 읽었다: ${error instanceof Error ? error.message : String(error)}`)
+    onError(`꺼둔 목록을 못 읽었다: ${describeError(error)}`)
     return new Set()
   }
 }

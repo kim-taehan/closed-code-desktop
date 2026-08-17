@@ -19,6 +19,7 @@ import {
   parseFromParent,
   PendingRequests,
 } from './rpc'
+import { describeError } from '../../shared/errors/describeError'
 import type { RpcRequest } from './rpc'
 import { createExtensionApi } from './extensionApi'
 import { createChildHandler } from './childHandlers'
@@ -62,7 +63,7 @@ async function respond(request: RpcRequest): Promise<void> {
   try {
     port.postMessage(okResponse(request.id, await handle(request)))
   } catch (error) {
-    port.postMessage(errorResponse(request.id, error instanceof Error ? error.message : String(error)))
+    port.postMessage(errorResponse(request.id, describeError(error)))
   }
 }
 

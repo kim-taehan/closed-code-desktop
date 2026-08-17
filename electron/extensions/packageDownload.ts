@@ -1,7 +1,7 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { describeError } from '../errors/describeError'
+import { describeError } from '../../shared/errors/describeError'
 import { networkFailure } from './fetchFailure'
 
 // 배포처에서 확장 패키지 바이트를 받아 임시 파일로 떨군다. 표준 §4.4 "내려받기".

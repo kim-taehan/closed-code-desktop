@@ -1,4 +1,5 @@
 import { lstat, rm } from 'node:fs/promises'
+import { describeError } from '../../shared/errors/describeError'
 import { dirname, resolve } from 'node:path'
 
 // 설치된 확장을 지운다 — 폴더째.
@@ -46,7 +47,7 @@ export async function uninstallExtension(extensionsDir: string, dir: string): Pr
     return {
       ok: false,
       reason: 'failed',
-      detail: error instanceof Error ? error.message : String(error),
+      detail: describeError(error),
     }
   }
 }

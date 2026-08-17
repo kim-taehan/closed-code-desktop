@@ -1,6 +1,6 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
-import { describeError } from '../errors/describeError'
+import { describeError } from '../../shared/errors/describeError'
 import {
   DEFAULT_SETTINGS,
   normalizeSettings,

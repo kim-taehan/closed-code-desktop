@@ -6,6 +6,7 @@ import {
   METHOD_RUN_COMMAND,
   type RpcRequest,
 } from './rpc'
+import { describeError } from '../../shared/errors/describeError'
 import {
   loadExtensions,
   type RegisteredCommand,
@@ -77,7 +78,7 @@ export function createChildHandler(apiFor: ExtensionApiFor, deps: LoadDeps): (re
         try {
           await redraw()
         } catch (error) {
-          failed.push(error instanceof Error ? error.message : String(error))
+          failed.push(describeError(error))
         }
       }
       return { drawn: redraws.length - failed.length, failed }
@@ -92,7 +93,7 @@ export function createChildHandler(apiFor: ExtensionApiFor, deps: LoadDeps): (re
         try {
           await handler(file)
         } catch (error) {
-          failed.push(error instanceof Error ? error.message : String(error))
+          failed.push(describeError(error))
         }
       }
       return { notified: activeFiles.length - failed.length, failed }

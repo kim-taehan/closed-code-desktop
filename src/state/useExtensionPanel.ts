@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { describeError } from '../../shared/errors/describeError'
 import type {
   ExtensionEntry,
   ExtensionRow,
@@ -279,6 +280,6 @@ export function useExtensionPanel(options: ExtensionPanelOptions): ExtensionPane
  * 앞머리를 떼지 않으면 토스트가 채널 이름으로 시작해 정작 사유가 잘린다.
  */
 function describe(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error)
+  const message = describeError(error)
   return message.replace(/^Error invoking remote method '[^']*':\s*/, '').replace(/^Error:\s*/, '')
 }

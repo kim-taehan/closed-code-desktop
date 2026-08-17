@@ -1,4 +1,5 @@
 import { dialog, ipcMain, type BrowserWindow } from 'electron'
+import { describeError } from '../../shared/errors/describeError'
 import {
   Channel,
   type ProjectFavoritePayload,
@@ -223,7 +224,7 @@ export class ProjectBridge {
       } catch (error) {
         return {
           ok: false,
-          error: error instanceof Error ? error.message : String(error),
+          error: describeError(error),
           status: this.listener.serverStatus(),
         }
       }

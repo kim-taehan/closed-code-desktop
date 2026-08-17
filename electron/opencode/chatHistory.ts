@@ -1,4 +1,5 @@
 import { Action, Kind } from '../../shared/protocol/kinds'
+import { describeError } from '../../shared/errors/describeError'
 import { verifyEmptyChats } from './emptyChats'
 import type { OpencodeSession } from './historyApi'
 import { replayFrames } from './historyReplay'
@@ -226,6 +227,6 @@ function errorFrame(error: unknown): Frame {
   return {
     kind: Kind.CHAT_HISTORY,
     action: Action.ERROR,
-    data: { code: 'HISTORY_FAILED', message: error instanceof Error ? error.message : String(error) },
+    data: { code: 'HISTORY_FAILED', message: describeError(error) },
   }
 }

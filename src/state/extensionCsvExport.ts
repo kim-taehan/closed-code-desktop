@@ -1,4 +1,5 @@
 import { csvFileName, rowsToCsv } from './extensionRowCsv'
+import { describeError } from '../../shared/errors/describeError'
 import { sortRows, type RowSort } from './extensionRowSort'
 import type { ExtensionRow } from './extensionRows'
 
@@ -34,6 +35,6 @@ export function exportRowsCsv(args: {
       else if (!result.cancelled) args.onNotice(`내보내지 못했습니다: ${result.reason}`)
     })
     .catch((error: unknown) => {
-      args.onNotice(`내보내지 못했습니다: ${error instanceof Error ? error.message : String(error)}`)
+      args.onNotice(`내보내지 못했습니다: ${describeError(error)}`)
     })
 }

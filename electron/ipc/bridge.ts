@@ -1,4 +1,5 @@
 import { ipcMain, type BrowserWindow } from 'electron'
+import { describeError } from '../../shared/errors/describeError'
 import { ChatAskHub } from '../extensions/chatAskHub'
 import { Channel, type ProjectScoped, type SessionStatePayload } from '../../shared/ipc/channels'
 import { registerSessionHandlers, SESSION_CHANNELS } from './sessionHandlers'
@@ -130,7 +131,7 @@ export class SessionBridge {
           stage: 'failed',
           failure: {
             stage: 'awaiting_connected',
-            reason: error instanceof Error ? error.message : String(error),
+            reason: describeError(error),
           },
         },
       } satisfies SessionStatePayload)

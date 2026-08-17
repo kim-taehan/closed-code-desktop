@@ -1,4 +1,5 @@
 import { Component, type ReactNode } from 'react'
+import { describeError } from '../../shared/errors/describeError'
 import { t } from '../i18n/messages'
 
 // 렌더러가 죽어 흰 화면이 되는 케이스의 마지막 방어선 (전례: a17ba09 언어 변경 흰 화면).
@@ -45,7 +46,7 @@ export function ErrorPage({
   error: unknown
   onReset?: () => void
 }) {
-  const message = error instanceof Error ? error.message : String(error)
+  const message = describeError(error)
   const stack = error instanceof Error ? error.stack : undefined
 
   return (

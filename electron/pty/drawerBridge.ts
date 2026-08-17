@@ -1,4 +1,5 @@
 import { ipcMain, type BrowserWindow } from 'electron'
+import { describeError } from '../../shared/errors/describeError'
 import { Channel, type ProjectScoped } from '../../shared/ipc/channels'
 import type {
   PtyClosePayload,
@@ -143,7 +144,7 @@ export class PtyDrawerBridge {
     } catch (error) {
       // 서버가 안 떠 있으면 여기로 온다. 사유를 그대로 화면에 올린다 —
       // 빈 터미널만 보여 주면 사용자가 자기 탓으로 여긴다.
-      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+      return { ok: false, error: describeError(error) }
     }
   }
 
@@ -202,7 +203,7 @@ export class PtyDrawerBridge {
       if (reclaimed) return { ok: true, started: false }
     } catch (error) {
       // 서버가 안 떴을 때가 가장 흔하다. 사유를 그대로 모델에게 올린다.
-      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+      return { ok: false, error: describeError(error) }
     }
 
     // **개행이 여기 붙는다.** `fill` 과 갈리는 지점이고, 이 한 글자가 「채워만 둔다」와

@@ -1,4 +1,5 @@
 import { TOOLS } from './toolSchemas'
+import { describeError } from '../../shared/errors/describeError'
 
 // MCP 요청 하나를 응답 하나로 바꾸는 자리.
 //
@@ -142,7 +143,7 @@ async function callTool(params: unknown, runTool: RunTool): Promise<unknown> {
   try {
     return { content: [{ type: 'text', text: await runTool(name, parsed) }] }
   } catch (error) {
-    return errorResult(error instanceof Error ? error.message : String(error))
+    return errorResult(describeError(error))
   }
 }
 

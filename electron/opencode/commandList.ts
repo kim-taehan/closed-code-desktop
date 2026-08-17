@@ -17,6 +17,8 @@
 // ⚠️ **질의 이름은 평문 `directory=` 다** (`/mcp` 와 같고 pty 의 `location[directory]=` 와 다르다).
 // 빼면 서버 cwd 로 떨어져 **다른 프로젝트의 목록이 온다** — 실측: 디렉토리마다 목록이 다르다.
 
+import { describeError } from '../../shared/errors/describeError'
+
 export interface CommandSummary {
   name: string
   description: string
@@ -75,7 +77,7 @@ export async function fetchCommands(
     return { commands: items.filter(hasName).map(toSummary) }
   } catch (error) {
     if (controller.signal.aborted) return { commands: [], error: '명령 목록 조회 시간 초과' }
-    return { commands: [], error: error instanceof Error ? error.message : String(error) }
+    return { commands: [], error: describeError(error) }
   } finally {
     clearTimeout(timer)
   }

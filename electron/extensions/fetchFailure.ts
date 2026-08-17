@@ -9,7 +9,7 @@
 // (`write_failed`·`too_large`·`invalid_json`) 셋 다 `timeout`·`unreachable` 을 갖고 있어,
 // 좁은 유니온을 돌려주면 그대로 담긴다. 이 파일은 그 둘만 알고 나머지는 모른다.
 
-import { describeError } from '../errors/describeError'
+import { describeError } from '../../shared/errors/describeError'
 
 /**
  * 시간 초과와 아예 못 닿는 것을 가른다. **뭉치면 안 된다** — 사용자가 할 일이 다르다

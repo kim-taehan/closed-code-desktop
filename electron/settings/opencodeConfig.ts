@@ -1,6 +1,6 @@
 import { readFile, writeFile, copyFile, mkdir } from 'node:fs/promises'
 import { homedir } from 'node:os'
-import { describeError } from '../errors/describeError'
+import { describeError } from '../../shared/errors/describeError'
 import { dirname, join } from 'node:path'
 
 // opencode 자신의 설정 파일을 읽고 쓴다.

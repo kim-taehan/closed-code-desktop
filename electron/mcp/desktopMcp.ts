@@ -1,4 +1,4 @@
-import { describeError } from '../errors/describeError'
+import { describeError } from '../../shared/errors/describeError'
 import { registerMcpServer } from './register'
 import { McpServer } from './server'
 import { createToolRunner, type McpToolPorts } from './tools'

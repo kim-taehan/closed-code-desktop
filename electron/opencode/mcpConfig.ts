@@ -1,4 +1,5 @@
 import { Action, Kind } from '../../shared/protocol/kinds'
+import { describeError } from '../../shared/errors/describeError'
 import { SERVER_NAME, TOOLS } from '../mcp/rpc'
 import type { McpStatusEntry, OpencodeClient } from './client'
 
@@ -112,7 +113,7 @@ async function readState(client: McpClient, directory: string | null): Promise<R
   try {
     status = await client.mcpStatus(directory)
   } catch (error) {
-    return { servers: [], message: error instanceof Error ? error.message : String(error) }
+    return { servers: [], message: describeError(error) }
   }
   const configured = await mcpSettings(client, directory)
   const listed = Object.entries(status).map(([name, entry]) => toServer(name, entry, configured[name]))

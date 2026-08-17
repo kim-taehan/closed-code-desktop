@@ -1,6 +1,6 @@
 import { lstat, stat } from 'node:fs/promises'
 import { isAbsolute, relative, resolve } from 'node:path'
-import { describeError } from '../errors/describeError'
+import { describeError } from '../../shared/errors/describeError'
 import { resolveInside } from '../fs/resolveInside'
 import type { ExtensionManifest } from '../../shared/extensions/manifest'
 import type { ExtensionApi } from './extensionApi'

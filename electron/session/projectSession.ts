@@ -1,4 +1,5 @@
 import type { PermissionMode } from '../../shared/protocol/kinds'
+import { describeError } from '../../shared/errors/describeError'
 import type { ChatSendContext } from '../../shared/ipc/chatPayloads'
 import type { SessionStatePayload } from '../../shared/ipc/channels'
 import { normalizeSendContext } from './editorContext'
@@ -137,7 +138,7 @@ export class ProjectSession {
           stage: 'failed',
           failure: {
             stage: 'awaiting_connected',
-            reason: error instanceof Error ? error.message : String(error),
+            reason: describeError(error),
           },
         })
       }

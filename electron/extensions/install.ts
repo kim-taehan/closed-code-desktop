@@ -1,6 +1,6 @@
 import { lstat, mkdtemp, mkdir, readFile, rename, rm } from 'node:fs/promises'
 import { join } from 'node:path'
-import { describeError } from '../errors/describeError'
+import { describeError } from '../../shared/errors/describeError'
 import {
   detectArchiveFormat,
   extractArchive,

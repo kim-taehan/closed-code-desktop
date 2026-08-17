@@ -1,4 +1,5 @@
 import { readFile, stat } from 'node:fs/promises'
+import { describeError } from '../../shared/errors/describeError'
 import { basename, sep } from 'node:path'
 import { dialog, type BrowserWindow } from 'electron'
 import {
@@ -53,7 +54,7 @@ async function classify(path: string, projectRoot: string | null): Promise<Picke
       ? asContextFile(path, name, info.isDirectory(), projectRoot)
       : await asImage(path, name, info.size, mediaType)
   } catch (error) {
-    const reason = error instanceof Error ? error.message : String(error)
+    const reason = describeError(error)
     return { kind: 'error', name, error: `읽지 못했습니다: ${reason}` }
   }
 }

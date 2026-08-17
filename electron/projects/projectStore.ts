@@ -1,6 +1,6 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
-import { describeError } from '../errors/describeError'
+import { describeError } from '../../shared/errors/describeError'
 import type { ProjectRecord } from '../../shared/projects/projectRecord'
 
 // projects.json 읽기/쓰기만 책임진다. 판단은 ProjectRegistry 가 한다.

@@ -1,4 +1,4 @@
-import { describeError } from '../errors/describeError'
+import { describeError } from '../../shared/errors/describeError'
 import { HandlerSet, type Unsubscribe } from '../ws/transport'
 import { ViewEmitters } from './viewEmitters'
 import { ExtensionHost, type ForkFn } from './host'
