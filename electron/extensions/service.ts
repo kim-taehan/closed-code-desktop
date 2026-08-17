@@ -1,10 +1,11 @@
+import { describeError } from '../errors/describeError'
 import { HandlerSet, type Unsubscribe } from '../ws/transport'
 import { ViewEmitters } from './viewEmitters'
 import { ExtensionHost, type ForkFn } from './host'
 import { errorResponse, METHOD_LOAD_EXTENSIONS, NOTICE_READY, okResponse, type RpcRequest } from './rpc'
 import { ProjectEnvelope } from './projectEnvelope'
 import { createInvoker, type Invoker } from './serviceInvoke'
-import { describe, toSkips } from './serviceParse'
+import { toSkips } from './serviceParse'
 import { dispatchExtensionApi, portsOf, type DispatchPorts } from './serviceDispatch'
 import { defaultExtensionsDir, scanExtensions, type ExtensionScan, type SkippedExtension } from './registry'
 import { disabledNames, onlyEnabled, withEnabled, type ListedExtension } from './serviceEnabled'
@@ -258,7 +259,7 @@ export class ExtensionService {
       this.report(this.loadFailures, '싣기 실패')
     } catch (error) {
       // 호스트가 죽었거나 답이 깨졌다. 목록은 훑기 결과만 남고 명령은 전부 거부된다.
-      this.logHandlers.emit(`[확장] 싣기 요청 실패: ${describe(error)}`)
+      this.logHandlers.emit(`[확장] 싣기 요청 실패: ${describeError(error)}`)
     }
   }
 
@@ -289,7 +290,7 @@ export class ExtensionService {
         ),
       )
     } catch (error) {
-      this.host.respond(errorResponse(request.id, describe(error)))
+      this.host.respond(errorResponse(request.id, describeError(error)))
     }
   }
 

@@ -1,5 +1,6 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
+import { describeError } from '../errors/describeError'
 import type { ProjectRecord } from '../../shared/projects/projectRecord'
 
 // projects.json 읽기/쓰기만 책임진다. 판단은 ProjectRegistry 가 한다.
@@ -40,7 +41,7 @@ export class ProjectStore {
       return normalize(JSON.parse(raw))
     } catch (error) {
       // 손상된 파일로 앱을 못 쓰게 만들지 않는다. 빈 상태로 시작한다.
-      this.onError(`projects.json 을 읽지 못했습니다: ${describe(error)}`)
+      this.onError(`projects.json 을 읽지 못했습니다: ${describeError(error)}`)
       return { ...EMPTY }
     }
   }
@@ -50,7 +51,7 @@ export class ProjectStore {
       await mkdir(dirname(this.filePath), { recursive: true })
       await writeFile(this.filePath, JSON.stringify(state, null, 2), 'utf8')
     } catch (error) {
-      this.onError(`projects.json 을 쓰지 못했습니다: ${describe(error)}`)
+      this.onError(`projects.json 을 쓰지 못했습니다: ${describeError(error)}`)
     }
   }
 }
@@ -95,8 +96,4 @@ function toRecord(value: unknown): ProjectRecord | null {
 function toStringArray(value: unknown): string[] {
   if (!Array.isArray(value)) return []
   return value.filter((item): item is string => typeof item === 'string')
-}
-
-function describe(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
 }

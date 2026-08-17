@@ -1,5 +1,6 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
+import { describeError } from '../errors/describeError'
 import {
   DEFAULT_SETTINGS,
   normalizeSettings,
@@ -44,12 +45,8 @@ export class SettingsStore {
       await mkdir(dirname(this.filePath), { recursive: true })
       await writeFile(this.filePath, JSON.stringify(normalized, null, 2), 'utf8')
     } catch (error) {
-      this.onError(`settings.json 을 쓰지 못했습니다: ${describe(error)}`)
+      this.onError(`settings.json 을 쓰지 못했습니다: ${describeError(error)}`)
     }
     return normalized
   }
-}
-
-function describe(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
 }

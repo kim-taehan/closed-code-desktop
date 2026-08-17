@@ -1,3 +1,4 @@
+import { describeError } from '../errors/describeError'
 import { registerMcpServer } from './register'
 import { McpServer } from './server'
 import { createToolRunner, type McpToolPorts } from './tools'
@@ -95,7 +96,7 @@ export class DesktopMcp {
       if (result.status !== 'connected') this.registered.delete(project.id)
     } catch (error) {
       this.registered.delete(project.id)
-      this.log(`MCP 등록 실패 (${project.root}): ${describe(error)}`)
+      this.log(`MCP 등록 실패 (${project.root}): ${describeError(error)}`)
     }
   }
 
@@ -129,8 +130,4 @@ export class DesktopMcp {
   private log(line: string): void {
     this.options.log?.(line)
   }
-}
-
-function describe(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
 }

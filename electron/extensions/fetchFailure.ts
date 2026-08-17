@@ -9,6 +9,8 @@
 // (`write_failed`·`too_large`·`invalid_json`) 셋 다 `timeout`·`unreachable` 을 갖고 있어,
 // 좁은 유니온을 돌려주면 그대로 담긴다. 이 파일은 그 둘만 알고 나머지는 모른다.
 
+import { describeError } from '../errors/describeError'
+
 /**
  * 시간 초과와 아예 못 닿는 것을 가른다. **뭉치면 안 된다** — 사용자가 할 일이 다르다
  * (기다렸다 다시 / 주소·망 확인).
@@ -23,16 +25,6 @@ export function networkFailure(
   return isTimeout(error)
     ? { ok: false, reason: 'timeout', detail: `${timeoutMs}ms` }
     : { ok: false, reason: 'unreachable', detail: describeError(error) }
-}
-
-/**
- * 오류를 사람이 읽을 한 줄로. 시간 초과와 무관한 실패(`write_failed` 등)도 쓴다.
- *
- * **`describe` 라 부르지 않는다** — vitest 의 전역 `describe` 와 이름이 겹쳐, 테스트에서
- * 이것을 import 하면 그 파일의 `describe` 블록이 조용히 가려진다.
- */
-export function describeError(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
 }
 
 /**

@@ -1,5 +1,6 @@
 import { lstat, stat } from 'node:fs/promises'
 import { isAbsolute, relative, resolve } from 'node:path'
+import { describeError } from '../errors/describeError'
 import { resolveInside } from '../fs/resolveInside'
 import type { ExtensionManifest } from '../../shared/extensions/manifest'
 import type { ExtensionApi } from './extensionApi'
@@ -155,7 +156,7 @@ export async function loadExtensions(
     try {
       module = deps.requireModule(entry)
     } catch (error) {
-      failed.push({ dir: source.dir, reason: 'require_failed', detail: describe(error) })
+      failed.push({ dir: source.dir, reason: 'require_failed', detail: describeError(error) })
       continue
     }
 
@@ -177,7 +178,7 @@ export async function loadExtensions(
       if (typeof onActiveFile === 'function') activeFiles.push(onActiveFile as ActiveFileHandler)
       loaded.push(source.manifest.name)
     } catch (error) {
-      failed.push({ dir: source.dir, reason: 'activate_failed', detail: describe(error) })
+      failed.push({ dir: source.dir, reason: 'activate_failed', detail: describeError(error) })
     }
   }
 
@@ -239,10 +240,6 @@ async function isFile(path: string): Promise<boolean> {
   } catch {
     return false
   }
-}
-
-function describe(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
 }
 
 function asRecord(value: unknown): Record<string, unknown> {

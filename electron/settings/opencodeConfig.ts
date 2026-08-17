@@ -1,5 +1,6 @@
 import { readFile, writeFile, copyFile, mkdir } from 'node:fs/promises'
 import { homedir } from 'node:os'
+import { describeError } from '../errors/describeError'
 import { dirname, join } from 'node:path'
 
 // opencode 자신의 설정 파일을 읽고 쓴다.
@@ -102,7 +103,7 @@ async function readOne({ scope, path }: { scope: ConfigScope; path: string }): P
   } catch (error) {
     // 없는 것은 오류가 아니다 — 아직 안 만든 상태를 그대로 보여 준다
     if (isMissing(error)) return { scope, path, content: null }
-    return { scope, path, content: null, error: describe(error) }
+    return { scope, path, content: null, error: describeError(error) }
   }
 }
 
@@ -120,7 +121,7 @@ async function effectiveConfig(
     if (!response.ok) return { effectiveError: `유효 설정 조회 실패 (HTTP ${response.status})` }
     return { effective: await response.json() }
   } catch (error) {
-    return { effectiveError: describe(error) }
+    return { effectiveError: describeError(error) }
   }
 }
 
@@ -145,7 +146,7 @@ export async function writeOpencodeConfig(path: string, content: string): Promis
   try {
     JSON.parse(content)
   } catch (error) {
-    return { ok: false, error: `JSON 이 아닙니다: ${describe(error)}`, needsReload: false }
+    return { ok: false, error: `JSON 이 아닙니다: ${describeError(error)}`, needsReload: false }
   }
 
   let backupPath: string | undefined
@@ -165,7 +166,7 @@ export async function writeOpencodeConfig(path: string, content: string): Promis
     await writeFile(path, content, 'utf8')
     return { ok: true, needsReload: true, ...(backupPath ? { backupPath } : {}) }
   } catch (error) {
-    return { ok: false, error: describe(error), needsReload: false }
+    return { ok: false, error: describeError(error), needsReload: false }
   }
 }
 
@@ -193,14 +194,10 @@ export async function disposeInstance(
     if (!response.ok) return { ok: false, error: `다시 읽기 실패 (HTTP ${response.status})` }
     return { ok: true }
   } catch (error) {
-    return { ok: false, error: describe(error) }
+    return { ok: false, error: describeError(error) }
   }
 }
 
 function isMissing(error: unknown): boolean {
   return (error as NodeJS.ErrnoException)?.code === 'ENOENT'
-}
-
-function describe(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
 }

@@ -1,5 +1,6 @@
 import { lstat, mkdtemp, mkdir, readFile, rename, rm } from 'node:fs/promises'
 import { join } from 'node:path'
+import { describeError } from '../errors/describeError'
 import {
   detectArchiveFormat,
   extractArchive,
@@ -83,7 +84,7 @@ export async function installPackage(options: InstallOptions): Promise<InstallRe
   try {
     entries = await listArchiveEntries(packagePath)
   } catch (error) {
-    return { ok: false, reason: 'unreadable_package', detail: describe(error) }
+    return { ok: false, reason: 'unreadable_package', detail: describeError(error) }
   }
 
   // 하나라도 밖을 가리키면 **풀지 않는다.** 걸러서 푸는 것이 아니라 통째로 거부한다 —
@@ -101,7 +102,7 @@ export async function installPackage(options: InstallOptions): Promise<InstallRe
       // 패키지가 폴더 한 겹을 감싸고 있어도 받아준다 (압축할 때 흔한 실수다)
       await normalizeExtractedStructure(staging)
     } catch (error) {
-      return { ok: false, reason: 'extract_failed', detail: describe(error) }
+      return { ok: false, reason: 'extract_failed', detail: describeError(error) }
     }
 
     const parsed = await readManifest(staging)
@@ -116,7 +117,7 @@ export async function installPackage(options: InstallOptions): Promise<InstallRe
       await rm(dir, { recursive: true, force: true })
       await rename(staging, dir)
     } catch (error) {
-      return { ok: false, reason: 'move_failed', detail: describe(error) }
+      return { ok: false, reason: 'move_failed', detail: describeError(error) }
     }
     return { ok: true, manifest: parsed.manifest, dir, replaced }
   } finally {
@@ -139,17 +140,13 @@ async function readManifest(
   try {
     data = JSON.parse(text)
   } catch (error) {
-    return { ok: false, reason: 'invalid_json', detail: describe(error) }
+    return { ok: false, reason: 'invalid_json', detail: describeError(error) }
   }
 
   const parsed = parseManifest(data)
   // 파서의 사유를 그대로 detail 에 실어 올린다 — 무엇을 빠뜨렸는지 알아야 고친다
   if (!parsed.ok) return { ok: false, reason: 'invalid_manifest', detail: parsed.reason }
   return { ok: true, manifest: parsed.manifest }
-}
-
-function describe(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
 }
 
 /** 심링크로 깔린 확장도 "있다" 로 본다 — 끊어진 링크를 덮어쓰는 것도 업데이트다 */

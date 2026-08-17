@@ -33,10 +33,6 @@ export function requireString(value: unknown, field: string): string {
   return value
 }
 
-export function describe(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
-}
-
 export function asRecord(value: unknown): Record<string, unknown> {
   return value !== null && typeof value === 'object' ? (value as Record<string, unknown>) : {}
 }
