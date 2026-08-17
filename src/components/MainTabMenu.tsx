@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { useDismissOnOutside } from './SidebarPanelSelect'
+import { useDismissOnOutside } from '../state/useDismiss'
 import type { TabCloseTargets } from '../state/tabCloseTargets'
 
 // 탭 우클릭 메뉴 — 닫기 갈래 넷 (IntelliJ 의 탭 컨텍스트 메뉴).

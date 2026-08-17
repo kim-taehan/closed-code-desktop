@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
+import { useDismissOnOutside } from '../state/useDismiss'
 import type { ScmCommitMenu } from '../state/useScmCommit'
 
 // 변경사항 갈래의 아래 — 커밋바.
@@ -119,21 +120,4 @@ export function ScmCommitBar(props: ScmCommitBarProps) {
       </div>
     </div>
   )
-}
-
-/** 바깥을 누르면 닫는다. 열려 있을 때만 듣는다 (`SidebarPanelSelect` 와 같은 관행). */
-function useDismissOnOutside(
-  ref: React.RefObject<HTMLElement | null>,
-  onDismiss: () => void,
-  active: boolean,
-): void {
-  useEffect(() => {
-    if (!active) return
-
-    const handler = (event: MouseEvent) => {
-      if (ref.current && !ref.current.contains(event.target as Node)) onDismiss()
-    }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [ref, onDismiss, active])
 }

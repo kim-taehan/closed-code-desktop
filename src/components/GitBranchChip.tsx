@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import type { GitBranchEntry } from '../../shared/git/gitRefs'
-import { useDismissOnOutside } from './SidebarPanelSelect'
+import { useDismissOnOutside } from '../state/useDismiss'
 import { ScmNameForm } from './ScmNameForm'
 
 // 브랜치 칩 — 사이드바 맨 윗줄과 소스 관리 탭이 같은 모습을 쓴다.

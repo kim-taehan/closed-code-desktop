@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
+import { useDismissOnOutside } from '../state/useDismiss'
 import { t } from '../i18n/messages'
 import { isExtensionPanelId, type ExtensionPanelId } from '../state/extensionPanels'
 
@@ -125,26 +126,4 @@ function Item({ label, active, onPick }: { label: string; active: boolean; onPic
       {label}
     </button>
   )
-}
-
-/**
- * 바깥을 누르면 닫는다. 열려 있을 때만 듣는다.
- *
- * `GitBranchChip` 의 전환 메뉴도 이것을 쓴다 — 레포에 같은 훅이 이미 여러 벌이라
- * 새 벌을 만들지 않았다.
- */
-export function useDismissOnOutside(
-  ref: React.RefObject<HTMLElement | null>,
-  onDismiss: () => void,
-  active: boolean,
-): void {
-  useEffect(() => {
-    if (!active) return
-
-    const handler = (event: MouseEvent) => {
-      if (ref.current && !ref.current.contains(event.target as Node)) onDismiss()
-    }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [ref, onDismiss, active])
 }

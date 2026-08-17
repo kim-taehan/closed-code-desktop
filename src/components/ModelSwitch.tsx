@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
+import { useDismissOnOutsideOrEscape } from '../state/useDismiss'
 import type { LlmModelStatePayload } from '../../shared/protocol/llmConfig'
 import { buildModelMenuOptions, displayModel } from '../state/modelSelect'
 import { t } from '../i18n/messages'
@@ -17,7 +18,7 @@ export interface ModelSwitchProps {
 export function ModelSwitch({ state, selected, onSelect, disabled = false }: ModelSwitchProps) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
-  useDismiss(ref, () => setOpen(false), open)
+  useDismissOnOutsideOrEscape(ref, () => setOpen(false), open)
 
   const currentModel = state.status?.model ?? ''
   const options = buildModelMenuOptions(state.options, currentModel)
@@ -80,27 +81,4 @@ export function ModelSwitch({ state, selected, onSelect, disabled = false }: Mod
       )}
     </div>
   )
-}
-
-/** 바깥 클릭·Escape 로 닫는다 (PermissionModeSwitch 와 같은 규칙). */
-function useDismiss(
-  ref: React.RefObject<HTMLElement | null>,
-  onDismiss: () => void,
-  active: boolean,
-): void {
-  useEffect(() => {
-    if (!active) return
-    const onDown = (event: MouseEvent) => {
-      if (ref.current && !ref.current.contains(event.target as Node)) onDismiss()
-    }
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onDismiss()
-    }
-    document.addEventListener('mousedown', onDown)
-    document.addEventListener('keydown', onKey)
-    return () => {
-      document.removeEventListener('mousedown', onDown)
-      document.removeEventListener('keydown', onKey)
-    }
-  }, [ref, onDismiss, active])
 }

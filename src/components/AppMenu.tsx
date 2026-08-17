@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useDismissOnOutside } from '../state/useDismiss'
 import { t } from '../i18n/messages'
 import { setOpenLogsHandler } from '../state/slashCommands'
 // 단축키 표기는 설정의 목록(ShortcutsSection)과 같은 판정을 쓴다 — 복사하면 두 곳이 갈린다.
@@ -88,21 +89,4 @@ function MenuItem({ icon, label, keys, onSelect }: MenuItemProps) {
       {keys !== undefined && <span className="app-menu__keys">{keys}</span>}
     </button>
   )
-}
-
-/** 바깥을 누르면 닫는다. 열려 있을 때만 듣는다. */
-function useDismissOnOutside(
-  ref: React.RefObject<HTMLElement | null>,
-  onDismiss: () => void,
-  active: boolean,
-): void {
-  useEffect(() => {
-    if (!active) return
-
-    const handler = (event: MouseEvent) => {
-      if (ref.current && !ref.current.contains(event.target as Node)) onDismiss()
-    }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [ref, onDismiss, active])
 }

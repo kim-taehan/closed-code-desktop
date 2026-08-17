@@ -2,7 +2,7 @@ import { useRef, useState } from 'react'
 import { t } from '../i18n/messages'
 import type { ExtensionCommand } from '../../shared/extensions/manifest'
 import type { ExtensionProgressPayload } from '../../shared/ipc/channels'
-import { useDismissOnOutside } from './SidebarPanelSelect'
+import { useDismissOnOutside } from '../state/useDismiss'
 import { ExtensionRunPane } from './ExtensionRunPane'
 import type { ExtensionProgressLine } from '../state/extensionProgressLog'
 

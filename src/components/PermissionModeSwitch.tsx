@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useDismissOnOutsideOrEscape } from '../state/useDismiss'
 import {
   ALL_PERMISSION_MODES,
   PERMISSION_MODE_HINT,
@@ -28,7 +29,7 @@ export function PermissionModeSwitch({
   const ref = useRef<HTMLDivElement>(null)
 
   useShiftTabCycle(mode, onChange, disabled)
-  useDismiss(ref, () => setOpen(false), open)
+  useDismissOnOutsideOrEscape(ref, () => setOpen(false), open)
 
   return (
     <div className="modes" ref={ref}>
@@ -136,28 +137,4 @@ function useShiftTabCycle(
  */
 function inComposer(target: EventTarget | null): boolean {
   return target instanceof Element && target.closest('.composer') !== null
-}
-
-/** 바깥을 누르거나 Escape 를 누르면 닫는다. mousedown 이어야 여는 클릭이 즉시 닫지 않는다. */
-function useDismiss(
-  ref: React.RefObject<HTMLElement | null>,
-  onDismiss: () => void,
-  active: boolean,
-): void {
-  useEffect(() => {
-    if (!active) return
-
-    const onDown = (event: MouseEvent) => {
-      if (ref.current && !ref.current.contains(event.target as Node)) onDismiss()
-    }
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onDismiss()
-    }
-    document.addEventListener('mousedown', onDown)
-    document.addEventListener('keydown', onKey)
-    return () => {
-      document.removeEventListener('mousedown', onDown)
-      document.removeEventListener('keydown', onKey)
-    }
-  }, [ref, onDismiss, active])
 }
