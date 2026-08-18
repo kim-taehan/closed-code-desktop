@@ -12,10 +12,19 @@ import { usePaneExits, type PaneExits } from './usePaneExits'
 
 // 본문 밑에 붙는 셸 칸. 펴고 접고, 높이를 재고, 어디에 포커스가 갈지를 쥔다.
 //
-// **펴짐·높이는 앱 전체가 하나를 나눠 쓴다.** 프로젝트마다 다르면 탭을 옮길 때마다 본문
-// 높이가 튄다 — 사이드바 폭이 앱 하나인 것과 같은 이유다 (`useSidebarWidth`).
+// **높이만 앱 전체가 하나를 나눠 쓴다.** 몇 줄을 보고 싶은가는 이 컴퓨터의 화면 취향이지
+// 프로젝트의 성질이 아니다 — 사이드바 폭이 앱 하나인 것과 같은 이유다 (`useSidebarWidth`).
 //
-// **탭 목록만 프로젝트마다 따로다.** 칸 하나가 pty 하나이고 pty 는 프로젝트에 매여 있다
+// **펴짐은 프로젝트마다 따로다 (2026-08-18).** 예전에는 이것도 앱 하나였다. 근거는
+// 「프로젝트마다 다르면 탭을 옮길 때마다 본문 높이가 튄다」였는데, 실제로 겪어 보니 반대가
+// 더 나빴다: 셸을 쓰는 프로젝트에서 펴 두면 **셸을 안 쓰는 프로젝트로 옮겨도 따라붙는다.**
+// 튀는 것은 옮기는 그 순간뿐이고, 따라붙는 것은 그 프로젝트에 있는 내내 거슬린다.
+//
+// 그 자리에 `everOpened` 의 **결함**도 같이 있었다. 「열어 본 적 없는 프로젝트에는 pty 를
+// 안 띄운다」는 뜻인데 값이 앱 하나짜리 불리언이라, A 에서 한 번 펴면 **B 로 옮기는 순간
+// B 의 서버에도 pty 가 떴다** — 막으려던 바로 그 일이다. 둘 다 프로젝트별로 옮겼다.
+//
+// **탭 목록도 프로젝트마다 따로다.** 칸 하나가 pty 하나이고 pty 는 프로젝트에 매여 있다
 // (`electron/pty/ptyPool.ts`) — 앱 하나로 두면 A 에서 셸을 셋 열고 B 로 옮기는 순간
 // B 의 서버에 셸 셋이 저절로 뜬다. 옮겼다 돌아오면 그대로인 것도 여기서 나온다
 // (설계 §1 이 본문 탭을 버린 근거 그대로다).
@@ -90,11 +99,23 @@ export interface ShellDrawer {
 export function useShellDrawer(projectId: string | null): ShellDrawer {
   // **켤 때는 언제나 접혀 있다.** 지난번 상태를 복원하지 않는다 — 앱을 켜면 먼저 보고
   // 싶은 것은 대화지 지난번에 열어 둔 셸이 아니다. ⌘↓ 한 번이면 펴진다.
-  const [open, setOpen] = useState(false)
+  // 그래서 저장소를 안 쓴다: 프로젝트별로 갈랐어도 앱이 사는 동안만 사는 값이다.
+  const [openByProject, setOpenByProject] = useState<Record<string, boolean>>({})
+  const [openedOnce, setOpenedOnce] = useState<ReadonlySet<string>>(() => new Set())
   const [height, setHeight] = useState(loadHeight)
-  const [focus, setFocus] = useState<'main' | 'drawer'>('main')
+  const [focusRaw, setFocus] = useState<'main' | 'drawer'>('main')
   const [dragging, setDragging] = useState(false)
-  const [everOpened, setEverOpened] = useState(false)
+
+  const open = projectId !== null && openByProject[projectId] === true
+  const everOpened = projectId !== null && openedOnce.has(projectId)
+  /**
+   * **접혀 있으면 키는 언제나 본문 것이다.**
+   *
+   * 상태로만 들면 프로젝트를 옮길 때 어긋난다: A 에서 셸에 내려간 채 B(접힘)로 옮기면
+   * 그려지지도 않은 칸이 키를 쥔 것이 되어 타자가 아무 데도 안 간다. `close` 가 포커스를
+   * 돌려주는 것과 같은 규칙인데, 그쪽은 **누를 때만** 돌고 이쪽은 늘 돈다.
+   */
+  const focus: 'main' | 'drawer' = open ? focusRaw : 'main'
   // 드래그 중 상태 갱신마다 리스너를 다시 걸지 않으려고 ref 로 최신 높이를 든다
   const latest = useRef(height)
   // 프로젝트마다 따로. 안 연 프로젝트는 키가 없고, 그때는 기본값(셸 하나)으로 읽는다 —
@@ -113,15 +134,18 @@ export function useShellDrawer(projectId: string | null): ShellDrawer {
   )
 
   const goDown = useCallback(() => {
-    setOpen(true)
-    setEverOpened(true)
+    // 프로젝트가 없으면 펼 칸도 없다 — 열쇠 없이 표에 넣으면 아무 프로젝트도 못 가리킨다
+    if (projectId === null) return
+    setOpenByProject((all) => ({ ...all, [projectId]: true }))
+    setOpenedOnce((all) => (all.has(projectId) ? all : new Set(all).add(projectId)))
     setFocus('drawer')
-  }, [])
+  }, [projectId])
 
   const close = useCallback(() => {
-    setOpen(false)
+    if (projectId === null) return
+    setOpenByProject((all) => ({ ...all, [projectId]: false }))
     setFocus('main')
-  }, [])
+  }, [projectId])
 
   // ⌘↑ 와 ⌄ 는 같은 일이다 — 올라오면 칸은 접힌다.
   // **셸은 죽지 않는다.** opencode 쪽 pty 가 그대로 살아 있고 서버가 스크롤백을 든다

@@ -59,7 +59,7 @@ export function App() {
   const tree = useFileTree(projects.activeId)
   const toasts = useToasts()
   const sidebar = useSidebarWidth()
-  // 하단 셸 칸 (⌘↓/⌘↑). 펴짐·높이는 앱 하나, **탭 목록만 프로젝트마다**다 (useShellDrawer)
+  // 하단 셸 칸 (⌘↓/⌘↑). **높이만 앱 하나**, 펴짐·탭 목록은 프로젝트마다다 (useShellDrawer)
   const shell = useShellDrawer(projects.activeId)
   const appSettings = useAppSettings()
   const devPhrase = useDevPhrase(appSettings) // 개발자 모드 이스터에그 (스펙 11_spec_devmode)

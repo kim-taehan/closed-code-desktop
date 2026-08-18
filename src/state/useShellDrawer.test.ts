@@ -174,3 +174,77 @@ describe('useShellDrawer', () => {
     })
   })
 })
+
+// **펴짐은 프로젝트마다 따로다** (2026-08-18). 셸을 쓰는 프로젝트에서 펴 두면 셸을 안 쓰는
+// 프로젝트로 옮겨도 따라붙던 자리다 — 옮기는 순간 높이가 튀는 것보다, 그 프로젝트에 있는
+// 내내 안 쓰는 칸이 자리를 먹는 쪽이 나빴다.
+describe('펴짐은 프로젝트마다 따로', () => {
+  /** 프로젝트를 갈아끼울 수 있는 훅 */
+  function twoProjects() {
+    return renderHook(({ id }: { id: string }) => useShellDrawer(id), { initialProps: { id: 'A' } })
+  }
+
+  it('A 에서 펴도 B 는 접힌 채다', () => {
+    const { result, rerender } = twoProjects()
+    act(() => result.current.goDown())
+    expect(result.current.open).toBe(true)
+
+    rerender({ id: 'B' })
+
+    expect(result.current.open).toBe(false)
+  })
+
+  it('B 를 보다 A 로 돌아오면 펴 둔 그대로다', () => {
+    const { result, rerender } = twoProjects()
+    act(() => result.current.goDown())
+    rerender({ id: 'B' })
+    rerender({ id: 'A' })
+
+    expect(result.current.open).toBe(true)
+  })
+
+  it('B 에서 접어도 A 는 펴진 채다 — 접는 것도 그 프로젝트 것이다', () => {
+    const { result, rerender } = twoProjects()
+    act(() => result.current.goDown())
+    rerender({ id: 'B' })
+    act(() => result.current.goDown())
+    act(() => result.current.close())
+    rerender({ id: 'A' })
+
+    expect(result.current.open).toBe(true)
+  })
+
+  // 「열어 본 적 없는 프로젝트에는 pty 를 안 띄운다」가 이 값의 뜻인데, 앱 하나짜리
+  // 불리언이던 시절에는 A 를 한 번 편 것만으로 B 의 서버에도 pty 가 떴다 — 막으려던 그 일이다.
+  it('everOpened 도 프로젝트마다 따로 — 남의 프로젝트에 셸을 띄우지 않는다', () => {
+    const { result, rerender } = twoProjects()
+    act(() => result.current.goDown())
+    expect(result.current.everOpened).toBe(true)
+
+    rerender({ id: 'B' })
+
+    expect(result.current.everOpened).toBe(false)
+  })
+
+  // 그려지지도 않은 칸이 키를 쥐고 있으면 타자가 아무 데도 안 간다.
+  it('셸에 내려간 채 다른 프로젝트로 가면 키는 본문으로 돌아온다', () => {
+    const { result, rerender } = twoProjects()
+    act(() => result.current.goDown())
+    expect(result.current.focus).toBe('drawer')
+
+    rerender({ id: 'B' })
+
+    expect(result.current.focus).toBe('main')
+  })
+
+  // 높이는 화면 취향이라 앱 하나다 — 프로젝트의 성질이 아니다 (`useSidebarWidth` 와 같은 규칙)
+  it('높이는 프로젝트를 옮겨도 그대로다', () => {
+    localStorage.setItem(KEY, '300')
+    const { result, rerender } = twoProjects()
+    const before = result.current.height
+
+    rerender({ id: 'B' })
+
+    expect(result.current.height).toBe(before)
+  })
+})
