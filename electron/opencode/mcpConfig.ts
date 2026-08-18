@@ -160,8 +160,21 @@ function toServer(
     server_name: name,
     status: typeof entry?.status === 'string' ? entry.status : 'unknown',
     transport: setting?.type === 'local' || setting?.type === 'remote' ? setting.type : 'unknown',
-    // 우리가 띄운 서버의 도구만 안다 — opencode 는 도구 목록을 안 준다 (`mcp/rpc.ts` 가 정본)
-    tools: name === SERVER_NAME ? TOOLS.map((tool) => tool.name) : [],
+    // 우리가 띄운 서버의 도구만 안다 — opencode 는 도구 목록을 안 준다 (`mcp/rpc.ts` 가 정본).
+    //
+    // **설명을 함께 싣는다.** 예전에는 `.map((tool) => tool.name)` 으로 이름만 보냈는데,
+    // 설명은 `toolSchemas.ts` 에 처음부터 도구마다 적혀 있었다 — 화면에 이름표만 남아
+    // 무엇을 하는 도구인지 알려면 소스를 열어야 했다. 여기가 그것이 버려지던 자리다.
+    // 인자 설명(`inputSchema`)까지는 안 보낸다: 지금 화면이 그릴 자리가 없고,
+    // 안 쓰는 값을 실어 보내면 payload 만 커진다.
+    //
+    // 여기서 빈 설명을 걸러 내지 않는다 — `TOOLS` 는 우리가 쓴 정본이고 타입이 모든
+    // 도구에 설명이 있음을 이미 보장한다 (처음에 방어를 뒀더니 타입체커가 「닿을 수 없는
+    // 비교」로 잡았다). 남의 데이터를 받는 자리는 화면 쪽 `toTools` 이고, 거르는 것은 거기다.
+    tools:
+      name === SERVER_NAME
+        ? TOOLS.map((tool) => ({ name: tool.name, description: tool.description }))
+        : [],
     ...(where !== '' ? { url: where } : {}),
     ...(typeof entry?.error === 'string' && entry.error !== '' ? { error: entry.error } : {}),
   }

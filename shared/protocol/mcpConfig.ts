@@ -50,12 +50,29 @@ export interface McpServerStatus {
   /** opencode 가 준 실패 원문. `failed`·`needs_client_registration` 에만 있다. */
   error?: string
   /**
-   * 이 서버가 주는 도구 이름.
+   * 이 서버가 주는 도구.
    *
    * **우리 서버(`closed-code-desktop`)에만 채운다.** opencode 는 `GET /mcp` 에 도구를 안 싣고,
    * 남의 서버 도구를 알아낼 표면이 없다 — 모르는 것을 지어내지 않는다.
    */
-  tools: string[]
+  tools: McpTool[]
+}
+
+/**
+ * 도구 하나.
+ *
+ * 예전에는 **이름만** 실었다(`string[]`). 설명은 처음부터 있었는데
+ * (`electron/mcp/toolSchemas.ts` 에 도구마다 한국어로 적혀 있다) 실어 보내는 자리에서
+ * `.map((tool) => tool.name)` 으로 떨어뜨리고 있었다 — 화면에는 이름표만 남아, 무엇을
+ * 하는 도구인지 알려면 소스를 열어야 했다.
+ */
+export interface McpTool {
+  name: string
+  /**
+   * 무엇을 하는 도구인가. **없을 수 있다** — 도구는 MCP 규약상 설명이 선택이고,
+   * 없는 것을 빈 문자열로 채우면 화면이 「설명이 있는데 비었다」로 그린다.
+   */
+  description?: string
 }
 
 export interface McpState {
@@ -95,7 +112,7 @@ function toServer(value: unknown): McpServerStatus | null {
     serverName: name,
     status: toStatus(source['status']),
     transport: toTransport(source['transport']),
-    tools: toStrings(source['tools']),
+    tools: toTools(source['tools']),
     ...(typeof url === 'string' && url !== '' ? { url } : {}),
     ...(typeof error === 'string' && error !== '' ? { error } : {}),
   }
@@ -119,8 +136,33 @@ function toTransport(value: unknown): McpTransport {
   return value === 'local' || value === 'remote' ? value : 'unknown'
 }
 
-function toStrings(value: unknown): string[] {
-  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []
+/**
+ * 도구 목록.
+ *
+ * **글자만 온 것도 받는다.** 이 payload 를 만드는 자리가 예전에는 이름만 실었고
+ * (`string[]`), 앱과 opencode 는 각자 갱신되므로 옛 모양이 한동안 함께 돈다.
+ * 그때 목록을 통째로 버리면 「이 앱이 띄웠다」 표식(`McpSection` 의 `ours`)까지 사라져,
+ * 서버 카드가 남의 서버처럼 보인다 — 설명만 없는 것과 결과가 다르다.
+ *
+ * 설명은 **빈 문자열이면 없는 것으로 본다.** 화면이 「설명이 있는데 비었다」로 그리는 것을
+ * 막는 자리가 여기뿐이다 (`url`·`error` 와 같은 규칙).
+ */
+function toTools(value: unknown): McpTool[] {
+  if (!Array.isArray(value)) return []
+  return value.flatMap((item) => {
+    if (typeof item === 'string') return item === '' ? [] : [{ name: item }]
+    const source = asRecord(item)
+    const name = source['name']
+    // 이름이 없으면 가리킬 도구가 없다 — 설명만 있는 줄은 그릴 수도 부를 수도 없다
+    if (typeof name !== 'string' || name === '') return []
+    const description = source['description']
+    return [
+      {
+        name,
+        ...(typeof description === 'string' && description !== '' ? { description } : {}),
+      },
+    ]
+  })
 }
 
 function asRecord(value: unknown): Record<string, unknown> {

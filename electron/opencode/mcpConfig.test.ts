@@ -99,7 +99,20 @@ describe('mcpConfigFrame', () => {
     const ours = (await stateOf()).servers.find((s) => s.serverName === 'closed-code-desktop')
     expect(ours?.status).toBe('connected')
     expect(ours?.transport).toBe('unknown')
-    expect(ours?.tools).toEqual(['open_file', 'open_terminal', 'run_project', 'read_logs', 'save_run_commands'])
+    expect(ours?.tools.map((tool) => tool.name)).toEqual([
+      'open_file',
+      'open_terminal',
+      'run_project',
+      'read_logs',
+      'save_run_commands',
+    ])
+  })
+
+  // 설명은 `toolSchemas.ts` 에 처음부터 도구마다 적혀 있었는데, 여기서 이름만 뽑느라
+  // 떨어뜨리고 있었다 — 화면에는 이름표만 남아 무엇을 하는 도구인지 알 길이 없었다.
+  it('도구 설명을 함께 싣는다 — 이름만 보내던 자리다', async () => {
+    const ours = (await stateOf()).servers.find((s) => s.serverName === 'closed-code-desktop')
+    expect(ours?.tools.every((tool) => (tool.description ?? '') !== '')).toBe(true)
   })
 
   it('남의 서버 도구는 지어내지 않는다', async () => {

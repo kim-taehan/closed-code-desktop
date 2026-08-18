@@ -82,6 +82,26 @@ function failed(status: McpConnectionStatus): boolean {
 
 function ServerCard({ server }: { server: McpServerStatus }) {
   const [busy, setBusy] = useState(false)
+  /** 설명을 펼쳐 둔 도구. **한 번에 하나다** — 다 펼치면 카드가 화면을 통째로 먹는다. */
+  const [picked, setPicked] = useState<string | null>(null)
+  // 목록이 다시 오면서 그 도구가 사라졌을 수 있다. 상태를 되돌리는 효과를 걸지 않는다 —
+  // 여기서 순수하게 유도하면 어긋날 자리가 없다 (`ExtensionViewPanel` 의 거르개와 같은 규칙).
+  const shown = server.tools.find((tool) => tool.name === picked && tool.description !== undefined)
+
+  /**
+   * 열린 설명 칸을 시야로 끌어온다.
+   *
+   * `block: 'nearest'` 라 이미 보이면 아무 일도 안 한다 — 보이는데도 굴리면 누를 때마다
+   * 화면이 들썩인다. 칸이 붙는 순간에만 도는 `ref` 콜백이라 효과를 따로 걸 자리가 없다.
+   *
+   * **없을 수 있어 지킨다.** jsdom 에는 이 함수가 없다(실측 — 시험이 잡았다).
+   * `ref` 콜백에서 던지면 그 자리에서 렌더가 깨져 **설명 칸이 아니라 카드 전체가 사라진다** —
+   * 곁다리 편의 하나 때문에 잃을 것이 아니다.
+   */
+  const reveal = (node: HTMLParagraphElement | null): void => {
+    node?.scrollIntoView?.({ block: 'nearest' })
+  }
+
   const tone = TONES[server.status]
   // 도구를 아는 것은 우리가 띄운 서버뿐이다 (`electron/opencode/mcpConfig.ts` — opencode 는
   // 남의 서버 도구를 안 준다). 그래서 이 목록이 곧 "이 앱이 띄웠다" 는 표식이다.
@@ -122,11 +142,35 @@ function ServerCard({ server }: { server: McpServerStatus }) {
       {server.tools.length > 0 && (
         <div className="dc-mcp__tools">
           {server.tools.map((tool) => (
-            <span key={tool} className="dc-mcp__tool">
-              {tool}
-            </span>
+            <button
+              key={tool.name}
+              type="button"
+              // 설명이 없는 도구는 눌러도 열 것이 없다. 버튼으로 두면 눌리는데 아무 일도
+              // 안 일어나므로, 그때는 예전처럼 **누를 수 없는 이름표**로 남긴다.
+              disabled={tool.description === undefined}
+              aria-expanded={tool.description === undefined ? undefined : picked === tool.name}
+              className={`dc-mcp__tool${picked === tool.name ? ' dc-mcp__tool--on' : ''}`}
+              // 같은 것을 다시 누르면 닫는다 — 연 것을 닫을 다른 문이 없다
+              onClick={() => setPicked((current) => (current === tool.name ? null : tool.name))}
+            >
+              {tool.name}
+            </button>
           ))}
         </div>
+      )}
+
+      {/* 고른 도구의 설명. **알약 줄 아래 한 칸**이고, 무엇을 골랐든 자리가 같다.
+          알약이 줄바꿈되므로 둘째 줄의 알약을 눌러도 설명은 늘 목록 맨 아래에 뜬다 —
+          누른 자리와 뜨는 자리가 멀어지는 것이 이 모양의 대가다. 도구가 스무 개면 그
+          거리가 화면 밖까지 벌어져 **눌렀는데 아무 일도 안 난 것처럼 보인다.**
+          그래서 열릴 때 그 칸을 시야로 끌어온다 (아래 `ref`).
+
+          설명 원문이 길다 (`save_run_commands` 는 400자). 오류 칸(`dc-mcp__err`)이 이미
+          같은 이유로 높이를 재우고 있어 새 규칙이 아니다. */}
+      {shown !== undefined && (
+        <p className="dc-mcp__doc" ref={reveal}>
+          {shown.description}
+        </p>
       )}
 
       {/* 꺼진 서버만 문구가 다르다. 부르는 곳은 하나다 — opencode 가 둘을 안 가른다.
