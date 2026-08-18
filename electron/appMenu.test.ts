@@ -26,9 +26,23 @@ describe('buildAppMenuTemplate', () => {
     }
   })
 
-  it('편집 role 은 모든 플랫폼에 있다 — 없으면 입력창 복붙이 죽는다', () => {
+  it('복붙 role 은 모든 플랫폼에 있다 — 없으면 입력창 복붙이 죽는다', () => {
     for (const platform of ['darwin', 'win32', 'linux'] as const) {
-      expect(rolesOf(buildAppMenuTemplate(platform))).toContain('editMenu')
+      const roles = rolesOf(buildAppMenuTemplate(platform))
+      for (const role of ['cut', 'copy', 'paste', 'selectAll']) expect(roles).toContain(role)
+    }
+  })
+
+  // undo/redo role 은 Chromium 의 **네이티브** 편집 undo 를 부른다. 편집기는 CodeMirror 라
+  // 자기 이력을 따로 쥐므로 그 호출은 아무 일도 안 하고, 키는 메뉴가 먹어서 CodeMirror 까지
+  // 가지도 않는다 — ⌘Z 가 죽은 키가 된다. 그래서 `editMenu` 를 통째로 쓰지 않는다.
+  it('undo·redo role 이 없다 — ⌘Z 가 CodeMirror 까지 내려가야 한다', () => {
+    for (const platform of ['darwin', 'win32', 'linux'] as const) {
+      const roles = rolesOf(buildAppMenuTemplate(platform))
+      expect(roles).not.toContain('undo')
+      expect(roles).not.toContain('redo')
+      // `editMenu` 를 그대로 쓰면 undo/redo 가 딸려 온다 — role 이름만 봐서는 안 보이므로 함께 잠근다
+      expect(roles).not.toContain('editMenu')
     }
   })
 
