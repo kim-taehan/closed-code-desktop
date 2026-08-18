@@ -52,8 +52,6 @@ export interface ExtensionTreeNode {
   badge?: string
   /** 이 줄에만 붙는 버튼. 누르면 그 마디 하나를 골라 `command` 를 돌린다 */
   action?: { label: string; command: string }
-  /** 줄 버튼이 둘 이상일 때 (「보기」 + 「다시」 처럼). `action` 과 함께 오면 이어서 그린다 */
-  actions?: { label: string; command: string }[]
   children?: ExtensionTreeNode[]
 }
 

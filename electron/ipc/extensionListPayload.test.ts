@@ -20,57 +20,6 @@ describe('둘째 줄 (detail)', () => {
   })
 })
 
-describe('줄 버튼이 여럿일 때 (actions)', () => {
-  // 하나가 오타라고 그 줄의 버튼을 전부 없애면, 무엇이 잘못됐는지 화면이 말해 주지 않는다.
-  it('깨진 항목만 버리고 나머지는 담는다', () => {
-    expect(
-      toTreeNodes([
-        {
-          id: 'a',
-          label: 'A',
-          actions: [
-            { label: '보기', command: 'x.show' },
-            { label: '', command: 'x.blank' },
-            { label: '이름만' },
-            null,
-            { label: '다시', command: 'x.write' },
-          ],
-        },
-      ]),
-    ).toEqual([
-      {
-        id: 'a',
-        label: 'A',
-        actions: [
-          { label: '보기', command: 'x.show' },
-          { label: '다시', command: 'x.write' },
-        ],
-      },
-    ])
-  })
-
-  it('빈 배열·배열이 아닌 값은 없는 것으로 본다', () => {
-    expect(toTreeNodes([{ id: 'a', label: 'A', actions: [] }, { id: 'b', label: 'B', actions: '보기' }])).toEqual([
-      { id: 'a', label: 'A' },
-      { id: 'b', label: 'B' },
-    ])
-  })
-
-  // 버튼이 하나인 확장이 대부분이라 `action` 을 그대로 뒀다. 둘 다 오면 둘 다 담는다.
-  it('하나짜리 action 과 함께 와도 서로 안 지운다', () => {
-    expect(
-      toTreeNodes([{ id: 'a', label: 'A', action: { label: '결과', command: 'x.show' }, actions: [{ label: '다시', command: 'x.run' }] }]),
-    ).toEqual([
-      {
-        id: 'a',
-        label: 'A',
-        action: { label: '결과', command: 'x.show' },
-        actions: [{ label: '다시', command: 'x.run' }],
-      },
-    ])
-  })
-})
-
 describe('접히지 않는 구획 (section)', () => {
   // `section: false` 를 실어 보내는 확장과 아예 안 적은 확장은 **같은 뜻**이다.
   // 담아 두면 없는 차이가 payload 에 남아, 비교하는 쪽에서 두 트리가 달라 보인다.

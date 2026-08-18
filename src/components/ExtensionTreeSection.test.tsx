@@ -84,52 +84,6 @@ describe('구획은 접히지 않는다', () => {
   })
 })
 
-describe('줄 버튼이 여럿일 때', () => {
-  // 하나로는 못 담는 짝이 실제로 나왔다: 이미 쓴 시나리오는 **보고** 나서 **다시** 만든다.
-  // 하나만 둘 수 있으면 둘 중 하나가 딴 데로 가고, 그 줄에서 하려던 일이 두 자리로 갈린다.
-  it('선언한 순서대로 나란히 그린다', () => {
-    const hit: string[] = []
-    render(
-      <ExtensionTree
-        nodes={[
-          {
-            id: 'a.html',
-            label: '승률 대시보드',
-            actions: [
-              { label: '보기', command: 'x.show' },
-              { label: '다시', command: 'x.write' },
-            ],
-          },
-        ]}
-        picked={new Set()}
-        onPickedChange={() => {}}
-        onAction={(command, id) => hit.push(`${command}:${id}`)}
-      />,
-    )
-
-    const labels = Array.from(document.querySelectorAll('.ext-tree__action')).map((one) => one.textContent)
-    expect(labels).toEqual(['보기', '다시'])
-
-    screen.getByRole('button', { name: '다시' }).click()
-    expect(hit).toEqual(['x.write:a.html'])
-  })
-
-  it('하나짜리 action 과 함께 오면 이어서 그린다 — 서로 지우지 않는다', () => {
-    render(
-      <ExtensionTree
-        nodes={[
-          { id: 'a', label: 'A', action: { label: '결과', command: 'x.show' }, actions: [{ label: '다시', command: 'x.run' }] },
-        ]}
-        picked={new Set()}
-        onPickedChange={() => {}}
-        onAction={() => {}}
-      />,
-    )
-
-    expect(Array.from(document.querySelectorAll('.ext-tree__action')).map((one) => one.textContent)).toEqual(['결과', '다시'])
-  })
-})
-
 describe('둘째 줄은 이름만으로 못 가리는 것을 말한다', () => {
   it('경로가 이름 밑에 그려진다 — 툴팁은 마우스가 없는 사람에게 없는 것과 같다', () => {
     draw(SECTION)

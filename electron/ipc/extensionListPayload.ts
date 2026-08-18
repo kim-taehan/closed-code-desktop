@@ -64,16 +64,6 @@ export function toRows(rows: unknown[]): ExtensionRowPayload[] {
  * 보일 수도 없으므로 그 자리에서 버린다 — 그리다가 터지면 뷰 전체가 빈 화면이 된다.
  * 행(`toRows`)과 같은 태도이고, 다른 점은 재귀라는 것뿐이다.
  */
-/** 줄 버튼 하나. 이름과 명령이 **둘 다** 있어야 그린다 — 하나만 오면 누를 수 없거나 빈 버튼이 된다. */
-function toAction(value: unknown): { label: string; command: string } | null {
-  if (value === null || typeof value !== 'object') return null
-  const source = value as Record<string, unknown>
-  const label = source['label']
-  const command = source['command']
-  if (typeof label !== 'string' || label === '' || typeof command !== 'string' || command === '') return null
-  return { label, command }
-}
-
 export function toTreeNodes(nodes: unknown[]): ExtensionTreeNodePayload[] {
   return nodes.flatMap((node) => {
     if (node === null || typeof node !== 'object') return []
@@ -91,13 +81,7 @@ export function toTreeNodes(nodes: unknown[]): ExtensionTreeNodePayload[] {
     // 모르는 값은 **조용히 뺀다** — 줄의 형편은 곁다리라, 오타 하나로 트리 전체가 사라지면 안 된다
     const state = source['state']
     const known = state === 'waiting' || state === 'running' || state === 'failed'
-    // 줄 버튼. 이름과 명령이 **둘 다** 있어야 그린다 — 하나만 오면 누를 수 없거나 빈 버튼이 된다
     const action = toAction(source['action'])
-    // 여럿일 때 (`actions`). 깨진 항목만 버리고 나머지는 담는다 — 하나가 오타라고
-    // 그 줄의 버튼을 전부 없애면 무엇이 잘못됐는지 화면이 말해 주지 않는다
-    const actions = Array.isArray(source['actions'])
-      ? source['actions'].map(toAction).filter((one): one is { label: string; command: string } => one !== null)
-      : []
     return [
       {
         id,
@@ -107,9 +91,18 @@ export function toTreeNodes(nodes: unknown[]): ExtensionTreeNodePayload[] {
         ...(typeof badge === 'string' && badge !== '' ? { badge } : {}),
         ...(known ? { state: state as 'waiting' | 'running' | 'failed' } : {}),
         ...(action !== null ? { action } : {}),
-        ...(actions.length > 0 ? { actions } : {}),
         ...(Array.isArray(children) ? { children: toTreeNodes(children) } : {}),
       },
     ]
   })
+}
+
+/** 줄 버튼 하나. 이름과 명령이 **둘 다** 있어야 그린다 — 하나만 오면 누를 수 없거나 빈 버튼이 된다. */
+function toAction(value: unknown): { label: string; command: string } | null {
+  if (value === null || typeof value !== 'object') return null
+  const source = value as Record<string, unknown>
+  const label = source['label']
+  const command = source['command']
+  if (typeof label !== 'string' || label === '' || typeof command !== 'string' || command === '') return null
+  return { label, command }
 }

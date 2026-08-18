@@ -95,9 +95,7 @@ function TreeItem({
   const children = node.children ?? []
   const isBranch = children.length > 0
   const state = branchStateOf(node, picked)
-  // 하나짜리(`action`)와 여럿(`actions`)을 **이어서** 그린다. 둘을 갈라 두는 이유는
-  // 버튼이 하나인 확장이 대부분이라 그쪽을 안 고치기 위해서다 (`ExtensionTreeNodePayload`).
-  const actions = [...(node.action ? [node.action] : []), ...(node.actions ?? [])]
+  const action = node.action
   // **구획은 접히지 않는다** (`node.section`). 상태로 가른 무리에서 접기는 이 확장을 여는
   // 이유인 「무엇이 비었나」를 통째로 감춘다 — 폴더와 달리 개수도 적어 감출 값이 없다.
   const isSection = isBranch && node.section === true
@@ -186,17 +184,11 @@ function TreeItem({
         {/* 그 줄에만 있는 행동 (`action`). **대상이 줄마다 다르면 버튼도 줄에 있어야 한다** —
             「이 API 의 결과를 본다」 는 위쪽 명령 버튼으로 표현할 수 없다. 확장이 데이터로
             선언하므로 앱에 확장별 특례가 생기지 않는다. */}
-        {onAction !== undefined &&
-          actions.map((one) => (
-            <button
-              key={one.command + one.label}
-              type="button"
-              className="ext-tree__action"
-              onClick={() => onAction(one.command, node.id)}
-            >
-              {one.label}
-            </button>
-          ))}
+        {action !== undefined && onAction !== undefined && (
+          <button type="button" className="ext-tree__action" onClick={() => onAction(action.command, node.id)}>
+            {action.label}
+          </button>
+        )}
       </div>
 
       {isBranch && shown && (
