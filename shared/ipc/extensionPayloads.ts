@@ -100,52 +100,17 @@ export interface ExtensionRunCommandPayload {
   extension?: string
 }
 
-/**
- * 트리의 마디 하나.
- *
- * **잎(children 이 없는 것)만 고를 수 있다.** 가지를 고르면 그 아래 잎이 전부 딸려온다 —
- * 가지 자체를 값으로 넘기면 확장이 "폴더" 와 "그 안의 파일들" 을 둘 다 다뤄야 한다.
- *
- * `id` 가 명령에 실려 나가는 값이다 (`ExtensionRunCommandPayload.selection`).
- */
-export interface ExtensionTreeNodePayload {
-  id: string
-  label: string
-  /** 오른쪽 끝에 붙는 짧은 표시. 이미 만든 결과의 건수 같은 것. */
-  badge?: string
-  /**
-   * 이 줄에만 붙는 버튼. 누르면 그 마디 하나를 골라 `command` 를 돌린다.
-   *
-   * **확장별 특례를 앱에 넣지 않으려고 데이터로 받는다** — 「이 API 의 결과를 본다」 같은
-   * 것은 줄마다 대상이 다르므로 위쪽 명령 줄의 버튼으로는 표현할 수 없다.
-   * `command` 는 매니페스트에 선언하지 않아도 된다 — 선언하면 위쪽에 큰 버튼으로도 뜬다.
-   */
-  action?: { label: string; command: string }
-  /**
-   * 이 줄이 **지금 어떤 상태인가**. 없으면 아무것도 안 그린다.
-   *
-   * 진행과 대상이 서로 남남이던 자리다 — 바닥 진행 칸은 「비상 로그인이 도는 중」이라고
-   * 말하는데 정작 그 줄이 트리의 어디인지는 화면이 말하지 않았다. 어느 대상이 도는지·
-   * 남았는지·터졌는지를 아는 것은 확장뿐이라 데이터로 받는다 (`action` 과 같은 규칙).
-   *
-   * `badge`(쓴 건수)와 **함께 오지 않는다**: 끝난 줄은 배지가, 안 끝난 줄은 이쪽이 말한다.
-   */
-  state?: ExtensionTreeNodeState
-  children?: ExtensionTreeNodePayload[]
-}
-
-/** 아직 안 끝난 줄의 형편. 끝난 줄은 `badge` 로 말한다. */
-export type ExtensionTreeNodeState = 'waiting' | 'running' | 'failed'
-
 
 // 진행 상황의 모양은 `extensionProgress.ts` 에 산다 — 여기로 그대로 다시 내보낸다.
 export type { ExtensionProgressPayload, ExtensionProgressKind, ExtensionProgressLane } from './extensionProgress'
 
-/** 한 뷰의 트리 전체. 행·화면과 같이 **통째 교체**다. */
-export interface ExtensionTreePayload {
-  viewId: string
-  nodes: ExtensionTreeNodePayload[]
-}
+// 트리의 모양도 갈라 뒀다 (`extensionTreePayload.ts`). 이 파일이 300줄 상한에 닿았고,
+// 트리 마디는 칸이 계속 느는 자리다. **부르는 쪽은 여기서 그대로 받는다.**
+export type {
+  ExtensionTreeNodePayload,
+  ExtensionTreeNodeState,
+  ExtensionTreePayload,
+} from './extensionTreePayload'
 
 /** 한 뷰의 결과 전체. `setRows` 는 이어붙이기가 아니라 통째 교체다 (계획서 §2.4). */
 export interface ExtensionRowsPayload {

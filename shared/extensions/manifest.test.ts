@@ -212,6 +212,55 @@ describe('contributes 안쪽은 항목 단위로 걸러 담는다', () => {
     expect(result.manifest.contributes?.views).toEqual([{ id: 'v1', title: 'T', kind: 'table' }])
   })
 
+  // 헤더 글리프(`icon`). 무엇을 뜻하는 그림인지는 확장만 아니까 데이터로 받는데,
+  // **아무 데나 붙지는 않는다** — 탭 안·아래 바의 버튼은 글자로 그린다.
+  it('글리프는 패널 헤더 명령에만 담는다', () => {
+    const result = parseManifest({
+      ...VALID,
+      contributes: {
+        commands: [
+          { id: 'a', title: '찾기', placement: 'header', icon: '↻' },
+          // 뷰에 묶인 header 는 탭 안으로 간다 — 거기는 글자 자리다
+          { id: 'b', title: '갱신', placement: 'header', view: 'v1', icon: '↻' },
+          { id: 'c', title: '저장', placement: 'menu', icon: '↻' },
+          { id: 'd', title: '실행', icon: '↻' },
+        ],
+      },
+    })
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.manifest.contributes?.commands).toEqual([
+      { id: 'a', title: '찾기', placement: 'header', icon: '↻' },
+      { id: 'b', title: '갱신', placement: 'header', view: 'v1' },
+      { id: 'c', title: '저장', placement: 'menu' },
+      { id: 'd', title: '실행' },
+    ])
+  })
+
+  // 24~28px 짜리 정사각 칸에 들어가는 것은 한 자뿐이다. 긴 글이 오면 띠가 어긋난다.
+  it('글리프는 한 자로 자른다 — 빈 값·타입 오류는 없는 것으로 본다', () => {
+    const result = parseManifest({
+      ...VALID,
+      contributes: {
+        commands: [
+          { id: 'a', title: '더하기', placement: 'header', icon: '＋더하기' },
+          // 서로게이트 쌍(이모지)이 반 토막 나면 안 된다 — 코드 유닛이 아니라 글자로 센다
+          { id: 'b', title: '찾기', placement: 'header', icon: '🔍🔎' },
+          { id: 'c', title: '지우기', placement: 'header', icon: '' },
+          { id: 'd', title: '내보내기', placement: 'header', icon: 42 },
+        ],
+      },
+    })
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.manifest.contributes?.commands).toEqual([
+      { id: 'a', title: '더하기', placement: 'header', icon: '＋' },
+      { id: 'b', title: '찾기', placement: 'header', icon: '🔍' },
+      { id: 'c', title: '지우기', placement: 'header' },
+      { id: 'd', title: '내보내기', placement: 'header' },
+    ])
+  })
+
   it('contributes 가 객체가 아니면 선언이 없는 것으로 본다', () => {
     const result = parseManifest({ ...VALID, contributes: '표' })
     expect(result.ok).toBe(true)

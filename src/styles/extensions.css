@@ -804,9 +804,14 @@
 /* 글꼴은 **파일 트리와 같다**(상속). 예전엔 `--dc-font-mono` 를 썼는데 이 레포에 정의된 적이
    없는 토큰이라 폴백 `monospace` — 브라우저 기본 고정폭이 걸려 같은 사이드바 안에서 파일명만
    이질적으로 보였고 폭도 더 먹었다 (다른 곳은 전부 `--dc-mono` 스택). */
+/* 둘째 줄(`detail`)이 붙으면 세로로 쌓인다. 안 붙으면 예전 그대로 한 줄이다 —
+   `flex-direction: column` 은 자식이 하나일 때 아무것도 바꾸지 않는다. */
 .ext-tree__name {
   flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
   padding: 0;
   border: 0;
   background: none;
@@ -818,6 +823,60 @@
   overflow: hidden;
   text-overflow: ellipsis;
   cursor: pointer;
+}
+
+/* 이름만으로 못 가리는 것 (경로). **등폭**으로 둔다 — 경로는 조각이 반복돼서
+   비례폭이면 끝의 파일 이름이 줄마다 다른 자리에서 시작한다. */
+.ext-tree__detail {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: var(--dc-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 10px;
+  color: var(--dc-text-muted);
+}
+
+/* ── 접히지 않는 구획 (`node.section`) ──────────────────────
+   폴더 가지와 **다른 것**으로 보여야 한다: 누를 수 없고, 늘 펼쳐져 있고, 아래 줄들의
+   머리말일 뿐이다. 그래서 줄이 아니라 **구분선 달린 라벨**로 그린다. */
+.ext-tree__row--section {
+  padding: 9px 6px 4px;
+  gap: 7px;
+}
+
+.ext-tree__row--section:first-child {
+  padding-top: 3px;
+}
+
+.ext-tree__section {
+  flex: none;
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  color: var(--dc-text-muted);
+}
+
+/* 라벨과 개수 사이를 실선이 잇는다 — 여백만 두면 개수가 어느 무리 것인지 흐려진다 */
+.ext-tree__row--section::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--dc-border);
+  opacity: 0.4;
+  /* 배지(개수)는 마크업상 이 가짜 요소보다 앞에 있다 — 오른쪽 끝으로 보낸다 */
+  order: 1;
+}
+
+.ext-tree__row--section .ext-tree__badge {
+  order: 2;
+  border: 0;
+  padding: 0;
+}
+
+/* 구획 아래에는 세로선을 안 긋는다. 폴더 계층이 아니라 **한 층**이라서다 */
+.ext-tree__children--section {
+  margin-left: 0;
+  padding-left: 0;
+  border-left: 0;
 }
 
 .ext-tree__name--picked {
@@ -1043,11 +1102,16 @@
   background: var(--dc-bg);
 }
 
+/* 버튼과 **같은 줄**에 산다 (`ExtensionActionBar`). 남는 폭을 다 먹어 버튼을 오른쪽으로
+   밀고, 넘치면 말줄임 한다 — 고른 것이 많아도 버튼이 줄 밖으로 나가지 않는다. */
 .ext-bar__picked {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin: 0 0 7px;
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  padding-left: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: 11px;
   color: var(--dc-text-muted);
 }
@@ -1059,7 +1123,9 @@
 
 .ext-bar__row {
   display: flex;
-  align-items: stretch;
+  align-items: center;
+  /* 버튼은 오른쪽에 모인다. 고른 것 줄이 없을 때(진행 칸이 떠 있을 때)도 자리가 안 바뀐다 */
+  justify-content: flex-end;
   gap: 6px;
 }
 
@@ -1207,18 +1273,30 @@
 }
 
 /* 주 행동 하나만 크다. 둘이면 「무엇을 먼저 누르나」가 다시 사라진다. */
+/* **채우지 않는다.** 사이드바에서 폭을 다 먹는 강조색 덩어리가 가장 시끄러운 것이 됐는데,
+   정작 이 확장에서 사람이 누르는 것은 목록의 줄이다. 강조색은 진행 분수 쪽에 남겨 둔다
+   (`ext-run__frac`) — 기다리는 시간이 고르는 시간보다 길어서 거기가 볼 자리다. */
 .ext-bar__go {
-  flex: 1;
+  flex: none;
   min-width: 0;
-  padding: 7px 10px;
-  border: 0;
+  max-width: 100%;
+  padding: 5px 11px;
+  border: 1px solid var(--dc-border);
   border-radius: 6px;
-  background: var(--dc-accent);
-  color: var(--dc-bg);
+  background: none;
+  color: var(--dc-text);
   font: inherit;
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   cursor: pointer;
+}
+
+.ext-bar__go:hover:not(:disabled) {
+  border-color: var(--dc-accent);
+  color: var(--dc-accent);
 }
 
 .ext-bar__go--off {
@@ -1327,6 +1405,26 @@
   cursor: pointer;
 }
 
+/* **밀어내는 것은 첫 하나뿐이다.** 둘 다 `auto` 면 남는 폭이 둘로 갈려 버튼 사이가
+   벌어진다 — 헤더 명령을 둘 선언한 확장(화면 시나리오)에서 처음 드러났다. */
+.dc-sidebar__extcmd + .dc-sidebar__extcmd {
+  margin-left: 0;
+}
+
+/* 글리프만 그리는 갈래 (`command.icon`). 정사각이라 헤더 띠(--dc-band) 안에서
+   글자 길이에 상관없이 자리가 같다 — 여러 개를 나란히 둘 수 있는 이유가 그것이다.
+   28px 은 띠(38px) 안에서 위아래 5px 씩 남기는 가장 큰 값이다. 글자가 사라진 자리라
+   **누를 것이 그림 하나뿐**이므로 과녁을 작게 두면 안 된다. */
+.dc-sidebar__extcmd--icon {
+  justify-content: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  font-size: 15px;
+  line-height: 1;
+}
+
 .dc-sidebar__extcmd:hover:not(:disabled) {
   background: color-mix(in srgb, var(--dc-accent) 12%, transparent);
   color: var(--dc-accent);
@@ -1339,7 +1437,10 @@
 
 /* 도는 동안의 같은 자리 — 「중단」.
    빨강을 쓰지 않는다: 지우기가 아니라 **되돌리는 것**이고, 사이드바에서 빨강은
-   git 충돌·오류에 이미 쓰인다. 테두리만 있는 버튼으로 실행 버튼과 무게를 가른다. */
+   git 충돌·오류에 이미 쓰인다.
+   예전에는 실행 버튼이 강조색으로 채워져 있어서 「테두리만」인 것이 곧 구분이었다.
+   실행 버튼도 테두리로 내려온 지금은 **테두리 색**이 가른다 — 실행은 중성선,
+   중단은 강조선. 도는 동안에만 뜨는 자리라 강조선이 시끄럽지 않다. */
 .ext-bar__go--stop {
   background: none;
   border: 1px solid var(--dc-accent);

@@ -72,6 +72,18 @@ export interface ExtensionCommand {
    * 것은 「거기 두겠다」는 뜻이고, 오타를 헤더로 눙치면 확장 개발자가 알아채지 못한다.
    */
   view?: string
+  /**
+   * 패널 헤더에서 **글자 대신** 그릴 글리프 한 자 (`placement: 'header'` 이고 `view` 가 없을 때만).
+   *
+   * 예전에는 헤더 명령마다 `↻` 를 앱이 박아 넣고 옆에 `title` 을 찍었다. 확장 하나가
+   * 헤더 명령을 둘 선언하는 순간 **글리프가 거짓말을 한다** — 「화면 더하기」에 다시
+   * 돌리는 표시가 붙었다. 무엇을 뜻하는 그림인지는 확장만 아니까 데이터로 받는다
+   * (`TreeNode.action` 과 같은 규칙).
+   *
+   * 없으면 예전처럼 `↻` + 글자로 그린다 — 이미 있는 확장이 안 깨져야 한다.
+   * **`title` 은 사라지지 않는다**: 툴팁과 화면낭독기 이름으로 남는다.
+   */
+  icon?: string
 }
 
 export interface ExtensionView {
@@ -243,11 +255,19 @@ function toCommand(value: unknown): ExtensionCommand | null {
   const placement = source['placement']
   // 뷰 묶기는 `header` 에만 뜻이 있다. 주 행동·`⋯` 는 아래 바에 사는데 그 바는 탭과 무관하다
   const view = source['view']
+  // 글리프는 **패널 헤더에만** 뜻이 있다 — 탭 안·아래 바의 버튼은 글자로 그린다.
+  // 그래서 `view` 를 적은 header 명령은 여기서 걸러진다: 그런 것은 그 뷰의 탭 안으로
+  // 가는데(`viewCommands`), 거기 그림을 담아 두면 확장 개발자는 적어 뒀으니 될 줄 안다.
+  // 한 자로 자른다 — 긴 글이 오면 정사각 아이콘 칸을 밀어 헤더 띠가 어긋난다.
+  // 코드 유닛이 아니라 **글자**로 센다: `[...icon][0]` 이라야 이모지가 반 토막 나지 않는다.
+  const icon = source['icon']
+  const inPanelHeader = placement === 'header' && !(typeof view === 'string' && view !== '')
   return {
     id,
     title,
     ...(placement === 'header' || placement === 'menu' ? { placement } : {}),
     ...(placement === 'header' && typeof view === 'string' && view !== '' ? { view } : {}),
+    ...(inPanelHeader && typeof icon === 'string' && icon !== '' ? { icon: [...icon][0] } : {}),
   }
 }
 

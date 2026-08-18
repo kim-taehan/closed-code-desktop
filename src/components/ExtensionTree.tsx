@@ -95,55 +95,77 @@ function TreeItem({
   const children = node.children ?? []
   const isBranch = children.length > 0
   const state = branchStateOf(node, picked)
-  const action = node.action
+  // 하나짜리(`action`)와 여럿(`actions`)을 **이어서** 그린다. 둘을 갈라 두는 이유는
+  // 버튼이 하나인 확장이 대부분이라 그쪽을 안 고치기 위해서다 (`ExtensionTreeNodePayload`).
+  const actions = [...(node.action ? [node.action] : []), ...(node.actions ?? [])]
+  // **구획은 접히지 않는다** (`node.section`). 상태로 가른 무리에서 접기는 이 확장을 여는
+  // 이유인 「무엇이 비었나」를 통째로 감춘다 — 폴더와 달리 개수도 적어 감출 값이 없다.
+  const isSection = isBranch && node.section === true
+  const shown = isSection ? true : open
 
   return (
     <li className={isBranch ? 'ext-tree__branch' : 'ext-tree__leaf'}>
       {/* 배지가 붙은 줄(= 확장이 "여기는 끝났다" 고 표시한 것)은 **줄 전체를 물들인다.**
-          900줄짜리 트리에서 작은 숫자만으로는 어디까지 했는지 눈으로 못 찾는다. */}
+          900줄짜리 트리에서 작은 숫자만으로는 어디까지 했는지 눈으로 못 찾는다.
+          구획 머리는 물들이지 않는다 — 거기 배지는 「끝났다」가 아니라 「몇 개냐」다. */}
       <div
-        className={`ext-tree__row${node.badge === undefined ? '' : ' ext-tree__row--done'}${
+        className={`ext-tree__row${node.badge === undefined || isSection ? '' : ' ext-tree__row--done'}${
           node.state === 'running' ? ' ext-tree__row--running' : ''
-        }`}
+        }${isSection ? ' ext-tree__row--section' : ''}`}
       >
-        <button
-          type="button"
-          // 꺾쇠는 글자가 아니라 **두 변으로 그린 뒤 회전**한다 — 파일 트리(`.dc-tree__caret`)와
-          // 같은 방식이라 어떤 크기에서도 또렷하고, 두 트리의 꺾쇠가 같은 모양이 된다
-          className={`ext-tree__twist${isBranch ? ' ext-tree__twist--branch' : ''}${open ? ' ext-tree__twist--open' : ''}`}
-          // 잎에도 자리를 남긴다 — 없애면 잎과 가지의 이름이 서로 어긋나 계단처럼 보인다
-          disabled={!isBranch}
-          aria-label={open ? '접기' : '펼치기'}
-          aria-expanded={isBranch ? open : undefined}
-          onClick={toggle}
-        />
+        {!isSection && (
+          <button
+            type="button"
+            // 꺾쇠는 글자가 아니라 **두 변으로 그린 뒤 회전**한다 — 파일 트리(`.dc-tree__caret`)와
+            // 같은 방식이라 어떤 크기에서도 또렷하고, 두 트리의 꺾쇠가 같은 모양이 된다
+            className={`ext-tree__twist${isBranch ? ' ext-tree__twist--branch' : ''}${open ? ' ext-tree__twist--open' : ''}`}
+            // 잎에도 자리를 남긴다 — 없애면 잎과 가지의 이름이 서로 어긋나 계단처럼 보인다
+            disabled={!isBranch}
+            aria-label={open ? '접기' : '펼치기'}
+            aria-expanded={isBranch ? open : undefined}
+            onClick={toggle}
+          />
+        )}
 
-        <input
-          type="checkbox"
-          className="ext-tree__check"
-          checked={state === 'all'}
-          // 부분 선택은 checked 로 표현할 수 없다 — DOM 속성을 직접 세운다
-          ref={(input) => {
-            if (input) input.indeterminate = state === 'some'
-          }}
-          aria-label={node.label}
-          onChange={() => onPickedChange(toggled(node, picked))}
-        />
+        {/* 구획 머리에는 체크박스가 없다. 「미작성 전부」를 한 번에 고르는 길은 아래 바의
+            주 행동이 이미 진다 (「없는 것 만들기」) — 같은 일을 두 자리에 두지 않는다. */}
+        {!isSection && (
+          <input
+            type="checkbox"
+            className="ext-tree__check"
+            checked={state === 'all'}
+            // 부분 선택은 checked 로 표현할 수 없다 — DOM 속성을 직접 세운다
+            ref={(input) => {
+              if (input) input.indeterminate = state === 'some'
+            }}
+            aria-label={node.label}
+            onChange={() => onPickedChange(toggled(node, picked))}
+          />
+        )}
 
-        <button
-          type="button"
-          className={`ext-tree__name${state === 'all' ? ' ext-tree__name--picked' : ''}`}
-          // 이름을 누르면 **본다**. 고르는 것은 체크박스다 (몸짓을 가른다).
-          // 가지에는 볼 것이 없으므로 접기로 돌린다.
-          onClick={() => (isBranch ? toggle() : onOpen?.(node.id))}
-          title={node.id}
-        >
-          {node.label}
-        </button>
+        {isSection ? (
+          // 누를 것이 없는 라벨이다. 옆으로 실선이 흘러 아래 줄들과 층이 갈린다
+          <span className="ext-tree__section">{node.label}</span>
+        ) : (
+          <button
+            type="button"
+            className={`ext-tree__name${state === 'all' ? ' ext-tree__name--picked' : ''}`}
+            // 이름을 누르면 **본다**. 고르는 것은 체크박스다 (몸짓을 가른다).
+            // 가지에는 볼 것이 없으므로 접기로 돌린다.
+            onClick={() => (isBranch ? toggle() : onOpen?.(node.id))}
+            title={node.detail ?? node.id}
+          >
+            {node.label}
+            {/* 이름만으로 못 가리는 것을 밑에 흐리게 (`detail`). 툴팁으로는 마우스를 얹기
+                전까지 안 보이고, 마우스가 없는 사람에게는 아예 없는 것과 같다. */}
+            {node.detail !== undefined && <span className="ext-tree__detail">{node.detail}</span>}
+          </button>
+        )}
 
         {/* 가지를 체크하면 **몇 개가 딸려 나가는지** 미리 말한다. 실측: 최상위 `src` 를 한 번
-            체크하면 269개가 소리 없이 선택돼 그대로 명령에 실렸다 (상한도 확인도 없다). */}
-        {isBranch && (
+            체크하면 269개가 소리 없이 선택돼 그대로 명령에 실렸다 (상한도 확인도 없다).
+            구획은 체크할 수가 없으므로 이 숫자가 뜻이 없다 — 개수는 배지가 말한다. */}
+        {isBranch && !isSection && (
           <span className="ext-tree__count" title={t('체크하면 딸려올 개수')}>
             {leavesOf(node).length}
           </span>
@@ -164,15 +186,21 @@ function TreeItem({
         {/* 그 줄에만 있는 행동 (`action`). **대상이 줄마다 다르면 버튼도 줄에 있어야 한다** —
             「이 API 의 결과를 본다」 는 위쪽 명령 버튼으로 표현할 수 없다. 확장이 데이터로
             선언하므로 앱에 확장별 특례가 생기지 않는다. */}
-        {action !== undefined && onAction !== undefined && (
-          <button type="button" className="ext-tree__action" onClick={() => onAction(action.command, node.id)}>
-            {action.label}
-          </button>
-        )}
+        {onAction !== undefined &&
+          actions.map((one) => (
+            <button
+              key={one.command + one.label}
+              type="button"
+              className="ext-tree__action"
+              onClick={() => onAction(one.command, node.id)}
+            >
+              {one.label}
+            </button>
+          ))}
       </div>
 
-      {isBranch && open && (
-        <ul className="ext-tree__children">
+      {isBranch && shown && (
+        <ul className={`ext-tree__children${isSection ? ' ext-tree__children--section' : ''}`}>
           {children.map((child) => (
             <TreeItem
               key={child.id}

@@ -45,9 +45,15 @@ import {
 export interface ExtensionTreeNode {
   id: string
   label: string
+  /** 이름 밑에 흐리게 붙는 한 줄 (경로 같은 것) */
+  detail?: string
+  /** 접히지 않는 구획인가. 꺾쇠·체크박스 없이 라벨과 개수만 그리고 늘 펼친다 */
+  section?: boolean
   badge?: string
   /** 이 줄에만 붙는 버튼. 누르면 그 마디 하나를 골라 `command` 를 돌린다 */
   action?: { label: string; command: string }
+  /** 줄 버튼이 둘 이상일 때 (「보기」 + 「다시」 처럼). `action` 과 함께 오면 이어서 그린다 */
+  actions?: { label: string; command: string }[]
   children?: ExtensionTreeNode[]
 }
 

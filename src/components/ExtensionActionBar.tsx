@@ -58,13 +58,18 @@ export function ExtensionActionBar(props: ExtensionActionBarProps) {
           그래서 바의 무게가 두 모드로 갈린다: 고를 때는 한 줄, 돌 때는 진행 칸이 주인공이다.
           쌓인 줄이 남아 있으면 끝난 뒤에도 그대로 둔다 — 지우면 돌아온 사람에게는
           처음부터 아무 일도 없던 것과 같다. */}
-      {props.progress === null && props.lines.length === 0 ? (
-        <p className="ext-bar__picked">{props.pickedText === '' ? t('고른 것이 없습니다') : props.pickedText}</p>
-      ) : (
+      {props.progress === null && props.lines.length === 0 ? null : (
         <ExtensionRunPane progress={props.progress} lines={props.lines} />
       )}
 
       <div className="ext-bar__row">
+        {/* **고른 것은 버튼과 같은 줄에 산다.** 예전에는 위에 따로 한 줄이었는데, 그 줄이
+            늘 자리를 먹으면서 정작 말하는 것은 「고른 것이 없습니다」인 때가 대부분이었다.
+            같은 줄로 내리면 목록이 18px 길어지고, 무엇이 실려 나가는지가 누르는 버튼
+            **바로 옆**에서 읽힌다. 진행 칸이 떠 있을 때는 그쪽이 더 할 말이 많으므로 비운다. */}
+        {props.progress === null && props.lines.length === 0 && (
+          <p className="ext-bar__picked">{props.pickedText === '' ? t('고른 것이 없습니다') : props.pickedText}</p>
+        )}
         {/* **도는 동안에는 같은 자리가 「중단」이 된다.** 잠긴 버튼으로 두면 수 분짜리
             작업에서 사용자가 할 수 있는 일이 없다 — 잘못 고른 대상을 훑기 시작해도 마찬가지다. */}
         {running ? (

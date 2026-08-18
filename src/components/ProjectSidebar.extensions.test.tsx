@@ -131,6 +131,52 @@ describe('설치된 확장이 사이드바에 자기 패널을 등록한다', ()
     expect(stub.runExtensionCommand).toHaveBeenCalledWith({ commandId: 'sampleExt.run' })
   })
 
+  // 패널 헤더 명령(`placement: 'header'`, `view` 없음)은 제목 줄 오른쪽에 앉는다.
+  // 확장이 `icon` 을 적으면 **글자 대신** 그 글리프만 그린다 — 헤더 명령을 둘 선언한
+  // 확장에서 앱이 박아 넣던 `↻` 가 「화면 더하기」에도 붙어 거짓말을 했다.
+  it('헤더 명령에 icon 이 있으면 글리프만 그리고, 이름은 낭독기·툴팁에 남는다', async () => {
+    const { stub } = stubDavis([
+      {
+        ...LINE_CHECKER,
+        contributes: {
+          ...LINE_CHECKER.contributes,
+          commands: [
+            { id: 'sampleExt.find', title: '화면 찾기', placement: 'header', icon: '↻' },
+            { id: 'sampleExt.add', title: '화면 더하기', placement: 'header', icon: '＋' },
+          ],
+        },
+      },
+    ])
+    renderSidebar()
+    await pickPanel('샘플 확장')
+
+    const add = await waitFor(() => screen.getByRole('button', { name: '화면 더하기' }))
+    // 이름은 낭독기가 읽고, 화면에는 글리프만 남는다 — 둘이 같으면 아이콘이 아니다
+    expect(add.textContent).toBe('＋')
+    expect(add.getAttribute('title')).toBe('화면 더하기')
+
+    fireEvent.click(add)
+    expect(stub.runExtensionCommand).toHaveBeenCalledWith({ commandId: 'sampleExt.add' })
+  })
+
+  // `icon` 을 안 적은 확장은 예전 그대로다. 이미 쓰이던 자리를 말없이 바꾸지 않는다.
+  it('icon 이 없는 헤더 명령은 ↻ 와 이름을 함께 그린다', async () => {
+    stubDavis([
+      {
+        ...LINE_CHECKER,
+        contributes: {
+          ...LINE_CHECKER.contributes,
+          commands: [{ id: 'sampleExt.refresh', title: '목록 갱신', placement: 'header' }],
+        },
+      },
+    ])
+    renderSidebar()
+    await pickPanel('샘플 확장')
+
+    const refresh = await waitFor(() => screen.getByRole('button', { name: /목록 갱신/ }))
+    expect(refresh.textContent).toBe('↻목록 갱신')
+  })
+
   it('돌리기 전에는 "아직 실행하지 않았습니다" 다', async () => {
     stubDavis([LINE_CHECKER])
     renderSidebar()
