@@ -10,6 +10,7 @@ import {
   type WriteFilePayload,
   type WriteFileResultPayload,
 } from '../../shared/ipc/channels'
+import type { ProjectFsActionPayload, ProjectFsResult } from '../../shared/ipc/projectFsPayloads'
 import type { ProjectFs } from '../projects/projectFs'
 
 // 프로젝트 파일 IPC 등록. ProjectBridge 가 300줄 상한에 닿아 이 묶음만 갈라냈다 —
@@ -27,6 +28,11 @@ export function registerFsHandlers(fs: ProjectFs): void {
       )
       return result.ok ? { ok: true, mtimeMs: result.mtimeMs } : { ok: false, reason: result.reason }
     },
+  )
+  ipcMain.handle(
+    Channel.PROJECT_FS_ACTION,
+    async (_event, payload: ProjectFsActionPayload): Promise<ProjectFsResult> =>
+      fs.fsAction(payload.projectId, payload.action),
   )
   ipcMain.handle(
     Channel.PROJECT_READ_FILE,

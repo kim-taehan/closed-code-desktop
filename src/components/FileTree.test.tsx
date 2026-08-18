@@ -20,7 +20,7 @@ function tree(overrides: Partial<FileTreeApi> = {}): FileTreeApi {
     children: {},
     expanded: new Set(),
     loading: new Set(),
-    toggle: () => {},
+    toggle: () => {}, refresh: () => {},
     ...overrides,
   }
 }

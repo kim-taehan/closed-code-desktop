@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from 'electron'
+import type { ProjectFsActionPayload, ProjectFsResult } from '../shared/ipc/projectFsPayloads'
 import {
   Channel,
   type ApprovalRespondPayload,
@@ -163,6 +164,9 @@ const bridge: DesktopBridge = {
     ipcRenderer.invoke(Channel.PROJECT_OPEN_IN_OS, payload) as Promise<OpenInOsResultPayload>,
   writeFile: (payload: WriteFilePayload) =>
     ipcRenderer.invoke(Channel.PROJECT_WRITE_FILE, payload) as Promise<WriteFileResultPayload>,
+  // 만들기·이름변경·휴지통. 넷을 갈래로 담은 한 채널이다 (`projectFsPayloads.ts`)
+  fsAction: (payload: ProjectFsActionPayload) =>
+    ipcRenderer.invoke(Channel.PROJECT_FS_ACTION, payload) as Promise<ProjectFsResult>,
   getSettings: () => ipcRenderer.invoke(Channel.SETTINGS_GET) as Promise<AppSettings>,
   setSettings: (settings: AppSettings) =>
     ipcRenderer.invoke(Channel.SETTINGS_SET, settings) as Promise<AppSettings>,

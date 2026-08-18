@@ -13,6 +13,13 @@ export interface FileTreeApi {
   expanded: Set<string>
   loading: Set<string>
   toggle: (path: string) => void
+  /**
+   * 그 폴더를 **다시 읽는다.** 만들거나 지운 뒤에 부른다.
+   *
+   * 트리 전체가 아니라 한 겹만 읽는 이유는 이 훅의 규칙 그대로다 — 펼친 곳만 읽는다.
+   * 아직 안 펼친 폴더를 여기서 읽으면, 사용자가 열어 본 적 없는 자리가 메모리에 들어온다.
+   */
+  refresh: (path: string) => void
 }
 
 export function useFileTree(projectId: string | null): FileTreeApi {
@@ -65,5 +72,19 @@ export function useFileTree(projectId: string | null): FileTreeApi {
     [projectId, children, load],
   )
 
-  return { children, expanded, loading, toggle }
+  /**
+   * 그 폴더를 다시 읽는다. **안 읽어 둔 폴더는 건너뛴다** — 접힌 자리를 여기서 읽으면
+   * 사용자가 열어 본 적 없는 것이 메모리에 들어온다 (`toggle` 이 지키는 규칙과 같다).
+   * 루트(`''`)는 늘 읽혀 있으므로 언제나 통과한다.
+   */
+  const refresh = useCallback(
+    (path: string) => {
+      if (projectId === null) return
+      if (path !== '' && children[path] === undefined) return
+      void load(projectId, path)
+    },
+    [projectId, children, load],
+  )
+
+  return { children, expanded, loading, toggle, refresh }
 }

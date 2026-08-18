@@ -1,5 +1,5 @@
 import { realpath } from 'node:fs/promises'
-import { join, sep } from 'node:path'
+import { basename, dirname, isAbsolute, join, sep } from 'node:path'
 
 // 경로 탈출 차단. 원래 `electron/projects/projectFs.ts` 안의 private 메서드였다.
 //
@@ -28,6 +28,34 @@ export async function resolveInside(root: string, relativePath: string): Promise
   } catch {
     return null
   }
+}
+
+/**
+ * **아직 없는 자리**를 가리킬 때 쓴다 (만들기·이름 바꿔 옮기기).
+ *
+ * `resolveInside` 는 `realpath` 로 검사하므로 **없는 경로는 무조건 `null`** 이다 —
+ * 만들려는 자리는 없는 것이 정상이라 그대로는 쓸 수 없다. 그래서 **부모를 편 뒤**
+ * 이름을 붙인다: 부모는 이미 있고, 심링크가 밖을 가리키는지도 부모에서 드러난다.
+ *
+ * 이름 쪽은 `..` 와 절대경로를 여기서 막는다 — 부모까지만 실경로로 확인하고 나머지를
+ * 그냥 이어 붙이면 `새 폴더/../../..` 한 줄로 루트를 벗어난다.
+ *
+ * 안이면 **만들 절대경로**를, 밖이거나 부모가 없으면 `null` 을 돌려준다.
+ */
+export async function resolveNewInside(root: string, relativePath: string): Promise<string | null> {
+  const trimmed = relativePath.trim()
+  if (trimmed === '' || isAbsolute(trimmed)) return null
+
+  const parent = dirname(trimmed)
+  const name = basename(trimmed)
+  // `.` 이나 `..` 로 끝나는 것은 가리키는 자리가 없다 — 이름이 아니다
+  if (name === '' || name === '.' || name === '..') return null
+
+  const base = await resolveInside(root, parent === '.' ? '' : parent)
+  if (base === null) return null
+
+  const candidate = join(base, name)
+  return isInside(base, candidate) && candidate !== base ? candidate : null
 }
 
 /** 루트 자신이거나 그 아래여야 한다. 접두사만 보면 `/a/bc` 가 `/a/b` 안으로 잡힌다. */

@@ -1,7 +1,8 @@
-import { readdir, readFile, stat, writeFile } from 'node:fs/promises'
+import { mkdir, readdir, readFile, rename, stat, writeFile } from 'node:fs/promises'
 import { join, relative, sep } from 'node:path'
 import { shell } from 'electron'
-import { resolveInside } from '../fs/resolveInside'
+import { resolveInside, resolveNewInside } from '../fs/resolveInside'
+import type { ProjectFsAction, ProjectFsResult } from '../../shared/ipc/projectFsPayloads'
 
 // 프로젝트 파일을 읽는 유일한 통로.
 //
@@ -9,7 +10,12 @@ import { resolveInside } from '../fs/resolveInside'
 // renderer 가 경로를 만들어 보내므로, 경계를 main 이 쥐지 않으면
 // `..` 하나로 홈 디렉토리 전체가 읽힌다.
 //
-// 쓰기는 **덮어쓰기만** 한다. 만들기·지우기·이름변경은 요청이 없어 두지 않는다.
+// 쓰기는 오래도록 **덮어쓰기만** 했다 — 만들기·지우기·이름변경은 요청이 없었다.
+// 2026-08-18 에 파일 트리 우클릭 메뉴가 생기며 넷이 붙었다 (`fsAction`). 경계는 그대로다:
+// **만드는 자리도 루트 안이어야 한다.** 없는 경로는 `realpath` 로 못 재므로 그쪽은
+// `resolveNewInside` 가 부모를 펴서 판정한다.
+//
+// **지우지 않는다 — 휴지통으로 보낸다.** 되돌릴 수 없는 조작을 앱이 대신 결정하지 않는다.
 
 /**
  * 트리에서 감출 항목.
@@ -168,6 +174,63 @@ export class ProjectFs {
     return error ? { ok: false, reason: error } : { ok: true }
   }
 
+  /**
+   * 만들고 옮기고 버린다 (`project:fsAction`).
+   *
+   * 갈래마다 **경계를 재는 함수가 다르다**: 있는 것을 가리키면 `resolveInside`,
+   * 아직 없는 자리를 가리키면 `resolveNewInside`. 이름 바꾸기는 **둘 다** 쓴다 —
+   * 원본은 있어야 하고 목적지는 없어야 한다.
+   */
+  async fsAction(projectId: string, action: ProjectFsAction): Promise<ProjectFsResult> {
+    const root = this.rootOf(projectId)
+    if (root === null) return { ok: false, reason: 'not_allowed' }
+
+    try {
+      if (action.kind === 'newFile' || action.kind === 'newDir') {
+        const target = await resolveNewInside(root, action.path)
+        if (target === null) return { ok: false, reason: 'not_allowed' }
+        // **덮어쓰지 않는다.** 있는 파일을 조용히 비우는 것이 이 조작의 최악이다.
+        // `wx` 는 그 판정을 파일시스템에게 맡긴다 — 있나 보고 쓰는 두 걸음 사이에
+        // 남이 만들면 우리 검사가 늦는다.
+        if (action.kind === 'newFile') {
+          await writeFile(target, '', { encoding: 'utf8', flag: 'wx' })
+          return { ok: true }
+        }
+        // **부모가 있어야 만든다.** `recursive` 는 「이미 있으면 넘어간다」를 위한 것이지
+        // 중간 폴더를 만들라는 뜻이 아니다 — 부모가 없으면 위 `resolveNewInside` 가
+        // 이미 거부했다. 경계를 재는 길이 부모를 실경로로 펴는 것이라 그 위는 잴 수 없다.
+        await mkdir(target, { recursive: true })
+        return { ok: true }
+      }
+
+      const source = await resolveInside(root, action.path)
+      // 옮기거나 버릴 것이 없다. 경계 위반과 가르는 이유는 사용자가 할 일이 달라서다 —
+      // 앞은 목록이 낡은 것이고(다시 읽으면 된다), 뒤는 잘못 가리킨 것이다.
+      if (source === null) return { ok: false, reason: 'missing' }
+
+      if (action.kind === 'trash') {
+        // **지우지 않는다.** 휴지통이 없는 환경에서는 던지고, 그때도 파일은 그대로 남는다.
+        await shell.trashItem(source)
+        return { ok: true }
+      }
+
+      const target = await resolveNewInside(root, action.to)
+      if (target === null) return { ok: false, reason: 'not_allowed' }
+      // **덮어쓰지 않는다.** `rename` 은 목적지가 있으면 말없이 지운다 — 이름을 잘못
+      // 적은 한 번에 남의 파일이 사라지는 자리다. 여기만 검사와 실행 사이가 벌어지는데
+      // (`wx` 같은 원자적 갈래가 없다), 그 틈에 남이 그 이름을 만드는 것보다
+      // 사람이 오타로 덮는 쪽이 비교할 수 없이 흔하다.
+      if (await exists(target)) return { ok: false, reason: 'exists' }
+      await rename(source, target)
+      return { ok: true }
+    } catch (error) {
+      // 이미 있는 것(`EEXIST`)만 갈라 준다 — 화면이 「다른 이름을 쓰세요」로 안내할 수 있다
+      const code = (error as NodeJS.ErrnoException).code
+      if (code === 'EEXIST') return { ok: false, reason: 'exists' }
+      return { ok: false, reason: 'failed', detail: describe(error) }
+    }
+  }
+
   private rootOf(projectId: string): string | null {
     return this.source.openProjects.find((project) => project.id === projectId)?.root ?? null
   }
@@ -179,6 +242,21 @@ function sortEntries(entries: DirEntry[]): DirEntry[] {
     if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1
     return a.name.localeCompare(b.name)
   })
+}
+
+/** 그 자리에 무언가 있나. 종류는 안 본다 — 이름이 겹치면 파일이든 폴더든 못 옮긴다. */
+async function exists(path: string): Promise<boolean> {
+  try {
+    await stat(path)
+    return true
+  } catch {
+    return false
+  }
+}
+
+/** 실패 원문. 화면은 이걸 그대로 보여주지 않고 사유 코드로 문구를 고른다. */
+function describe(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
 }
 
 /** 대화에 넣는 경로는 플랫폼과 무관하게 / 로 쓴다 */

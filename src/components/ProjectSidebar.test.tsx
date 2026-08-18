@@ -37,7 +37,7 @@ function renderSidebar(overrides: Partial<Parameters<typeof ProjectSidebar>[0]> 
     <ProjectSidebar
       project={project}
       status="ready"
-      tree={{ children: { '': [] }, expanded: new Set(), loading: new Set(), toggle: vi.fn() }}
+      tree={{ children: { '': [] }, expanded: new Set(), loading: new Set(), toggle: vi.fn(), refresh: () => {} }}
       onPickFile={vi.fn()}
       onOpenFile={vi.fn()}
       onOpenHtml={vi.fn()}

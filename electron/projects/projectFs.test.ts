@@ -8,10 +8,14 @@ import { MAX_FILE_BYTES, ProjectFs } from './projectFs'
 // 호이스팅돼도 아래 vi.fn 정의를 안전하게 잡는다.
 const showItemInFolder = vi.fn()
 const openPath = vi.fn(async (_path: string) => '')
+// 휴지통은 **진짜로 부르지 않는다** — 시험이 사용자 휴지통을 채우면 안 되고,
+// OS 마다 되는 조건이 달라 초록/빨강이 기계를 탄다. 그 자리에 도달했나만 잰다.
+const trashItem = vi.fn(async (_path: string) => {})
 vi.mock('electron', () => ({
   shell: {
     showItemInFolder: (path: string) => showItemInFolder(path),
     openPath: (path: string) => openPath(path),
+    trashItem: (path: string) => trashItem(path),
   },
 }))
 
@@ -36,6 +40,8 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await rm(workDir, { recursive: true, force: true })
+  // 스파이는 시험을 넘어 산다 — 안 비우면 앞 시험의 호출이 「부르지 않았다」를 깬다
+  trashItem.mockClear()
 })
 
 function fs(open: { id: string; root: string }[] = [{ id: 'p1', root: projectRoot }]): ProjectFs {

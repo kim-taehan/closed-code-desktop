@@ -20,7 +20,7 @@ function tree() {
     },
     expanded: new Set<string>(),
     loading: new Set<string>(),
-    toggle: () => {},
+    toggle: () => {}, refresh: () => {},
   }
 }
 

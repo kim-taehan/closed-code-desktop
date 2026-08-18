@@ -163,6 +163,7 @@ export const Channel = {
   /** renderer → main: 파일 내용 읽기 */
   PROJECT_READ_FILE: 'project:readFile',
   PROJECT_OPEN_IN_OS: 'project:openInOs',
+  PROJECT_FS_ACTION: 'project:fsAction',
   /** renderer → main: 앱 전역 설정 읽기/쓰기 */
   SETTINGS_GET: 'settings:get',
   SETTINGS_SET: 'settings:set',
@@ -295,5 +296,4 @@ export const Channel = {
   /** renderer → main: 배포처에서 패키지를 내려받아 설치한다 (디스크 설치와 같은 검사를 탄다) */
   EXTENSION_REGISTRY_INSTALL: 'extension:registryInstall',
 } as const
-
 export type Channel = (typeof Channel)[keyof typeof Channel]

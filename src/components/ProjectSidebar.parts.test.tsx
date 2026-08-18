@@ -38,7 +38,7 @@ describe('프로젝트 사이드바', () => {
     children: { '': [] },
     expanded: new Set<string>(),
     loading: new Set<string>(),
-    toggle: () => {},
+    toggle: () => {}, refresh: () => {},
   }
   const SIDEBAR_NOOP = {
     onFavorite: () => {},

@@ -2,6 +2,8 @@ import { useEffect } from 'react'
 import type { ProjectRecord } from '../../shared/projects/projectRecord'
 import { STATUS_LABEL, type ProjectStatus } from '../state/projectStatus'
 import { FileTree } from './FileTree'
+import { FileTreeOverlays } from './FileTreeOverlays'
+import { useFileTreeActions } from '../state/useFileTreeActions'
 import { HistoryList } from './HistoryList'
 import { GitPanel } from './GitPanel'
 import type { GitBranchMenu } from './GitBranchChip'
@@ -96,6 +98,10 @@ export function ProjectSidebar(props: ProjectSidebarProps) {
   const target = panels.find((option) => option.id === panel) ?? null
   // 준비 행동(목록 갱신)은 **헤더 오른쪽**이다 — 프로젝트당 한 번이면 되는 일이라
   // 주 행동과 크기가 달라야 잘못 누르지 않는다 (기획서 §3).
+  // 트리 우클릭(만들기·이름변경·휴지통). 메뉴와 창은 아래에서 그린다 —
+  // **트리 안에 그리면 스크롤 칸에 잘린다** (`FileTreeMenu` 머리말).
+  const files = useFileTreeActions(props.project.id, props.tree.refresh, props.onToast)
+
   const headerCommands = target === null ? [] : commandSlots(target.extension.contributes?.commands ?? []).header
 
   // 보고 있던 확장이 지워지면(설정 창에서 삭제) 그릴 것이 없다. 빈 화면에 가두지 않고
@@ -175,6 +181,7 @@ export function ProjectSidebar(props: ProjectSidebarProps) {
             onOpenFile={props.onOpenFile}
             onPickFile={props.onPickFile}
             badges={buildBadges(props.git.state)}
+            onContextMenu={files.openMenu}
           />
         )}
         {panel === 'git' && (
@@ -282,6 +289,9 @@ export function ProjectSidebar(props: ProjectSidebarProps) {
           </button>
         )}
       </div>
+
+      {/* 메뉴·이름 창은 트리 **바깥 층**에 뜬다 — 트리는 스크롤 칸이라 안에 그리면 잘린다 */}
+      <FileTreeOverlays files={files} />
     </aside>
   )
 }

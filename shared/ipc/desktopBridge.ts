@@ -1,4 +1,5 @@
 import type { AppSettings } from '../settings/appSettings'
+import type { ProjectFsActionPayload, ProjectFsResult } from './projectFsPayloads'
 import type {
   ServerPingResultPayload,
   ApprovalRespondPayload,
@@ -144,6 +145,8 @@ export interface DesktopBridge
   openInOs(payload: OpenInOsPayload): Promise<OpenInOsResultPayload>
   /** 덮어쓴다. 연 뒤에 바뀌었으면 거절한다 (에이전트가 고쳤을 수 있다). */
   writeFile(payload: WriteFilePayload): Promise<WriteFileResultPayload>
+  /** 만들기·이름변경·휴지통. 넷을 갈래로 담은 한 채널이다 (`projectFsPayloads.ts`) */
+  fsAction(payload: ProjectFsActionPayload): Promise<ProjectFsResult>
   /** 활성 프로젝트의 연결을 지금 확인한다 */
   diagnose(): Promise<DiagnosticsPayload>
   getSettings(): Promise<AppSettings>

@@ -17,6 +17,11 @@ import { treeKeyAction, visibleRows } from '../state/fileTreeKeys'
 
 export interface FileTreeProps {
   tree: FileTreeApi
+  /**
+   * 우클릭. 화면 좌표를 함께 준다 — 메뉴는 트리 **바깥**에 떠야 한다 (스크롤 칸 안에
+   * 그리면 잘린다). 안 주면 브라우저 기본 메뉴가 그대로 뜬다.
+   */
+  onContextMenu?: (path: string, isDirectory: boolean, x: number, y: number) => void
   /** 뷰어로 연다 */
   onOpenFile: (path: string) => void
   /** 경로를 입력창에 넣는다 */
@@ -126,6 +131,7 @@ function Node({
   badges,
   active,
   onFocusRow,
+  onContextMenu,
 }: {
   entry: DirEntryPayload
   depth: number
@@ -145,8 +151,8 @@ function Node({
         // 화면낭독기가 「몇 번째 / 몇 단계」를 읽으려면 깊이가 필요하다. 형제 번호는
         // 안 준다 — 그러려면 부모의 자식 수를 여기서 알아야 하고, 안 읽힌 폴더는 그 수가 없다.
         aria-level={depth + 1}
-        // 화살표로 옮겨 갈 때 찾는 표. `path` 에는 따옴표·괄호가 들어올 수 있어
-        // 고르는 쪽에서 `CSS.escape` 를 쓴다.
+        // 화살표로 옮겨 갈 때 찾는 표. 고르는 쪽은 선택자가 아니라 값을 직접 비교한다
+        // (위 `focus` — 경로에 따옴표·괄호가 들어와도 이스케이프할 것이 없다).
         data-tree-path={entry.path}
         // **초점은 한 줄만.** 나머지는 -1 이라 Tab 이 건너뛴다 (roving tabindex)
         tabIndex={active === entry.path ? 0 : -1}
@@ -155,6 +161,14 @@ function Node({
         title={entry.path}
         // 마우스로 짚은 줄에서 화살표가 이어져야 한다 — 안 그러면 옛 줄에서 다시 센다
         onFocus={() => onFocusRow(entry.path)}
+        onContextMenu={(event) => {
+          if (onContextMenu === undefined) return
+          // 브라우저 기본 메뉴를 막는다 — 둘이 겹쳐 뜨면 우리 것이 뒤에 깔린다
+          event.preventDefault()
+          // 우클릭한 줄이 초점도 가져간다. 그래야 메뉴를 닫은 뒤 화살표가 거기서 이어진다
+          onFocusRow(entry.path)
+          onContextMenu(entry.path, entry.isDirectory, event.clientX, event.clientY)
+        }}
         onClick={() => (entry.isDirectory ? tree.toggle(entry.path) : onOpenFile(entry.path))}
       >
         {/* 글자(▸)로 그리면 작은 크기에서 점처럼 뭉개진다 — CSS 로 그린다 */}
@@ -198,6 +212,7 @@ function Node({
           badges={badges}
           active={active}
           onFocusRow={onFocusRow}
+          {...(onContextMenu ? { onContextMenu } : {})}
         />
       )}
     </>

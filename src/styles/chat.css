@@ -3043,6 +3043,17 @@ body {
   background: var(--dc-surface);
 }
 
+/* 되돌리기 어려운 항목 (`FileTreeMenu` 의 「휴지통으로」).
+   **글자만 물들인다** — 면까지 채우면 목록에서 그 줄로 눈이 먼저 가는데, 이 메뉴에서
+   가장 자주 쓰는 것은 위의 셋이다. 색만으로 가르지 않으려고 자리도 맨 아래에 둔다. */
+.tab-menu__item--danger {
+  color: var(--dc-status-error);
+}
+
+.tab-menu__item--danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--dc-status-error) 12%, transparent);
+}
+
 .tab-menu__item:disabled {
   opacity: 0.4;
   cursor: default;

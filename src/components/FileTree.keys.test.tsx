@@ -22,7 +22,7 @@ function file(name: string, path = name): DirEntryPayload {
 }
 
 function tree(overrides: Partial<FileTreeApi> = {}): FileTreeApi {
-  return { children: {}, expanded: new Set(), loading: new Set(), toggle: () => {}, ...overrides }
+  return { children: {}, expanded: new Set(), loading: new Set(), toggle: () => {}, refresh: () => {}, ...overrides }
 }
 
 /**   src/ (펼침) → a.ts · b.ts,  README.md */

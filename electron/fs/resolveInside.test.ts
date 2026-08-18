@@ -2,7 +2,7 @@ import { mkdtemp, mkdir, realpath, rm, symlink, writeFile } from 'node:fs/promis
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { resolveInside } from './resolveInside'
+import { resolveInside, resolveNewInside } from './resolveInside'
 
 // 확장 체계와 파일 트리가 공유하는 경계. 여기가 뚫리면 루트 밖 파일이 열린다.
 // 경로는 renderer / 확장 매니페스트가 만들어 보내므로 이 판정을 믿을 수 있어야 한다.
@@ -110,5 +110,55 @@ describe('열 수 없는 경로', () => {
 
   it('루트가 없으면 null 이다', async () => {
     expect(await resolveInside(join(workDir, '없는루트'), 'src')).toBeNull()
+  })
+})
+
+// **아직 없는 자리**를 가리키는 짝 (만들기·이름 바꿔 옮기기).
+//
+// `resolveInside` 는 `realpath` 로 재므로 없는 경로가 무조건 `null` 인데, 만들려는 자리는
+// 없는 것이 정상이다. 부모까지만 실경로로 펴고 이름을 붙이는 것이 이 함수다 —
+// **이름 쪽을 안 막으면** `새 폴더/../../..` 한 줄로 루트를 벗어난다.
+describe('없는 자리 만들기 (resolveNewInside)', () => {
+  it('있는 폴더 안의 새 이름을 준다', async () => {
+    expect(await resolveNewInside(root, 'src/새파일.ts')).toBe(join(root, 'src', '새파일.ts'))
+  })
+
+  it('루트 바로 밑도 된다', async () => {
+    expect(await resolveNewInside(root, '새파일.ts')).toBe(join(root, '새파일.ts'))
+  })
+
+  // 부모까지만 확인하고 나머지를 그냥 이어 붙이면 여기서 뚫린다
+  it('이름에 `..` 가 섞이면 거부한다', async () => {
+    expect(await resolveNewInside(root, 'src/..')).toBeNull()
+    expect(await resolveNewInside(root, '../밖에만들기')).toBeNull()
+    expect(await resolveNewInside(root, 'src/../../밖')).toBeNull()
+  })
+
+  it('절대경로는 거부한다', async () => {
+    expect(await resolveNewInside(root, '/tmp/밖')).toBeNull()
+  })
+
+  it('빈 이름·점만 있는 이름은 가리키는 자리가 없다', async () => {
+    for (const bad of ['', '   ', '.', 'src/.', 'src/..']) {
+      expect(await resolveNewInside(root, bad)).toBeNull()
+    }
+  })
+
+  // 끝의 `/` 는 탈출이 아니라 **그냥 그 이름**이다. 여기서 거부하면 「폴더를 만들려고
+  // 슬래시를 붙였을 뿐」인 사람이 이유 없는 거절을 받는다 — 이미 있으면 만들 때
+  // `exists` 로 걸리므로 판정을 앞당길 이유가 없다.
+  it('끝의 슬래시는 이름의 일부가 아니다', async () => {
+    expect(await resolveNewInside(root, 'src/')).toBe(join(root, 'src'))
+  })
+
+  // 부모가 없으면 만들 자리도 없다 — 중간 폴더를 말없이 만들어 주지 않는다
+  it('부모가 없으면 null 이다', async () => {
+    expect(await resolveNewInside(root, '없는폴더/새파일.ts')).toBeNull()
+  })
+
+  // 심링크가 밖을 가리키면 문자열상으로는 안쪽으로 보인다 — 부모를 펴는 이유가 이것이다
+  it('밖을 가리키는 심링크 안에는 못 만든다', async () => {
+    await symlink(join(workDir, '바깥'), join(root, 'link-out'), 'dir')
+    expect(await resolveNewInside(root, 'link-out/새파일.ts')).toBeNull()
   })
 })

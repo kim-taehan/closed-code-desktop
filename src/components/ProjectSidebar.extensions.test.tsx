@@ -55,7 +55,7 @@ const PROJECT: ProjectRecord = { id: 'p1', root: '/tmp/p1', name: 'p1', favorite
 /** 이 시험이 보지 않는 나머지 props. git·history 는 화면을 그릴 만큼만 채운다. */
 const NOOP = {
   status: 'ready' as const,
-  tree: { children: { '': [] }, expanded: new Set<string>(), loading: new Set<string>(), toggle: () => {} },
+  tree: { children: { '': [] }, expanded: new Set<string>(), loading: new Set<string>(), toggle: () => {}, refresh: () => {} },
   onPickFile: () => {},
   onTestConnection: () => {},
   onFavorite: () => {},
