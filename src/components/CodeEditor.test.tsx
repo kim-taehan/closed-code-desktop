@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, render, waitFor } from '@testing-library/react'
 import { EditorView } from '@codemirror/view'
+import { undo } from '@codemirror/commands'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { CodeEditor } from './CodeEditor'
 
@@ -191,5 +192,57 @@ describe('코드 편집기', () => {
 
     container.querySelector('.cm-content')?.dispatchEvent(new FocusEvent('blur'))
     expect(onBlur).toHaveBeenCalled()
+  })
+})
+
+// **되돌리기는 사람이 친 것만 되돌린다.**
+//
+// 편집기는 `doc: ''` 로 태어나고 파일은 비동기로 뒤에 온다 (`useOpenFiles.open`). 그래서
+// 「파일 내용이 들어가는 순간」이 트랜잭션 하나가 되는데, 그것이 이력에 쌓여 있었다 —
+// ⌘Z 를 충분히 누르면 그 채움까지 되돌아가 **문서가 통째로 빈다.** 거기서 끝나지 않는다:
+// 빈 문서가 `onChange` 로 나가 draft 가 되고 600ms 뒤 자동 저장이 빈 파일을 디스크에 쓴다.
+// 실측(2026-08-18) — `gateway/gradlew.bat` 2,896바이트가 0바이트가 됐다.
+describe('되돌리기의 바닥은 파일을 연 시점이다', () => {
+  /** 열림(빈 문서) → 내용 도착, 실제 흐름 그대로 */
+  function opened(text: string, onChange: (next: string) => void = () => {}) {
+    const view = render(<CodeEditor path="a.ts" value="" onChange={onChange} />)
+    view.rerender(<CodeEditor path="a.ts" value={text} onChange={onChange} />)
+    const editor = EditorView.findFromDOM(view.container.querySelector('.cm-editor') as HTMLElement)
+    return { ...view, editor: editor as EditorView }
+  }
+
+  /** ⌘Z 를 열 번. 사람이 「다 지워질 때까지」 누르는 모양이다 */
+  function undoTimes(editor: EditorView, times: number) {
+    for (let at = 0; at < times; at += 1) undo({ state: editor.state, dispatch: editor.dispatch })
+  }
+
+  it('아무것도 안 쳤으면 ⌘Z 를 아무리 눌러도 내용이 그대로다', () => {
+    const { container, editor } = opened('원래 내용')
+
+    undoTimes(editor, 10)
+
+    expect(container.querySelector('.cm-content')?.textContent).toBe('원래 내용')
+  })
+
+  it('친 것은 되돌아가되 **연 시점에서 멈춘다** — 파일이 비지 않는다', () => {
+    const { container, editor } = opened('원래 내용')
+    editor.dispatch({ changes: { from: editor.state.doc.length, insert: ' 더 씀' } })
+    expect(container.querySelector('.cm-content')?.textContent).toBe('원래 내용 더 씀')
+
+    undoTimes(editor, 10)
+
+    expect(container.querySelector('.cm-content')?.textContent).toBe('원래 내용')
+  })
+
+  // 빈 문서가 밖으로 나가면 그것이 draft 가 되고 자동 저장이 디스크를 비운다.
+  // 화면이 잠깐 비었다 돌아오는 정도가 아니라 **파일이 사라지는** 자리다.
+  it('되돌리기가 빈 내용을 밖으로 내보내지 않는다', () => {
+    const seen: string[] = []
+    const { editor } = opened('원래 내용', (next) => seen.push(next))
+    editor.dispatch({ changes: { from: editor.state.doc.length, insert: 'x' } })
+
+    undoTimes(editor, 10)
+
+    expect(seen).not.toContain('')
   })
 })

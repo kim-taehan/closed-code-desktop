@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands'
 import { HighlightStyle, LanguageDescription, syntaxHighlighting } from '@codemirror/language'
 import { languages } from '@codemirror/language-data'
-import { Compartment, EditorState, Prec } from '@codemirror/state'
+import { Compartment, EditorState, Prec, Transaction } from '@codemirror/state'
 import { EditorView, drawSelection, keymap, lineNumbers } from '@codemirror/view'
 import { tags } from '@lezer/highlight'
 import type { EditorSelection } from '../state/editorContext'
@@ -135,7 +135,25 @@ export function CodeEditor({
     const editor = view.current
     if (editor === null) return
     if (editor.state.doc.toString() !== value)
-      editor.dispatch({ changes: { from: 0, to: editor.state.doc.length, insert: value } })
+      editor.dispatch({
+        changes: { from: 0, to: editor.state.doc.length, insert: value },
+        /**
+         * **이 채움은 되돌릴 것이 아니다.**
+         *
+         * 편집기는 `doc: ''` 로 태어나고 파일은 비동기로 뒤에 온다 (`useOpenFiles.open` 이
+         * 탭을 먼저 세우고 `readFile` 결과를 나중에 넣는다). 그래서 「파일 내용이 들어가는
+         * 순간」이 트랜잭션 하나가 되는데, 그것이 이력에 쌓여 있었다 —
+         * **⌘Z 를 충분히 누르면 그 채움까지 되돌아가 문서가 통째로 빈다.**
+         *
+         * 거기서 끝나지 않는다: 빈 문서가 `onChange` 로 나가 draft 가 되고, 600ms 뒤
+         * 자동 저장이 **빈 파일을 디스크에 쓴다.** 실측(2026-08-18) — 사용자의
+         * `gateway/gradlew.bat` 2,896바이트가 0바이트가 됐다. git 이 없는 파일이었으면
+         * 되살릴 길이 없었다.
+         *
+         * 되돌리기는 **사람이 친 것만** 되돌려야 한다. 파일을 연 시점이 바닥이다.
+         */
+        annotations: Transaction.addToHistory.of(false),
+      })
     reveal()
   }, [value])
 
