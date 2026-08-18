@@ -147,3 +147,37 @@ describe('그 사이 파일이 바뀌었을 때', () => {
     expect(notify).toHaveBeenCalledTimes(1)
   })
 })
+
+// **던지는 것도 실패다.** 자동 저장을 부르는 자리는 둘 다 `void` 라 (타이머·flush)
+// 예외가 나면 아무 데도 안 잡히고 조용히 사라진다 — 사용자에게는 「그냥 저장이 안 된다」로
+// 보이고, 화면 어디에도 이유가 없다. IPC 가 통째로 안 붙은 때가 그 모양이 된다.
+describe('저장이 던졌을 때', () => {
+  it('조용히 죽지 않고 알린다', async () => {
+    writeFile.mockRejectedValue(new Error('No handler registered'))
+    const { result } = await opened()
+
+    await run(() => result.current.edit('a.ts', '고침'))
+    await idle()
+
+    expect(notify).toHaveBeenCalledWith(expect.stringContaining('저장하지 못했습니다'), 'error')
+    // 고친 내용은 화면에 남는다 — 지우면 사용자가 쓴 것이 사라진다
+    expect(result.current.files[0]!.draft).toBe('고침')
+  })
+
+  // 던진 것은 `stale` 이 아니다. 잠가 버리면 서버가 잠깐 흔들린 뒤에도 영영 안 쓴다.
+  it('잠기지 않는다 — 다음 타이핑에 다시 시도한다', async () => {
+    writeFile.mockRejectedValue(new Error('boom'))
+    const { result } = await opened()
+
+    await run(() => result.current.edit('a.ts', '고침'))
+    await idle()
+    expect(writeFile).toHaveBeenCalledTimes(1)
+
+    writeFile.mockResolvedValue({ ok: true, mtimeMs: 300 })
+    await run(() => result.current.edit('a.ts', '더 고침'))
+    await idle()
+
+    expect(writeFile).toHaveBeenCalledTimes(2)
+    expect(result.current.files[0]!.text).toBe('더 고침')
+  })
+})

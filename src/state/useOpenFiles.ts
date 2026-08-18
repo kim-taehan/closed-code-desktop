@@ -93,12 +93,21 @@ export function useOpenFiles(
       const file = filesRef.current.find((f) => f.path === path)
       if (file === undefined || file.draft === undefined || !isDirty(file)) return
 
-      const result = await window.davis.writeFile({
-        projectId,
-        path,
-        text: file.draft,
-        expectedMtimeMs: file.mtimeMs ?? 0,
-      })
+      // **던지는 것을 여기서 받는다.** 이 함수를 부르는 자리는 둘 다 `void` 라
+      // (`edit` 의 타이머 · `flush`) 예외가 나면 아무 데도 안 잡히고 조용히 사라진다 —
+      // 사용자에게는 「자동 저장이 그냥 안 된다」로 보이고, 화면 어디에도 이유가 없다.
+      // IPC 가 통째로 안 붙은 때(핸들러 미등록·프로젝트 사라짐)가 그 모양이 된다.
+      const result = await window.davis
+        .writeFile({
+          projectId,
+          path,
+          text: file.draft,
+          expectedMtimeMs: file.mtimeMs ?? 0,
+        })
+        .catch((error: unknown) => ({
+          ok: false as const,
+          reason: error instanceof Error ? error.message : 'threw',
+        }))
 
       if (!result.ok) {
         notify?.(WRITE_REASON[result.reason ?? ''] ?? '저장하지 못했습니다', 'error')
