@@ -4,6 +4,7 @@ import { ViewEmitters } from './viewEmitters'
 import { ExtensionHost, type ForkFn } from './host'
 import { errorResponse, METHOD_LOAD_EXTENSIONS, NOTICE_READY, okResponse, type RpcRequest } from './rpc'
 import { ProjectEnvelope } from './projectEnvelope'
+import { ViewOwnership } from './viewOwnership'
 import { createInvoker, type Invoker } from './serviceInvoke'
 import { toSkips } from './serviceParse'
 import { dispatchExtensionApi, portsOf, type DispatchPorts } from './serviceDispatch'
@@ -59,6 +60,7 @@ export class ExtensionService {
   private readonly logHandlers = new HandlerSet<[string]>()
   /** 결과 행·트리·화면에 붙일 프로젝트 겉봉. 규칙은 `projectEnvelope.ts` 에 있다. */
   private readonly envelope = new ProjectEnvelope()
+  private readonly ownership = new ViewOwnership() // redraw 가 남의 프로젝트 화면을 나르지 않게 — 규칙은 viewOwnership.ts
   private scanning: Promise<ExtensionScan> | null = null
   private loadFailures: ExtensionSkip[] = []
   /** 싣기가 끝났는가. 목록·명령이 이걸 기다린다 — 안 기다리면 기동 직후 호출이 빈손으로 돌아온다. */
@@ -148,6 +150,7 @@ export class ExtensionService {
 
     this.scanning = null
     this.loadFailures = []
+    this.ownership.clear() // 저장된 화면이 자식과 함께 죽었다 — 옛 주인 기록이 새 redraw 를 막으면 안 된다
     this.loaded = new Promise<void>((resolve) => {
       this.markReady = resolve
     }).then(() => this.loadAll())
@@ -173,7 +176,7 @@ export class ExtensionService {
 
   async redraw(projectId: string | null): Promise<void> {
     await this.settled()
-    await this.invoke.redraw(projectId)
+    await this.ownership.duringRedraw(() => this.invoke.redraw(projectId))
   }
 
   async activeFileChanged(file: unknown, projectId: string | null): Promise<void> {
@@ -278,7 +281,7 @@ export class ExtensionService {
           request.id,
           await dispatchExtensionApi(
             portsOf(this.options, {
-              ...this.views.bindings(() => this.envelope.current()),
+              ...this.ownership.guard(this.views.bindings(() => this.envelope.current())),
               // 응답으로 못 보내는 것들의 통로.
               // 자식이 죽었으면 `notify` 가 false 를 돌려주는데, 곁가지라 그냥 흘린다.
               notifyChild: (method, params) => {
@@ -293,6 +296,4 @@ export class ExtensionService {
       this.host.respond(errorResponse(request.id, describeError(error)))
     }
   }
-
 }
-
