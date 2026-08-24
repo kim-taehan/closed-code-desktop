@@ -81,6 +81,22 @@ describe('McpSection', () => {
     expect(screen.getByText(/이 앱이 띄움/)).toBeTruthy()
   })
 
+  // **도구가 있다고 우리 것이 아니다.** 원격 서버에도 도구를 채우게 되면서
+  // (`electron/opencode/remoteMcpTools.ts`) `tools.length > 0` 이라는 옛 표식이 거짓이 됐다.
+  // 그대로 뒀으면 사내 원격 서버가 도구를 준 순간 「local · 이 앱이 띄움」으로 뒤집혔다.
+  it('남의 원격 서버는 도구가 있어도 remote 다', () => {
+    show([server({ serverName: 'davis-cloud-mcp', transport: 'remote', tools: [{ name: 'health_check' }] })])
+    expect(screen.getByText('health_check')).toBeTruthy()
+    expect(screen.queryByText(/이 앱이 띄움/)).toBeNull()
+    expect(screen.getByText('remote')).toBeTruthy()
+  })
+
+  // 거꾸로도 성립해야 한다 — 우리 서버를 가리는 근거가 도구 목록이 아니라 이름이다
+  it('우리 서버는 도구를 못 실어도 우리 것이다', () => {
+    show([server({ serverName: 'closed-code-desktop', transport: 'unknown', tools: [] })])
+    expect(screen.getByText(/이 앱이 띄움/)).toBeTruthy()
+  })
+
   // 모르는 갈래를 「실패」로 칠하면 사용자가 없는 장애를 쫓는다
   it('OAuth 갈래도 이름을 갖는다 — 실패로 칠하지 않는다', () => {
     show([server({ status: 'needs_auth' })])

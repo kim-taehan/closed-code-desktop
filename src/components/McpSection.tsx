@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { OUR_MCP_SERVER } from '../../shared/protocol/mcpConfig'
 import type { McpConnectionStatus, McpServerStatus, McpState } from '../../shared/protocol/mcpConfig'
 
 // 커넥터(MCP) 다이얼로그의 본문 — **연결 상태**를 보여준다.
@@ -103,9 +104,11 @@ function ServerCard({ server }: { server: McpServerStatus }) {
   }
 
   const tone = TONES[server.status]
-  // 도구를 아는 것은 우리가 띄운 서버뿐이다 (`electron/opencode/mcpConfig.ts` — opencode 는
-  // 남의 서버 도구를 안 준다). 그래서 이 목록이 곧 "이 앱이 띄웠다" 는 표식이다.
-  const ours = server.tools.length > 0
+  // **이름으로 가린다.** 예전에는 `tools.length > 0` 이었다 — 도구를 아는 것이 우리가 띄운
+  // 서버뿐이던 시절에는 맞았지만, 지금은 원격 서버 도구도 채운다
+  // (`electron/opencode/remoteMcpTools.ts`). 그대로 뒀으면 사내 원격 서버가 도구를 준
+  // 순간 「local · 이 앱이 띄움」으로 뒤집혔다 — 갈래도 정체도 둘 다 거짓말이다.
+  const ours = server.serverName === OUR_MCP_SERVER
   const kind = ours ? 'local · 이 앱이 띄움' : server.transport === 'unknown' ? '' : server.transport
 
   function connect(enabled: boolean): void {

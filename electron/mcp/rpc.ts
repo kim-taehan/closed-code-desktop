@@ -1,5 +1,6 @@
 import { TOOLS } from './toolSchemas'
 import { describeError } from '../../shared/errors/describeError'
+import { OUR_MCP_SERVER } from '../../shared/protocol/mcpConfig'
 
 // MCP 요청 하나를 응답 하나로 바꾸는 자리.
 //
@@ -30,8 +31,11 @@ const PROTOCOL_VERSION = '2025-06-18'
  * ⚠️ **이 상수를 바꾸면 등록 이름이 바뀐다.** desktop 은 사용자 `opencode.json` 을 건드리지
  * 않고 세션마다 런타임으로 등록하므로(`register.ts:16`) 옛 이름은 opencode 가 다시 뜨면
  * 사라진다. 다만 **바꾼 뒤 첫 실행에서 살아 있던 opencode 에는 두 이름이 함께 보일 수 있다.**
+ *
+ * 값이 `shared` 에 있는 것은 **커넥터 화면도 이 이름으로 우리 카드를 가리기 때문이다** —
+ * 화면은 `electron/` 을 import 하지 않아 상수를 나눠 가질 자리가 거기뿐이다.
  */
-export const SERVER_NAME = 'closed-code-desktop'
+export const SERVER_NAME = OUR_MCP_SERVER
 
 export interface RpcRequest {
   id?: unknown

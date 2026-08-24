@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Action, Kind } from '../../shared/protocol/kinds'
 import { parseMcpState } from '../../shared/protocol/mcpConfig'
 import { mcpConfigFrame } from './mcpConfig'
@@ -171,5 +171,88 @@ describe('mcpConfigFrame', () => {
 
   it('mcp_config_test 는 답하지 않는다 — opencode 에 대응 표면이 없다', async () => {
     expect(await mcpConfigFrame(client(), '/proj', Action.MCP_CONFIG_TEST, {})).toBeNull()
+  })
+})
+
+// **두 층 사이의 배선.** 무는 길(`remoteMcpTools.ts`)과 봉투 만들기는 각자 잠겨 있어도,
+// **누구에게 묻는지를 고르는 규칙**은 여기 말고 잠길 자리가 없다. 그 규칙이 곧 다이얼로그가
+// 뜨는 속도이기도 하다 — 죽은 서버까지 두드리면 그 시간만큼 화면이 늦는다.
+describe('원격 서버 도구를 물어서 채운다', () => {
+  const LIVE = {
+    'davis-cloud-mcp': { status: 'connected' },
+    deadremote: { status: 'failed', error: 'SSE error: Unable to connect.' },
+    livelocal: { status: 'connected' },
+    'closed-code-desktop': { status: 'connected' },
+  }
+  const LIVE_CONFIG = {
+    mcp: {
+      'davis-cloud-mcp': { type: 'remote', url: 'https://mcp.test/mcp' },
+      deadremote: { type: 'remote', url: 'http://127.0.0.1:9/mcp' },
+      livelocal: { type: 'local', command: ['/usr/bin/true'] },
+    },
+  }
+
+  // 실물 응답의 모양 그대로 (`remoteMcpTools.test.ts` 머리말). 여기서는 누가 물었는지만 센다
+  function probe() {
+    const asked: string[] = []
+    vi.stubGlobal('fetch', async (url: string, init: RequestInit) => {
+      const { method } = JSON.parse(init.body as string)
+      if (method === 'initialize') asked.push(url)
+      return {
+        headers: { get: () => 'sid-1' },
+        text: async () =>
+          'event: message\r\ndata: {"result":{"tools":[{"name":"health_check","description":"상태를 본다."}]}}\r\n\r\n',
+      } as unknown as Response
+    })
+    return asked
+  }
+
+  const live = () => client({ mcpStatus: vi.fn(async () => LIVE), config: vi.fn(async () => LIVE_CONFIG) })
+
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('연결된 원격 서버는 도구가 찬다 — opencode 는 이걸 안 준다', async () => {
+    probe()
+    const cloud = (await stateOf(live())).servers.find((s) => s.serverName === 'davis-cloud-mcp')
+    expect(cloud?.tools).toEqual([{ name: 'health_check', description: '상태를 본다.' }])
+  })
+
+  it('묻는 곳은 설정에 적힌 그 주소다', async () => {
+    const asked = probe()
+    await stateOf(live())
+    expect(asked).toEqual(['https://mcp.test/mcp'])
+  })
+
+  // 죽은 서버는 답할 리 없고, 두드리는 시간만큼 다이얼로그가 늦게 뜬다
+  it('실패한 원격은 두드리지 않는다', async () => {
+    const asked = probe()
+    const dead = (await stateOf(live())).servers.find((s) => s.serverName === 'deadremote')
+    expect(asked).not.toContain('http://127.0.0.1:9/mcp')
+    expect(dead?.tools).toEqual([])
+  })
+
+  // local 은 stdio 로 붙는다 — 주소 자리에 있는 것은 실행 명령이라 물을 곳이 아니다
+  it('local 서버는 붙어 있어도 두드리지 않는다', async () => {
+    const asked = probe()
+    const local = (await stateOf(live())).servers.find((s) => s.serverName === 'livelocal')
+    expect(asked).toHaveLength(1)
+    expect(local?.tools).toEqual([])
+  })
+
+  it('우리 서버 도구는 원격 응답으로 덮이지 않는다', async () => {
+    probe()
+    const ours = (await stateOf(live())).servers.find((s) => s.serverName === 'closed-code-desktop')
+    expect(ours?.tools.map((tool) => tool.name)).toContain('open_file')
+  })
+
+  // 서버 하나가 안 답하는 것과 목록을 못 받는 것은 다르다
+  it('물었는데 못 받으면 그 칸만 비고 목록은 그대로다', async () => {
+    vi.stubGlobal('fetch', async () => {
+      throw new Error('ECONNREFUSED')
+    })
+    const state = await stateOf(live())
+    expect(state.servers).toHaveLength(4)
+    expect(state.servers.find((s) => s.serverName === 'davis-cloud-mcp')?.tools).toEqual([])
+    expect(state.message).toBe('')
   })
 })

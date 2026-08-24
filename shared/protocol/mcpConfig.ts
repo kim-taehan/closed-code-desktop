@@ -41,6 +41,19 @@ export type McpConnectionStatus =
 /** 서버가 어떻게 붙는가. opencode 설정의 `type` 이다. */
 export type McpTransport = 'local' | 'remote' | 'unknown'
 
+/**
+ * 이 앱이 띄우는 MCP 서버의 이름. **우리 카드를 가리는 근거가 이 이름 하나다.**
+ *
+ * 여기 있는 이유는 화면과 main 이 같은 이름을 봐야 하기 때문이다 — 화면은
+ * `electron/` 을 import 하지 않는다. 등록에 쓰이는 `electron/mcp/rpc.ts` 의 `SERVER_NAME`
+ * 이 이 상수를 가져다 쓰므로, 바꿀 때 한 곳만 고치면 된다 (그 파일의 경고도 함께 읽어라).
+ *
+ * 예전에는 화면이 **`tools` 가 찼는지**로 우리 서버를 가렸다. opencode 가 남의 서버 도구를
+ * 안 주던 시절에는 맞는 추론이었지만, 지금은 원격 서버 도구도 채운다 (`electron/opencode/
+ * remoteMcpTools.ts`) — 그대로 뒀으면 사내 원격 서버가 「이 앱이 띄움」으로 보였다.
+ */
+export const OUR_MCP_SERVER = 'closed-code-desktop'
+
 export interface McpServerStatus {
   serverName: string
   status: McpConnectionStatus
@@ -52,8 +65,14 @@ export interface McpServerStatus {
   /**
    * 이 서버가 주는 도구.
    *
-   * **우리 서버(`closed-code-desktop`)에만 채운다.** opencode 는 `GET /mcp` 에 도구를 안 싣고,
-   * 남의 서버 도구를 알아낼 표면이 없다 — 모르는 것을 지어내지 않는다.
+   * **opencode 는 여전히 도구를 안 준다** — `GET /mcp` 는 상태뿐이고 `/doc` 전수에도 서버별
+   * 도구 목록 표면이 없다 (2026-08-24 실측). 그래서 채우는 길이 둘로 갈린다:
+   *   우리 서버 — 우리가 쓴 정본(`electron/mcp/toolSchemas.ts`)을 그대로 싣는다
+   *   remote·connected — main 이 그 서버에 MCP 로 직접 물어본다 (`remoteMcpTools.ts`)
+   * local(실행형) 서버는 아직 비어 있다 — 붙는 길이 stdio 라 밖에서 물을 자리가 없다.
+   *
+   * **여전히 지어내지는 않는다.** 못 물어봤으면 빈 목록이고, 빈 목록은 「도구가 없다」가
+   * 아니라 「모른다」다. 이 구분이 화면 문구에 걸린다.
    */
   tools: McpTool[]
 }
@@ -141,8 +160,12 @@ function toTransport(value: unknown): McpTransport {
  *
  * **글자만 온 것도 받는다.** 이 payload 를 만드는 자리가 예전에는 이름만 실었고
  * (`string[]`), 앱과 opencode 는 각자 갱신되므로 옛 모양이 한동안 함께 돈다.
- * 그때 목록을 통째로 버리면 「이 앱이 띄웠다」 표식(`McpSection` 의 `ours`)까지 사라져,
- * 서버 카드가 남의 서버처럼 보인다 — 설명만 없는 것과 결과가 다르다.
+ * 그때 목록을 통째로 버리면 도구 칩이 통째로 사라진다 — 설명만 없는 것과 결과가 다르다.
+ * (예전에는 여기가 「이 앱이 띄웠다」 표식까지 겸했다. 지금 그 판정은 `OUR_MCP_SERVER`
+ * 이름으로 하므로 목록을 잃어도 카드의 정체까지 흔들리지는 않는다.)
+ *
+ * **여기가 남의 데이터를 받는 자리다.** 원격 서버가 준 도구도 이 문을 지난다 —
+ * 어댑터는 이름·설명만 뽑아 넘기고, 모양을 못 믿어 거르는 일은 여기서 한다.
  *
  * 설명은 **빈 문자열이면 없는 것으로 본다.** 화면이 「설명이 있는데 비었다」로 그리는 것을
  * 막는 자리가 여기뿐이다 (`url`·`error` 와 같은 규칙).

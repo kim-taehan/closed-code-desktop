@@ -2,6 +2,7 @@ import { Action, Kind } from '../../shared/protocol/kinds'
 import { describeError } from '../../shared/errors/describeError'
 import { SERVER_NAME, TOOLS } from '../mcp/rpc'
 import type { McpStatusEntry, OpencodeClient } from './client'
+import { remoteMcpTools } from './remoteMcpTools'
 
 // 커넥터(MCP) 다이얼로그의 번역 — davis `mcp_config` 봉투 ↔ opencode `/mcp`.
 //
@@ -24,8 +25,12 @@ import type { McpStatusEntry, OpencodeClient } from './client'
 // (a) 상태에만 있다 — 런타임 등록(`POST /mcp`). **우리 자신이 그렇다.** `GET /mcp` 에는
 //     뜨는데 `GET /config` 에는 없다 (실측 1.18.18 — 등록이 파일에 안 써지는 것과 같은 사유,
 //     `mcp/register.ts` 머리말). 그래서 우리 서버는 transport 도 url 도 모르고, 아는 것은
-//     **도구 목록**뿐이다. 화면은 `tools` 가 찬 항목을 "이 앱이 띄움" 으로 읽는다.
-//     기준을 설정 쪽으로 잡으면 우리가 목록에서 빠지므로 **상태 맵이 기준이다.**
+//     **도구 목록**뿐이다. 기준을 설정 쪽으로 잡으면 우리가 목록에서 빠지므로
+//     **상태 맵이 기준이다.**
+//
+//     한동안 화면이 `tools` 가 찬 항목을 "이 앱이 띄움" 으로 읽었다 — 남의 도구를 알 길이
+//     없던 시절에만 참인 추론이었고, 아래 (c) 로 거짓이 됐다. 지금 그 판정은 이름
+//     (`OUR_MCP_SERVER`)으로 한다.
 //
 // (b) 설정에만 있다 — opencode 가 그 항목을 **버린 것이다.** 스키마를 어긴 설정이 트리거고,
 //     증상이 고약하다 (2026-08-15 desktop-dev 실측, opencode 1.18.18):
@@ -38,6 +43,11 @@ import type { McpStatusEntry, OpencodeClient } from './client'
 //     **사용자는 오타를 냈는데 커넥터 화면에 아무 흔적이 없다** — 조용히 죽는 부류다.
 //     그래서 합집합을 돌아 이런 이름도 `status:'unknown'` 으로 목록에 남긴다 (`readState`).
 //     이 트리거를 찾아 준 것은 contract-qa 이고, 위 재현은 내가 따로 쟀다.
+//
+// (c) **도구 목록은 opencode 밖에서 온다** (2026-08-24). `/doc` 전수에 서버별 도구 표면이
+//     없어서, remote·connected 인 서버에는 **그 서버에 직접 MCP 로 물어본다**
+//     (`remoteMcpTools.ts`). 화면에서 사내 원격 서버가 「연결됨」인데 도구 칸만 비어 있던
+//     자리다. 봉투 모양은 그대로고 `tools` 를 채우는 출처가 하나 늘었을 뿐이다.
 //
 // **불린을 믿지 않는다.** connect 는 실패해도 `true` 를 준다 (`client.setMcpEnabled` 주석).
 // 그래서 켜고 끈 뒤에는 항상 상태를 다시 읽어 그 결과로 봉투를 만든다. 낙관적으로 고치면
@@ -120,7 +130,34 @@ async function readState(client: McpClient, directory: string | null): Promise<R
   const orphans = Object.keys(configured)
     .filter((name) => !(name in status))
     .map((name) => toServer(name, {}, configured[name]))
-  return { servers: [...listed, ...orphans], message: '' }
+  return { servers: await withRemoteTools([...listed, ...orphans]), message: '' }
+}
+
+/**
+ * 붙어 있는 원격 서버에 도구 목록을 물어 채운다. opencode 가 안 주는 것이라
+ * **우리가 그 서버에 직접 묻는다** (`remoteMcpTools.ts` 가 근거의 정본).
+ *
+ * 무는 조건이 셋이다. `remote` 여야 하고(local 은 stdio 라 밖에서 물을 자리가 없다),
+ * `connected` 여야 하고(죽은 서버를 두드리면 다이얼로그가 그만큼 늦게 뜬다),
+ * 주소를 알아야 한다(설정 조회가 실패하면 `url` 이 없다).
+ *
+ * **한꺼번에 묻는다.** 차례로 물으면 상한이 서버 수만큼 곱해진다.
+ *
+ * 빈손이면 원래 항목을 그대로 둔다 — 빈 목록을 덮어써 봐야 같은 값이고,
+ * 「못 물어봤다」와 「도구가 없다」를 여기서 가릴 방법도 없다.
+ */
+async function withRemoteTools(
+  servers: Record<string, unknown>[],
+): Promise<Record<string, unknown>[]> {
+  return Promise.all(
+    servers.map(async (server) => {
+      if (server['transport'] !== 'remote' || server['status'] !== 'connected') return server
+      const url = server['url']
+      if (typeof url !== 'string' || url === '') return server
+      const tools = await remoteMcpTools(url)
+      return tools.length === 0 ? server : { ...server, tools }
+    }),
+  )
 }
 
 async function mcpSettings(
@@ -160,7 +197,10 @@ function toServer(
     server_name: name,
     status: typeof entry?.status === 'string' ? entry.status : 'unknown',
     transport: setting?.type === 'local' || setting?.type === 'remote' ? setting.type : 'unknown',
-    // 우리가 띄운 서버의 도구만 안다 — opencode 는 도구 목록을 안 준다 (`mcp/rpc.ts` 가 정본).
+    // 여기서 채우는 것은 **우리 서버 것뿐이다** — opencode 는 어느 서버의 도구도 안 준다
+    // (`mcp/rpc.ts` 가 우리 목록의 정본). 남의 원격 서버 도구는 이 함수가 모르고,
+    // 봉투가 다 만들어진 뒤 `withRemoteTools` 가 물어서 덮는다. 순서가 그런 이유는
+    // 무엇을 물을지가 **여기서 정해지는 값(transport·status·url)에 달렸기** 때문이다.
     //
     // **설명을 함께 싣는다.** 예전에는 `.map((tool) => tool.name)` 으로 이름만 보냈는데,
     // 설명은 `toolSchemas.ts` 에 처음부터 도구마다 적혀 있었다 — 화면에 이름표만 남아
