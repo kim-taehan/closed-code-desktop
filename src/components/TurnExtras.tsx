@@ -47,11 +47,16 @@ export function TurnFooter({
 
 
 /**
- * 셸 결과를 대화에 넘긴다. 넘기기 전에 **한 줄을 덧붙일 수 있다.**
+ * 셸 결과를 대화에 넘긴다. 넘길 때 **한 줄을 덧붙일 수 있다.**
  *
  * 명령과 출력만 넘기면 모델은 사용자가 그걸 왜 보여주는지 모른다 — 고쳐 달라는 것인지,
- * 왜 이렇게 나오는지 묻는 것인지. 그래서 클릭이 곧 전송이 아니라 **입력 한 칸을 연다.**
- * 빈 채로 보내면 예전과 똑같이 나간다 (덧붙일 말은 선택이다).
+ * 왜 이렇게 나오는지 묻는 것인지. 그래서 덧붙일 칸을 함께 둔다.
+ *
+ * **칸은 처음부터 떠 있다.** 버튼을 눌러야 칸이 열리게 만들었다가 되물렸다 (2026-08-24) —
+ * 결과를 보고 물음이 떠오른 사람에게 "열기" 는 순전한 군더더기였고, 열리는 것을 모르면
+ * 그냥 빈 채로 넘긴다. 다만 **초점은 가져가지 않는다**: 셸을 돌릴 때마다 이 칸이 여럿
+ * 생기고, 늘 떠 있는 칸이 초점을 빼앗으면 아래쪽 입력창을 쓰던 손이 튄다.
+ * 빈 채로 넘기면 예전과 똑같이 나간다 (덧붙일 말은 선택이다).
  */
 export function AskAboutShell({
   shell,
@@ -61,44 +66,22 @@ export function AskAboutShell({
   onAsk?: (command: string, output: string, note?: string) => void
 }) {
   const [asked, setAsked] = useState(false)
-  const [open, setOpen] = useState(false)
   const [note, setNote] = useState('')
   if (!onAsk) return null
 
   const send = () => {
     setAsked(true)
-    setOpen(false)
     const trimmed = note.trim()
     // 공백뿐인 덧말은 없는 것으로 친다 — 질문 없는 빈 줄이 프롬프트 끝에 붙지 않게
     onAsk(shell.command, shell.output, trimmed === '' ? undefined : trimmed)
   }
 
-  if (open) {
+  // 한 번 넘긴 뒤에는 칸도 거둔다 — 두 번 넘길 수 있는 자리가 아니다
+  if (asked) {
     return (
       <div className="cc-shell-ask">
-        <input
-          type="text"
-          className="cc-shell-ask__input"
-          value={note}
-          placeholder="덧붙일 말 (선택)"
-          aria-label="덧붙일 말"
-          autoFocus
-          onChange={(event) => setNote(event.target.value)}
-          onKeyDown={(event) => {
-            // 한글 조합 확정 Enter 도 keydown 으로 올라온다 (Composer.tsx:222 와 같은 자리) —
-            // isComposing 을 안 보면 첫 글자를 확정하는 순간 전송된다
-            if (event.key === 'Enter' && !event.nativeEvent.isComposing) {
-              event.preventDefault()
-              send()
-            } else if (event.key === 'Escape') {
-              // 나가는 길. 쓰던 덧말은 버린다 — 다음에 열면 빈 칸이 맞다
-              setOpen(false)
-              setNote('')
-            }
-          }}
-        />
-        <button type="button" className="cc-shell-ask__button" onClick={send}>
-          보내기
+        <button type="button" className="cc-shell-ask__button" disabled>
+          넘겼습니다
         </button>
       </div>
     )
@@ -106,18 +89,34 @@ export function AskAboutShell({
 
   return (
     <div className="cc-shell-ask">
+      <input
+        type="text"
+        className="cc-shell-ask__input"
+        value={note}
+        placeholder="덧붙일 말 (선택)"
+        aria-label="덧붙일 말"
+        onChange={(event) => setNote(event.target.value)}
+        onKeyDown={(event) => {
+          // 한글 조합 확정 Enter 도 keydown 으로 올라온다 (Composer.tsx:222 와 같은 자리) —
+          // isComposing 을 안 보면 첫 글자를 확정하는 순간 넘어간다
+          if (event.key === 'Enter' && !event.nativeEvent.isComposing) {
+            event.preventDefault()
+            send()
+          } else if (event.key === 'Escape') {
+            // 접을 칸이 없으니 Escape 는 쓰던 말을 지운다 — 넘기지는 않는다
+            setNote('')
+          }
+        }}
+      />
       <button
         type="button"
         className="cc-shell-ask__button"
-        disabled={asked}
-        onClick={() => setOpen(true)}
+        onClick={send}
         title="이 명령과 출력을 대화에 넘깁니다"
       >
-        {asked ? '넘겼습니다' : '이 결과 물어보기'}
+        이 결과 물어보기
       </button>
-      <span className="cc-shell-ask__note">
-        {asked ? '' : '지금은 화면에만 있어 모델이 보지 못합니다'}
-      </span>
+      <span className="cc-shell-ask__note">지금은 화면에만 있어 모델이 보지 못합니다</span>
     </div>
   )
 }
