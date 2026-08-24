@@ -20,8 +20,8 @@ export interface ProjectRecord {
 /** 최근 목록 상한. 즐겨찾기는 여기 세지 않는다. */
 export const RECENT_CAP = 15
 
-/** 동시에 열 수 있는 프로젝트 수 (설계 §4.4) */
-export const MAX_OPEN_PROJECTS = 4
+/** 동시에 열 수 있는 프로젝트 수 (설계 §4.4). 4 → 10 (2026-08-24 사용자 요청) */
+export const MAX_OPEN_PROJECTS = 10
 
 /**
  * 즐겨찾기 먼저, 그 안에서 최근 연 순.
