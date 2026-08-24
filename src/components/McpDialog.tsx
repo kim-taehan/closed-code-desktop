@@ -20,10 +20,12 @@ export function McpDialog({ state, onClose }: McpDialogProps) {
             ×
           </button>
         </div>
-        <div className="dc-settings__body">
-          <div className="dc-settings__pane">
-            <McpSection state={state} />
-          </div>
+        {/* **`dc-settings__body` 를 쓰지 않는다.** 그것은 `180px 1fr` 격자라 자식이 하나면
+            그 하나가 180px 칸에 들어간다 — 커넥터가 딱 그 꼴이었다: 좁은 왼쪽 열에 카드가
+            전부 몰려 도구 칩이 잘리고 오른쪽은 통째로 비었다. 여기 두 칸은 `McpSection` 이
+            직접 나눈다 (`dc-mcp-split`). 창틀만 설정 모달에서 빌린다. */}
+        <div className="dc-mcp-body">
+          <McpSection state={state} />
         </div>
       </div>
     </div>

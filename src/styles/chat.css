@@ -4590,16 +4590,98 @@ body {
   border-color: var(--dc-accent);
 }
 
-/* ── MCP 서버 카드 ───────────────────────────────────── */
-/* 자격 입력 칸이던 것을 연결 상태 카드로 바꿨다 (McpSection.tsx 머리말).
-   상태색은 점과 pill 두 곳에 같은 tone 클래스로 걸린다. */
+/* ── MCP 커넥터 (왼쪽 리스트 / 오른쪽 상세) ───────────── */
+/* 자격 입력 칸이던 것을 연결 상태로 바꿨다 (McpSection.tsx 머리말).
+   상태색은 점과 pill 두 곳에 같은 tone 클래스로 걸린다.
 
+   **카드를 세로로 쌓던 것을 두 칸으로 갈랐다.** 서버 하나에 도구 칩이 수십 개 딸리는데
+   그게 다이얼로그의 180px 왼쪽 칸에 들어가 잘리고 있었다 (`McpDialog` 의 주석). */
+
+.dc-mcp-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+/* 서버가 하나도 없을 때만 나온다 — 그때는 가를 것이 없어 한 칸으로 쓴다.
+   `dc-settings__pane` 에서 받던 여백을 여기서 준다. */
+.dc-mcp-body > .dc-settings__section {
+  padding: 16px 20px;
+}
+
+.dc-mcp-split {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  flex: 1;
+  min-height: 0;
+}
+
+/* 왼쪽은 선이 아니라 면으로 갈린다 (설정 창의 분류 칸과 같은 규칙). */
+.dc-mcp-list {
+  display: flex;
+  flex-direction: column;
+  padding: 10px 8px;
+  overflow-y: auto;
+  background: var(--dc-layer);
+}
+
+.dc-mcp-list__items {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.dc-mcp-list__item {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font: inherit;
+  text-align: left;
+  padding: 8px 9px;
+  border-radius: var(--dc-radius-sm);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.dc-mcp-list__item:hover {
+  background: color-mix(in srgb, var(--dc-bg) 60%, transparent);
+}
+
+.dc-mcp-list__item--on {
+  background: color-mix(in srgb, var(--dc-accent) 20%, transparent);
+}
+
+.dc-mcp-list__top {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  /* 서버 이름이 칸보다 길 수 있다. 줄여서 말줄임을 걸지 않으면 배지가 밀려난다 */
+  min-width: 0;
+}
+
+.dc-mcp-list__top .dc-mcp__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dc-mcp-list__foot {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  /* 점 너비만큼 들여 이름과 세로로 맞춘다 */
+  padding-left: 15px;
+}
+
+/* 고른 서버 하나의 상세 (오른쪽). 예전에는 이 클래스가 서버마다 하나씩 쌓이던 **카드**여서
+   면과 테두리로 카드끼리 갈랐다. 지금은 한 번에 하나만 그리므로 가를 상대가 없다 —
+   왼쪽 리스트의 면이 이미 두 칸을 가르고 있다. */
 .dc-mcp {
-  margin-bottom: 14px;
-  padding: 12px;
-  border-radius: var(--dc-radius-md);
-  background: var(--dc-surface);
-  border: 1px solid var(--dc-border);
+  padding: 16px 18px;
+  overflow-y: auto;
+  min-width: 0;
 }
 
 .dc-mcp__head {
@@ -4684,11 +4766,28 @@ body {
   overflow-y: auto;
 }
 
+/* 도구 칸의 머리. **오른쪽에만 있다** — 왼쪽 리스트는 도구를 아예 안 그린다.
+   칩이 없을 때도 이 머리는 남는다: 자리는 있는데 비었다는 것과, 자리 자체가 없다는 것은
+   다른 말이고 아래 `dc-mcp__note` 가 왜 비었는지를 잇는다. */
+.dc-mcp__toolhead {
+  margin: 14px 0 6px;
+  font-size: 11px;
+  color: var(--dc-text-muted);
+}
+
+/* 도구 목록이 빈 이유. **「도구가 없다」가 아니라 「모른다」**라서 칩 자리에 문장이 온다
+   (`McpServerDetail` 의 `whyNoTools`). */
+.dc-mcp__note {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--dc-text-muted);
+}
+
 .dc-mcp__tools {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  margin-top: 8px;
 }
 
 /* 누르면 아래에 설명이 열린다. **모양은 그대로 둔다** — 알약이 몇 개인지 한눈에 세는
@@ -4744,9 +4843,13 @@ body {
   margin-top: 9px;
 }
 
+/* 등록처 안내. 리스트 아래 — 서버가 몇이든 **목록의 끝**에 붙는다
+   (`margin-top: auto` 라 목록이 짧으면 칸 바닥까지 내려간다). */
 .dc-mcp__foot {
-  margin: 4px 0 0;
+  margin: auto 0 0;
+  padding-top: 12px;
   font-size: 11px;
+  line-height: 1.6;
   color: var(--dc-text-muted);
 }
 
