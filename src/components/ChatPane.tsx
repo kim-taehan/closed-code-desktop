@@ -39,10 +39,20 @@ export function ChatPane(props: ChatPaneProps) {
         agentTasks={snapshot.agentTasks}
         reviews={reviews.reviews}
         onOpenFile={props.onOpenFile}
-        onAskShell={(command, output) =>
+        onAskShell={(command, output, note) =>
           void window.davis.sendChat({
-            // 모델은 이 명령을 본 적이 없다 — 무엇을 돌렸는지부터 알려준다
-            query: ['다음 명령을 실행했습니다.', '', `$ ${command}`, '', '```', output, '```'].join('\n'),
+            // 모델은 이 명령을 본 적이 없다 — 무엇을 돌렸는지부터 알려준다.
+            // 사용자가 덧붙인 말은 **맨 뒤**에 둔다: 출력을 다 읽은 뒤에 오는 것이 물음이다
+            query: [
+              '다음 명령을 실행했습니다.',
+              '',
+              `$ ${command}`,
+              '',
+              '```',
+              output,
+              '```',
+              ...(note ? ['', note] : []),
+            ].join('\n'),
             ...props.chatContext,
           })
         }

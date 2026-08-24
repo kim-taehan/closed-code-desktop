@@ -4107,6 +4107,25 @@ body {
   color: var(--dc-text-muted);
 }
 
+/* 넘기기 전에 덧붙이는 한 줄. 버튼 자리에서 그대로 자라 위아래가 흔들리지 않는다 */
+.cc-shell-ask__input {
+  flex: 1;
+  min-width: 0;
+  max-width: 420px;
+  font: inherit;
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  color: var(--dc-text);
+  background: none;
+  border: 1px solid var(--dc-border);
+}
+
+.cc-shell-ask__input:focus {
+  outline: none;
+  border-color: color-mix(in srgb, var(--dc-accent) 55%, transparent);
+}
+
 /* ── md 미리보기 ─────────────────────────────────────── */
 
 .dc-viewer__modes {

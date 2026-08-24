@@ -20,8 +20,8 @@ export interface MessageListProps {
   onDecideReview?: (turnId: string, decision: 'accept' | 'reject', filePaths?: string[]) => void
   /** 턴 리뷰의 파일 경로를 눌렀을 때 그 파일을 첫 변경 지점에서 연다. 없으면 경로가 눌리지 않는다. */
   onOpenFile?: (path: string, revealLine?: number) => void
-  /** 로컬 셸 결과를 대화에 넘긴다. 없으면 버튼을 그리지 않는다. */
-  onAskShell?: (command: string, output: string) => void
+  /** 로컬 셸 결과를 대화에 넘긴다. `note` 는 사용자가 덧붙인 한 줄. 없으면 버튼을 그리지 않는다. */
+  onAskShell?: (command: string, output: string, note?: string) => void
   /** 이 답변에 대한 피드백을 연다. 어떤 응답이 문제였는지 함께 보낸다. */
   onFeedback?: (messageContent: string) => void
 }
