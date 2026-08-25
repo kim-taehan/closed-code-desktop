@@ -1,0 +1,102 @@
+# 릴리스 — main 에 push 될 때 package.json 버전이 아직 릴리스되지 않았으면 배포한다.
+# (버전 올리고 main 에 push → 자동 배포. 버전 그대로면 빌드 스킵. tickly release.yml 의 구조.)
+#
+# CI(desktop-ci.yml)와 따로 두는 이유: CI 는 게이트(검증)만 돌고 dist 가 없다.
+# 동봉할 opencode 다운로드(fetch-opencode)는 망 밖에서만 되므로, 폐쇄망 반입물은
+# 이 워크플로가 만든 GitHub Release 산출물을 그대로 가져간다.
+#
+# OS 매트릭스로 각자 제 판을 빌드한다 — 맥에서 win 크로스빌드도 되지만(실측 9cbc9cd),
+# windows 러너로 빌드하면 "win 설치 후 리소스 경로" 류의 판별이 실제 판에서 이뤄진다.
+name: release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  NODE_VERSION: '20' # CI 와 같은 판 — 게이트가 이 버전으로 검증돼 있다
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      release: ${{ steps.v.outputs.release }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: v
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VER=$(node -p "require('./package.json').version")
+          echo "version=$VER" >> "$GITHUB_OUTPUT"
+          if gh release view "v$VER" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "release=false" >> "$GITHUB_OUTPUT"
+            echo "v$VER 이미 존재 → 빌드 스킵"
+          else
+            echo "release=true" >> "$GITHUB_OUTPUT"
+            echo "v$VER 신규 → 빌드 진행"
+          fi
+
+  build:
+    needs: version
+    if: needs.version.outputs.release == 'true'
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            targets: mac-arm64 mac-x64
+            dist: --mac
+          - os: windows-latest
+            targets: win-x64
+            dist: --win
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      # 동봉할 opencode 실행 파일 — sha512 무결성·버전 하한 검사는 스크립트가 한다
+      - run: node scripts/fetch-opencode.mjs ${{ matrix.targets }}
+      - run: npm run build
+      # 매트릭스 잡은 빌드만 (publish 안 함 → 릴리스 경합 방지). 산출물은 아티팩트로.
+      - run: npx electron-builder ${{ matrix.dist }} --publish never
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ matrix.os }}
+          path: |
+            release/*.zip
+            release/*.exe
+          if-no-files-found: error
+
+  release:
+    needs: [version, build]
+    if: needs.version.outputs.release == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      # CHANGELOG.md 에서 이번 버전 절을 릴리스 본문으로 추출 (없으면 제목만)
+      - name: Extract release notes
+        run: |
+          VER="${{ needs.version.outputs.version }}"
+          awk -v ver="$VER" '$0 ~ "^## \\["ver"\\]"{f=1;next} f&&/^## \[/{exit} f{print}' CHANGELOG.md > notes.md || true
+          if [ ! -s notes.md ]; then echo "Open Code Desktop v$VER" > notes.md; fi
+          echo "---- release body ----"; cat notes.md
+      # 모든 플랫폼 산출물을 모아 단일 릴리스로 publish.
+      # artifactName 이 버전 없는 고정 이름이라 releases/latest/download 로 항상 최신을 받는다.
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.version.outputs.version }}
+          name: Open Code Desktop v${{ needs.version.outputs.version }}
+          body_path: notes.md
+          files: dist/**/*
