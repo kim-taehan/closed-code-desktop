@@ -1,6 +1,6 @@
 # electron-builder 설정 (PoC — 서명 없음)
-appId: com.opencode.desktop
-productName: Open Code Desktop
+appId: com.axgentic.desktop
+productName: AXGentic Desktop
 copyright: SKCC
 
 directories:
@@ -57,4 +57,4 @@ win:
   icon: build/icon.png
 
 # 버전 없는 이름으로 고정 → releases/latest/download 로 항상 최신을 받게 한다.
-artifactName: open-code-desktop-${arch}.${ext}
+artifactName: axgentic-desktop-${arch}.${ext}

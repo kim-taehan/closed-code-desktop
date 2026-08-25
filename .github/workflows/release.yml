@@ -90,13 +90,13 @@ jobs:
         run: |
           VER="${{ needs.version.outputs.version }}"
           awk -v ver="$VER" '$0 ~ "^## \\["ver"\\]"{f=1;next} f&&/^## \[/{exit} f{print}' CHANGELOG.md > notes.md || true
-          if [ ! -s notes.md ]; then echo "Open Code Desktop v$VER" > notes.md; fi
+          if [ ! -s notes.md ]; then echo "AXGentic Desktop v$VER" > notes.md; fi
           echo "---- release body ----"; cat notes.md
       # 모든 플랫폼 산출물을 모아 단일 릴리스로 publish.
       # artifactName 이 버전 없는 고정 이름이라 releases/latest/download 로 항상 최신을 받는다.
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ needs.version.outputs.version }}
-          name: Open Code Desktop v${{ needs.version.outputs.version }}
+          name: AXGentic Desktop v${{ needs.version.outputs.version }}
           body_path: notes.md
           files: dist/**/*

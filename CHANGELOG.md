@@ -3,6 +3,11 @@
 릴리스마다 `## [버전]` 절을 위에 쌓는다 — release 워크플로가 이 절을 릴리스 본문으로 추출한다.
 버전을 올리고(`package.json`) 이 파일에 절을 더한 뒤 main 에 push 하면 배포가 나간다.
 
+## [0.1.1] - 2026-08-25
+
+- 제품명을 **AXGentic Desktop** 으로 통일 (창 제목·패키징·릴리스·산출물 파일명 — 이전: Open Code Desktop)
+- 산출물 파일명 변경: `axgentic-desktop-<arch>.zip` / `axgentic-desktop-x64.exe`
+
 ## [0.1.0] - 2026-08-25
 
 첫 공개 릴리스.
