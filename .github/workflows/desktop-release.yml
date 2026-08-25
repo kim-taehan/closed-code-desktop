@@ -1,0 +1,65 @@
+# 릴리스 빌드 — opencode 동봉 아티팩트(mac zip 2종 + win nsis)를 만든다.
+#
+# CI(desktop-ci.yml)와 따로 두는 이유: CI 는 게이트(검증)만 돌고 dist 스텝이 없다.
+# 동봉 바이너리 다운로드(fetch-opencode)는 **망 밖에서만** 가능하므로, 폐쇄망 반입물은
+# 이 워크플로의 아티팩트를 그대로 가져간다 (desktop/README.md 동봉 절 참고).
+#
+# ⚠️ macOS 러너가 필요하다 — mac 타깃은 macOS 에서만 말리고, win(nsis)은 맥에서
+# 크로스빌드가 되는 것을 실측했다 (2026-08-25, 커밋 9cbc9cd). 사내 러너 그룹에
+# macOS 가 없으면 `runs-on` 을 조직 사정에 맞게 바꿔야 한다.
+name: Desktop Release
+
+on:
+  push:
+    tags: ['v*.*.*']
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref_name }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: '20' # CI 와 같은 판 — 게이트가 이 버전으로 검증돼 있다
+
+jobs:
+  release-build:
+    name: Build bundled artifacts (mac + win)
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # 동봉할 opencode 바이너리 3종(mac-arm64·mac-x64·win-x64)을 받는다.
+      # sha512 무결성·버전 하한(1.17.18) 검사는 스크립트가 한다 — 실패하면 여기서 선다.
+      - name: Fetch opencode binaries
+        run: node scripts/fetch-opencode.mjs --all
+
+      # dist:mac / dist:win 을 그대로 쓰지 않는 이유: 둘 다 `npm run build` 를 포함해
+      # 빌드가 두 번 돈다. 여기서는 빌드 한 번 + electron-builder 로 두 타깃을 만든다.
+      - name: Build app
+        run: npm run build
+
+      - name: Package (mac zip x2 + win nsis)
+        run: npx electron-builder --mac --win
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: open-code-desktop-${{ github.ref_name }}
+          path: |
+            release/*.zip
+            release/*.exe
+          if-no-files-found: error
+          retention-days: 30
