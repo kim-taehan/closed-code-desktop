@@ -18,8 +18,13 @@ import { delimiter, join } from 'node:path'
 //
 // **못 찾으면 어디를 봤는지 통째로 돌려준다.** 이 실패는 화면에 "연결 실패" 로만 보이는
 // 종류라, 목록이 없으면 사용자가 무엇을 고쳐야 하는지 알 방법이 없다.
+//
+// **패키징한 앱은 실행 파일을 동봉해 간다 (2026-08-25).** 폐쇄망에는 npm·bun·curl 이 없어
+// "따로 설치하세요" 가 성립하지 않는다 — `scripts/fetch-opencode.mjs` 가 받아 둔 것을
+// electron-builder 가 `extraResources` 로 싣는다. 그래서 아래 탐색은 동봉을 **PATH 보다
+// 먼저** 본다.
 
-/** 알려진 설치 자리. PATH 다음에 이 순서로 본다. */
+/** 알려진 설치 자리. 동봉·PATH 다음에 이 순서로 본다. */
 function knownDirs(home: string): string[] {
   return [
     // bun 으로 설치한 자리 — 이 계정의 실측 위치다 (`~/.bun/bin/opencode` 심볼릭 링크)
@@ -51,15 +56,52 @@ function isExecutable(path: string): boolean {
 }
 
 /**
+ * 동봉본을 판정하는 데 필요한 것만. **`electron` 을 import 하지 않는다** — 이 파일은
+ * 실물 없이 도는 단위 시험이 겨누는 자리라, 여기서 electron 을 끌어들이면 이 모듈을
+ * 거쳐 가는 시험들이 전부 `vi.mock('electron')` 을 달아야 한다.
+ */
+export interface BundleHost {
+  /** `process.resourcesPath` — Electron 밖(단위 시험·스크립트)에서는 없다 */
+  resourcesPath?: string | undefined
+  /** `process.defaultApp` — `electron .` 로 띄운 개발 모드에서만 참 */
+  defaultApp?: boolean | undefined
+  platform: string
+}
+
+/**
+ * 앱에 동봉된 실행 파일 자리. 패키징된 앱이 아니면 **null** 이다.
+ *
+ * ⚠️ **개발 모드를 반드시 걸러야 한다.** `npm run dev` 는 `electron .` 이고, 그때
+ * `process.resourcesPath` 는 우리 앱이 아니라 **node_modules 의 electron 배포물**을
+ * 가리킨다. 거기에 우리 것이 있을 리 없으니 결과는 같지만, 사용자에게 보여줄
+ * 「찾아본 자리」에 거짓 자리가 한 줄 실린다.
+ *
+ * 판정은 `app.isPackaged` 와 같은 값을 `process` 에서 직접 읽는다 — Electron 문서가
+ * `defaultApp` 을 "기본 실행 파일에 인자로 넘겨 띄웠을 때 참" 으로 정의한다
+ * (`node_modules/electron/electron.d.ts:24255`). 순수 node 에서는 둘 다 없어서 null 이다.
+ */
+export function bundledBinary(host: BundleHost = process): string | null {
+  if (host.resourcesPath === undefined || host.defaultApp === true) return null
+  // `extraResources` 의 `to: opencode` 가 만든 자리. Windows 만 이름이 다르다 (실측).
+  return join(host.resourcesPath, 'opencode', host.platform === 'win32' ? 'opencode.exe' : 'opencode')
+}
+
+/**
  * opencode 실행 파일을 찾는다.
  *
- * 순서는 **명시 지정 > PATH > 알려진 자리**다. `OPENCODE_BIN` 을 맨 앞에 두는 이유는
- * 우리가 못 찾는 자리에 깔린 사용자에게 되돌아갈 길을 주기 위해서다 — 아래 두 갈래는
+ * 순서는 **명시 지정 > 동봉 > PATH > 알려진 자리**다. `OPENCODE_BIN` 을 맨 앞에 두는 이유는
+ * 우리가 못 찾는 자리에 깔린 사용자에게 되돌아갈 길을 주기 위해서다 — 아래 갈래들은
  * 우리가 아는 만큼만 보므로 언젠가 틀린다.
+ *
+ * **동봉이 PATH 를 이긴다.** 설치물은 앱과 짝이 맞춰 검증된 버전이어야 한다 — PATH 가
+ * 이기면 현장 머신에 우연히 있던 다른 버전이 조용히 잡히고, 하한선(1.17.18) 미달이면
+ * 증상이 "어댑터가 이벤트를 못 받는다" 류로 보여 진단이 비싸다. 다른 것을 쓰려는 사람에게는
+ * `OPENCODE_BIN` 이 그대로 남아 있다.
  */
 export function findOpencodeBinary(
   env: NodeJS.ProcessEnv = process.env,
   executable: (path: string) => boolean = isExecutable,
+  bundled: string | null = bundledBinary(),
 ): BinaryLookup {
   const searched: string[] = []
 
@@ -67,6 +109,11 @@ export function findOpencodeBinary(
   if (explicit) {
     searched.push(`${explicit} (OPENCODE_BIN)`)
     if (executable(explicit)) return { path: explicit, source: 'OPENCODE_BIN', searched }
+  }
+
+  if (bundled !== null) {
+    searched.push(`${bundled} (앱에 동봉)`)
+    if (executable(bundled)) return { path: bundled, source: '앱에 동봉', searched }
   }
 
   const home = env['HOME']?.trim() || homedir()
@@ -85,7 +132,13 @@ export function findOpencodeBinary(
   return { path: null, searched }
 }
 
-/** 못 찾았을 때 화면에 띄울 문장. 본 자리를 다 적는다 — 이게 유일한 단서다. */
+/**
+ * 못 찾았을 때 화면에 띄울 문장. 본 자리를 다 적는다 — 이게 유일한 단서다.
+ *
+ * 목록에 「앱에 동봉」 줄이 있는데도 여기까지 왔다면 **빌드가 잘못 나간 것**이다
+ * (`scripts/fetch-opencode.mjs` 를 안 돌리고 패키징). 현장에서 고칠 수 있는 것은
+ * `OPENCODE_BIN` 뿐이라 문구는 그대로 둔다.
+ */
 export function notFoundMessage(lookup: BinaryLookup): string {
   return [
     'opencode 실행 파일을 찾지 못했습니다.',

@@ -32,8 +32,20 @@ davis 시절엔 앱이 런타임을 내려받아 띄우고 포트 8000~8099 를 
 - **`--port` 를 주지 않는다.** opencode 가 빈 포트를 잡고 stdout 에
   `opencode server listening on http://127.0.0.1:PORT` 를 찍는다 — **그 한 줄이 주소를 아는 유일한 길**이다.
 - 탭을 닫으면 그 서버만, 앱을 끄면 **우리가 띄운 것만** 죽는다 (`pkill` 류의 넓은 종료 금지).
-- 실행 파일은 PATH → 알려진 자리 순으로 찾는다. **macOS GUI 앱은 셸 PATH 를 못 받는다**
-  (`opencode/binary.ts`). 못 찾으면 찾아본 자리를 통째로 화면에 싣는다. 되돌아갈 길은 `OPENCODE_BIN`.
+- 실행 파일은 `OPENCODE_BIN` → **앱에 동봉된 것** → PATH → 알려진 자리 순으로 찾는다
+  (`opencode/binary.ts`). **macOS GUI 앱은 셸 PATH 를 못 받는다** — 그래서 PATH 뒤에도 갈래가 있다.
+  못 찾으면 찾아본 자리를 통째로 화면에 싣는다.
+- **패키징한 앱은 opencode 실행 파일을 싣고 간다** (2026-08-25). 폐쇄망에는 npm·bun·curl 이
+  없어 "따로 설치하세요" 가 성립하지 않는다. 빌드 전에 받아 둔다 — 레포에는 안 들어간다:
+
+  ```bash
+  node scripts/fetch-opencode.mjs            # 이 판에 맞는 것
+  node scripts/fetch-opencode.mjs --all      # mac-arm64 · mac-x64 · win-x64
+  ```
+
+  버전은 그 스크립트의 상수 하나(`1.18.18`)이고, 받은 것의 `--version` 을 어댑터 하한선과
+  대조해 미달이면 빌드가 선다. `dist:mac`/`dist:win` 은 없으면 문장으로 알리고 멈춘다.
+  **이 스크립트는 망 밖에서만 돈다** — 현장에는 완성된 zip/exe 하나만 반입한다.
 
 ⚠️ **격리는 절반이다.** 서버가 갈리면 MCP 등록(instance 수명)과 설정 캐시는 갈리지만
 **세션 저장소는 서버끼리 공유된다**(실측). 대화가 안 새게 막는 것은 여전히 어댑터의 sessionID 필터뿐이다.

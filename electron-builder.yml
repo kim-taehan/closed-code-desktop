@@ -21,6 +21,25 @@ files:
 
 asar: true
 
+# opencode 실행 파일을 앱 안에 싣는다 — **폐쇄망 현장에는 npm·bun·curl 이 없다.**
+# `scripts/fetch-opencode.mjs` 가 `build/vendor/opencode/<타깃>/` 에 받아 두고
+# (레포에는 안 들어간다 — 137MB, gitignore), 런타임 탐색은 `electron/opencode/binary.ts`.
+#
+# ⚠️ **`${platform}` 이 아니라 `${os}` 다.** `${platform}` 은 `process.platform` — 즉
+# **빌드하는 머신**을 돌려준다(`app-builder-lib/out/util/macroExpander.js:34`, 실측).
+# 맥에서 `--win` 을 말면 `darwin` 이 박혀 빈 자리를 가리킨다. `${os}` 는 타깃 쪽
+# 키(`mac`/`win`/`linux`)다.
+#
+# `${arch}` 는 아키마다 다시 펼쳐진다 — 매처가 arch 별로 만들어지기 때문이다
+# (`platformPackager.js:201`). 그래서 mac zip 두 개에 **각자 것만** 실린다 (dist 로 실측).
+#
+# `to: opencode` 로 평탄하게 놓아 런타임 경로가 아키와 무관해진다:
+#   mac  Contents/Resources/opencode/opencode
+#   win  resources/opencode/opencode.exe
+extraResources:
+  - from: build/vendor/opencode/${os}-${arch}
+    to: opencode
+
 mac:
   target:
     - target: zip

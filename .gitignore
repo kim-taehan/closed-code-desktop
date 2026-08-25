@@ -15,6 +15,10 @@ dist-electron/
 release/
 out/
 
+# 동봉할 opencode 실행 파일 — 타깃당 137~178MB 다. 레포에 넣지 않는다.
+# 받는 법: `node scripts/fetch-opencode.mjs [mac-arm64|mac-x64|win-x64]`
+build/vendor/
+
 # 테스트 커버리지 산출물
 coverage/
 
