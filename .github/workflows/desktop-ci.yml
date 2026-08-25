@@ -33,8 +33,7 @@ jobs:
   # docs-only PR 도 머지 가능해진다.
   changes:
     name: Detect code changes
-    runs-on:
-      group: organization/Default
+    runs-on: ubuntu-latest # 개인 계정 public 레포 — 사내 러너 그룹이 없다 (2026-08-25)
     outputs:
       code: ${{ steps.filter.outputs.code }}
     steps:
@@ -71,8 +70,7 @@ jobs:
     needs: changes
     # docs-only(code=false) 면 skip→success. changes 장애('')·코드변경(true)이면 실행(우회 차단)
     if: ${{ !cancelled() && needs.changes.outputs.code != 'false' }}
-    runs-on:
-      group: organization/Default
+    runs-on: ubuntu-latest # 개인 계정 public 레포 — 사내 러너 그룹이 없다 (2026-08-25)
     # Vite 렌더러 번들이 CI 러너의 기본 힙(~2GB)을 넘길 수 있다.
     env:
       NODE_OPTIONS: --max-old-space-size=8192
