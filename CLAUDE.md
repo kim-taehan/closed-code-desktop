@@ -8,7 +8,8 @@ opencode 헤드리스 서버(HTTP+SSE)에 붙는 Electron 데스크톱 클라이
 
 ## 이 레포의 착지 기준
 
-- **파일당 300줄 상한** (`.ts`/`.tsx`, `scripts/check-file-size.mjs`). 초과는 추출로 푼다.
+- **파일당 300줄 상한** (`.ts`/`.tsx`, `scripts/check-file-size.mjs` — 대상은
+  `src·electron·shared·tests·extensions`. `scripts/` 는 게이트 밖이다). 초과는 추출로 푼다.
   주석 삭제로 줄이지 않는다 — 이 레포의 주석은 실측 근거다 (davis 시절부터 이어진 규칙)
 - **완료 = 게이트 4종 동시 초록** — 자산 매니페스트
   (`shasum -c src/lib/davis-progress/.davis-progress-sync.sha256`) · `lint:filesize` ·
@@ -30,7 +31,8 @@ opencode 어댑터(`electron/opencode/`)는 davis 봉투(`kind`/`action`)를 흉
 `electron/session/multiSession.test.ts` 가 그걸 겨눈다. davis 때는 프로젝트마다 소켓이 갈려
 물리적으로 안전했던 자리다 — 그 감각으로 만지면 남의 대화가 화면에 샌다.
 
-> **`transport.ts` 는 300줄 상한에 정확히 닿아 있다 (2026-08-16).** 다음 `kind` 를 더하는
+> **`electron/opencode/transport.ts` 는 300줄 상한에 정확히 닿아 있다 (2026-08-16).**
+> (위 문단의 `electron/ws/transport.ts` 와 다른 파일이다 — 그쪽은 인터페이스 정의부 61줄.) 다음 `kind` 를 더하는
 > 사람은 한 줄을 못 넣고 게이트에서 멈춘다 — **그게 신호다.** 그때 갈라야 할 다음 후보는
 > 인바운드(`onEvent`)이고 순수 전이로 뽑힌다. 다만 **그것이 위 격리 필터라 옮기는 순간 이
 > 문단이 거짓이 된다** — 옮긴다면 이 문서를 같은 커밋에서 함께 고치고 격리를 다시 재라.

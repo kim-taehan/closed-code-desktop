@@ -24,7 +24,7 @@ const FAKE_OPENCODE_VERSION = MIN_OPENCODE_VERSION
 //      `{data}` 2 · `{data,cursor}` 1) 아예 안 감싸는 것도 있다 (`/api/health`·`/api/location`).
 //      `fakePty.ts` 가 `{location, data}` 를 쓰는 것은 어긋난 게 아니라 **pty 계열 실물이
 //      그렇기 때문**이다. 여기에 GET 을 더할 때는 그 경로를 실측하고 맞춘다 —
-//      전수는 `README.md` 실측 함정 4.
+//      전수는 `docs/DEVELOPMENT.md` 실측 함정 4.
 //   2. SSE 이벤트의 페이로드 필드는 **`properties`** 다 — 레거시 `/event` 가 그렇다.
 //   3. `/event` 는 **서버 전역**이다 — 모든 세션의 이벤트가 모든 구독자에게 간다
 //      (세션 격리는 클라이언트가 sessionID 로 거른다)

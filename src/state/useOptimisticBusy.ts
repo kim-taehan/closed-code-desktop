@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { SILENCE_MS } from '../../shared/protocol/silence'
 
 // 전송 직후의 「응답 중」 을 화면이 먼저 아는 상태.
 //
@@ -13,16 +14,13 @@ import { useEffect, useState } from 'react'
  * 정상 경로에서는 `turn_started` 가 이 시간 안에 와서 쓰이지 않는다. 쓰이는 것은
  * 그 이벤트가 **영영 안 오는 경우**뿐이다.
  *
- * **침묵 감시(`replyWatch` 의 30초)와 같은 값이어야 한다.** 이보다 짧으면 표시가
- * 먼저 꺼지고 안내 말풍선은 아직 안 온 **침묵 구간**이 생긴다 — 10초였던 시절
- * 실측(2026-08-26): LLM 경로가 죽었을 때 10~30초 동안 화면에 아무것도 없었고,
- * LLM prefill 이 10초를 넘는 정상적으로 느린 턴에서도 같은 구멍이 열렸다.
- * 같은 값이면 표시가 풀리는 순간 replyWatch 의 안내가 이어받는다.
+ * **침묵 감시(`replyWatch`)와 같은 값이어야 한다** — 그래서 값은 여기 없고
+ * `shared/protocol/silence.ts` 한 곳에 있다. 어긋났을 때 무슨 일이 나는지도 거기 있다.
  *
  * 내보내는 이유는 시험 때문이다 (`useAutoHeal` 의 `RECHECK_MS` 와 같은 규칙) — 시험이
  * 숫자를 손으로 적으면 값을 고친 날 그 시험만 조용히 헛돈다.
  */
-export const HANDOFF_MS = 30_000
+export const HANDOFF_MS = SILENCE_MS
 
 export interface OptimisticBusy {
   /** 낙관 + 실제를 합친 값. 중지 버튼·전송 큐가 함께 본다. */

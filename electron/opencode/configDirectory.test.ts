@@ -40,7 +40,7 @@ describe('OpencodeClient 설정 조회', () => {
     )
     // pty 표면의 이름(`location[directory]=`)으로 새면 200 인 채로 전역이 온다
     expect(urlOf(impl)).not.toContain('location')
-    // `/api` 판은 없다 — 그 주소는 404 가 아니라 웹 UI HTML 을 준다 (README 실측 함정 11)
+    // `/api` 판은 없다 — 그 주소는 404 가 아니라 웹 UI HTML 을 준다 (docs/DEVELOPMENT.md 실측 함정 11)
     expect(urlOf(impl)).not.toContain('/api/config')
   })
 

@@ -120,7 +120,7 @@ async function createWindow(): Promise<void> {
   // 에이전트가 이 앱을 조작하는 문. **창마다 새로 만들지 않는다** — 포트와 토큰이 둘이 되면
   // opencode 에 등록된 옛 주소가 죽는다. 포트들이 왜 함수인지는 `mcp/appWiring.ts` 머리말.
   desktopMcp ??= createDesktopMcp({
-    settings: () => settings.load(),
+    settings: () => (appSettings ?? settings).load(), // 모듈 변수 — 지역을 잡으면 첫 창 세대에 굳는다 (A7)
     registry: () => projectRegistry,
     window: () => mainWindow,
     // 아래에서 만들어진다 — 여기서 값을 잡지 않는 이유가 그것만은 아니다 (창 수명, 머리말)

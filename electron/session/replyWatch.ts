@@ -7,14 +7,18 @@
 // 이 감시는 원인을 고치지 않는다. 원인은 그때그때 다르고 앞으로도 새로 생긴다.
 // 이건 **"침묵으로 끝나는 경우는 없다"는 최후 보장**이다.
 
+import { SILENCE_MS } from '../../shared/protocol/silence'
+
 /**
  * 요청을 보낸 뒤 이만큼 아무것도 안 오면 침묵으로 본다.
  *
  * runtime 은 LLM 을 부르기 **전에** turn_started 를 낸다. 그래서 모델이 느린 것과는
- * 무관하고, 이 시간은 "요청이 접수되기까지" 만 재면 된다. 하트비트 주기(30초)와 같은
- * 값으로 둔다 — 그 사이 ping 하나는 오갔을 시간이라 연결 자체는 멀쩡한 셈이다.
+ * 무관하고, 이 시간은 "요청이 접수되기까지" 만 재면 된다.
+ *
+ * 값은 `shared/protocol/silence.ts` 하나다 — renderer 의 낙관 「응답 중」 상한과
+ * 같은 값이어야 침묵 구간이 안 생긴다. 여기만 바꾸면 그 구간이 되살아난다.
  */
-const DEFAULT_SILENCE_MS = 30_000
+const DEFAULT_SILENCE_MS = SILENCE_MS
 
 export class ReplyWatch {
   private timer: NodeJS.Timeout | null = null

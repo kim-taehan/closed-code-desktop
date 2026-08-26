@@ -46,7 +46,7 @@ function withDirectory(path: string, directory: string | null): string {
  *
  * **없는데 404 가 아니다.** 그 주소는 **200 에 웹 UI HTML** 을 준다 (SPA 폴백).
  * `response.ok` 가 참이라 거기서 안 끊기고 JSON 파싱에서야 터진다 — 상태 코드로는
- * 못 가린다. README 실측 함정 11.
+ * 못 가린다. docs/DEVELOPMENT.md 실측 함정 11.
  *
  * ⚠️ **`?directory=` 를 실어야 그 프로젝트의 `opencode.json` 을 읽는다** (2026-08-14 실측).
  * 서버 하나로 프로젝트가 여럿일 때 답이 갈린다 — 같은 서버에서 없이 부르면 프로바이더 3개,
