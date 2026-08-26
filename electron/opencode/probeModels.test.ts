@@ -6,7 +6,7 @@ import { checkModels } from './probe'
 // → 그 주소가 살아 있나. **이 파일은 첫째·셋째를 본다** — 「무엇을 골랐나」는
 // `probeChoice.test.ts`(통합)와 `configChoice.test.ts`(규칙)로 갈렸다.
 //
-// ⚠️ **경로가 두 세대로 갈린다** (README 실측 함정 1·8): health 는 `/global` 판을 쓰고
+// ⚠️ **경로가 두 세대로 갈린다** (docs/DEVELOPMENT.md 실측 함정 1·8): health 는 `/global` 판을 쓰고
 // 설정 계열은 `/api` 판이 **없어** 레거시 표면(`/config`·`/config/providers`)을 쓴다.
 // **한쪽에 맞춰 `/api` 를 붙이면 404 가 아니라 더 나쁘다** — 아래 참조.
 //
