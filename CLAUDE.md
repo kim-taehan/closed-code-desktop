@@ -14,6 +14,8 @@ opencode 헤드리스 서버(HTTP+SSE)에 붙는 Electron 데스크톱 클라이
   (`shasum -c src/lib/davis-progress/.davis-progress-sync.sha256`) · `lint:filesize` ·
   typecheck(2 tsconfig) · vitest. **매니페스트가 빠져 있었다** — CI 는 처음부터 넷을 돌린다
 - 커밋·푸시는 사용자가 요청할 때만
+- **일상 커밋은 `dev` 에** 쌓는다. `main` 은 릴리스 라인이다 — main 에 push 하는 것이
+  곧 배포라서(release.yml 버전 게이트), 버전을 올려 내보낼 때만 dev 를 main 으로 머지한다
 
 ## 작업할 때 알아야 할 것
 
