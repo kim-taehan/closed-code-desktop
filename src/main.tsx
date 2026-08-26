@@ -5,7 +5,7 @@ import { ErrorBoundary, ErrorPage, installBlankScreenGuard } from './components/
 import pkg from '../package.json'
 
 // 창 제목(네이티브 타이틀바)에 버전을 실어 어느 빌드인지 바로 보이게 한다.
-document.title = `AXGentic Desktop (${pkg.version})`
+document.title = `Closed Code Desktop (${pkg.version})`
 
 const container = document.getElementById('root')
 if (!container) throw new Error('#root 엘리먼트를 찾을 수 없습니다')

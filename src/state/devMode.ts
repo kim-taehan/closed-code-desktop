@@ -28,7 +28,7 @@ export function matchDevPhrase(text: string, developerMode: boolean): DevPhraseM
   if (trimmed === DEV_OFF_PHRASE) {
     return developerMode
       ? { next: false, reply: '개발자 모드가 해제되었습니다.' }
-      : { next: false, reply: '나는 axgentic code 다' }
+      : { next: false, reply: '나는 closed code 다' }
   }
   return null
 }

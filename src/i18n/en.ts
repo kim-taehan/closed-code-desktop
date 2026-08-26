@@ -12,7 +12,7 @@ export const en: Record<string, string> = {
 
   // 설정 창 뼈대
   설정: 'Settings',
-  'AXGentic Code 설정': 'AXGentic Code Settings',
+  'Closed Code 설정': 'Closed Code Settings',
   '설정 분류': 'Settings categories',
 
   // 화면(디스플레이)

@@ -38,7 +38,7 @@ export function ProjectEmptyState(props: ProjectEmptyStateProps) {
           <span className="dc-launch__glyph" aria-hidden="true">
             AX
           </span>
-          AXGentic Code
+          Closed Code
         </p>
         <h1 className="dc-launch__title">어느 폴더에서 일할까요?</h1>
 

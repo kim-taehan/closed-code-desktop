@@ -6,6 +6,8 @@
 
 ## [0.1.2] - 2026-08-26
 
+- 제품명을 **Closed Code Desktop** 으로 변경 (창 제목·앱 내 표기·패키징·산출물 파일명 — 이전: AXGentic Desktop)
+- 산출물 파일명 변경: `closed-code-desktop-<arch>.zip` / `closed-code-desktop-x64.exe`
 - 전송 즉시 진행 표시 — LLM 응답이 오기 전에도 「응답 중」 스피너가 바로 뜬다.
   응답이 없으면 30초까지 유지돼 침묵 안내 말풍선과 끊김 없이 이어진다
 - 셸 결과를 대화로 넘길 때도 같은 진행 표시가 뜬다

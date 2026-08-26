@@ -3,7 +3,7 @@ import { displayDuration } from '../utils/formatDuration'
 
 // 턴 헤더 (설계 §6.2). vscode TurnContainer 헤더부(MessageList.tsx:31-131)와 동형.
 //
-// 텍스트는 문자열 그대로 "AXGentic Code", 스텝은 "{n} step" (복수형 없음).
+// 텍스트는 문자열 그대로 "Closed Code", 스텝은 "{n} step" (복수형 없음).
 // stepCount 는 **body 에 들어간 렌더 노드 수**이지 도구 개수가 아니다 —
 // 연속 도구 묶음은 1로 센다.
 
@@ -70,7 +70,7 @@ export function TurnHeader({
           }
         : {})}
     >
-      <span className="cc-turn-header-text">AXGentic Code</span>
+      <span className="cc-turn-header-text">Closed Code</span>
       {hasToggle && <span className="cc-turn-header-meta">{stepCount} step</span>}
       {duration && <span className="cc-turn-header-meta">{duration}</span>}
       {hasToggle && (

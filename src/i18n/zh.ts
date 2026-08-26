@@ -12,7 +12,7 @@ export const zh: Record<string, string> = {
 
   // 설정 창 뼈대
   설정: '设置',
-  'AXGentic Code 설정': 'AXGentic Code 设置',
+  'Closed Code 설정': 'Closed Code 设置',
   '설정 분류': '设置分类',
 
   // 화면(디스플레이)

@@ -1,4 +1,4 @@
-# AXGentic Desktop — 개발·설계 문서
+# Closed Code Desktop — 개발·설계 문서
 
 [opencode](https://opencode.ai) 헤드리스 서버에 붙는 Electron 데스크톱 클라이언트.
 

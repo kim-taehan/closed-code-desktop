@@ -24,9 +24,9 @@ function renderTurn(props: Partial<Parameters<typeof TurnContainer>[0]> = {}) {
 }
 
 describe('헤더 기본 형태', () => {
-  it('텍스트는 문자열 그대로 AXGentic Code 다', () => {
+  it('텍스트는 문자열 그대로 Closed Code 다', () => {
     renderTurn()
-    expect(screen.getByText('AXGentic Code')).toBeTruthy()
+    expect(screen.getByText('Closed Code')).toBeTruthy()
   })
 
   it('스텝은 복수형 없이 "{n} step" 이다', () => {
@@ -53,7 +53,7 @@ describe('스텝이 0 인 턴', () => {
 
   it('그래도 헤더 텍스트는 나온다', () => {
     renderTurn({ body: [] })
-    expect(screen.getByText('AXGentic Code')).toBeTruthy()
+    expect(screen.getByText('Closed Code')).toBeTruthy()
   })
 })
 

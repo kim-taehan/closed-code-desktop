@@ -30,7 +30,7 @@ export function showTaskDone(window: BrowserWindow, notice: TaskNotice = {}): vo
 
   current?.close()
   const notification = new Notification({
-    title: 'AXGentic Code',
+    title: 'Closed Code',
     body: bodyOf(notice),
     icon: ICON_PATH,
   })

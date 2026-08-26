@@ -1,4 +1,4 @@
-# AXGentic Code Desktop 문서
+# Closed Code Desktop 문서
 
 davis-code-desktop 문서 색인.
 

@@ -29,10 +29,10 @@ describe('matchDevPhrase — 스펙 표', () => {
     })
   })
 
-  it('일반 상태에서 해제 문구 → 유지 + "나는 axgentic code 다"', () => {
+  it('일반 상태에서 해제 문구 → 유지 + "나는 closed code 다"', () => {
     expect(matchDevPhrase('내가 김도은이다', false)).toEqual({
       next: false,
-      reply: '나는 axgentic code 다',
+      reply: '나는 closed code 다',
     })
   })
 

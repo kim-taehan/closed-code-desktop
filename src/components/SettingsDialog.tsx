@@ -57,7 +57,7 @@ export function SettingsDialog(props: SettingsDialogProps) {
     <div className="dc-modal" role="dialog" aria-label={t('설정')} onClick={props.onClose}>
       <div className="dc-settings" onClick={(event) => event.stopPropagation()}>
         <div className="dc-settings__head">
-          <span className="dc-settings__title">{t('AXGentic Code 설정')}</span>
+          <span className="dc-settings__title">{t('Closed Code 설정')}</span>
           <button type="button" className="dc-modal__close" onClick={props.onClose} title={t('닫기')}>
             ×
           </button>
