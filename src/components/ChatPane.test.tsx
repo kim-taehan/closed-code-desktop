@@ -30,7 +30,7 @@ function paneOf(slice: SessionSlice, busy: boolean) {
   return render(
     <ChatPane
       slice={slice}
-      optimistic={{ busy, markSent: () => {} }}
+      optimistic={{ busy, markSent: () => {}, reset: () => {} }}
       gesture={gesture}
       scrollRef={createRef<HTMLDivElement>()}
       chatContext={{ dirtyFiles: [] }}

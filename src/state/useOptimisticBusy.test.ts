@@ -69,6 +69,21 @@ describe('useOptimisticBusy', () => {
     expect(result.current.busy).toBe(true)
   })
 
+  // **중지 버튼의 탈출구.** 낙관 구간에는 끝날 턴이 없어 turn_ended 가 못 풀어 준다 —
+  // reset 이 없으면 중지를 눌러도 상한까지 그대로다 (사용자 지적 2026-08-26).
+  it('reset 은 낙관 상태를 즉시 푼다 — 스트리밍 중에는 busy 를 못 끈다', () => {
+    const { result, rerender } = render()
+    act(() => result.current.markSent())
+    act(() => result.current.reset())
+    expect(result.current.busy).toBe(false)
+
+    // 진짜 턴이 도는 중에는 reset 이 busy 를 못 끈다 — 중단의 끝은 turn_ended 다
+    act(() => result.current.markSent())
+    rerender({ s: true })
+    act(() => result.current.reset())
+    expect(result.current.busy).toBe(true)
+  })
+
   // 스트리밍이 도는 동안은 상한이 붙지 않는다 — 붙으면 10초짜리 긴 턴에서 중지 버튼이
   // 도중에 사라진다. (인계로 `sending` 이 이미 false 라 타이머가 안 걸리는 것이 근거다.)
   it('스트리밍이 도는 동안에는 상한이 끄지 않는다', async () => {

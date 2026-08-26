@@ -29,6 +29,15 @@ export interface OptimisticBusy {
   busy: boolean
   /** LLM 으로 보내는 자리에서 부른다. 셸·데스크톱 명령에는 부르지 않는다. */
   markSent: () => void
+  /**
+   * 낙관 상태만 즉시 푼다 — 중지 버튼이 부른다.
+   *
+   * 중단의 「끝」 신호는 `turn_ended` 뿐인데, 턴이 아직 안 열린 낙관 구간에는
+   * 끝날 턴 자체가 없어 상한(30초)까지 아무것도 안 풀렸다 — 사용자에게는
+   * "중지를 눌렀는데 무시한다" 로 보였다 (2026-08-26). 진짜 스트리밍 중에는
+   * 이걸 불러도 `isStreaming` 이 busy 를 지키므로 안전하다.
+   */
+  reset: () => void
 }
 
 export function useOptimisticBusy(isStreaming: boolean): OptimisticBusy {
@@ -47,5 +56,9 @@ export function useOptimisticBusy(isStreaming: boolean): OptimisticBusy {
     return () => clearTimeout(timer)
   }, [sending, isStreaming])
 
-  return { busy: isStreaming || sending, markSent: () => setSending(true) }
+  return {
+    busy: isStreaming || sending,
+    markSent: () => setSending(true),
+    reset: () => setSending(false),
+  }
 }

@@ -244,7 +244,13 @@ export function ChatComposer(props: ChatComposerProps) {
           ? {
               stop: {
                 pending: cancel.pending,
-                onPress: () => cancel.request(() => void window.davis.cancelChat()),
+                onPress: () =>
+                  cancel.request(() => {
+                    void window.davis.cancelChat()
+                    // 낙관 구간(턴 미개시)의 중단은 여기서 즉시 푼다 — turn_ended 가
+                    // 올 턴이 없어, 안 풀면 상한까지 "무시당한" 것처럼 보인다.
+                    props.optimistic.reset()
+                  }),
               },
             }
           : {})}
