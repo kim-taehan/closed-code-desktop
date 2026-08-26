@@ -15,5 +15,5 @@
     "rootDir": ".",
     "types": ["node"]
   },
-  "include": ["electron", "shared", "extensions"]
+  "include": ["electron", "shared", "extensions", "tests"]
 }

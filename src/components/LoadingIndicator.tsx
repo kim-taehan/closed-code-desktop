@@ -7,7 +7,10 @@ import { DavisProgress, type SpinnerMode } from '../lib/davis-progress'
 // 턴이 도구 실행 등으로 잠깐 끊길 때마다 표시기가 깜빡이면 산만해진다.
 // 지연을 두면 짧은 공백은 그냥 이어져 보인다.
 
-const HIDE_DELAY_MS = 320
+// 내보내는 이유는 시험 때문이다 (`useOptimisticBusy` 의 `HANDOFF_MS` 와 같은 규칙) —
+// 조립 시험(`App.wiring.test.tsx`)이 이 숫자를 손으로 적으면 값을 고친 날 그 시험만
+// 조용히 헛돈다.
+export const HIDE_DELAY_MS = 320
 
 export interface LoadingIndicatorProps {
   /** 스트리밍 중이거나 승인 대기 중 */
