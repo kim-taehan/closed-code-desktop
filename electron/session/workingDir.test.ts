@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { FakeRuntimeServer } from '../../tests/fake-runtime/FakeRuntimeServer'
-import { WsConnection } from '../ws/connection'
+import { MemoryConnection } from '../../tests/fake-runtime/MemoryConnection'
 import { Handshake } from './handshake'
 import {
   WORKING_DIR_INACTIVE,
@@ -11,20 +10,16 @@ import {
 
 // 현재 세션 작업 경로 push (ADR-036 / DC-1146).
 
-let server: FakeRuntimeServer | null = null
-let connection: WsConnection | null = null
+let connection: MemoryConnection | null = null
 
-afterEach(async () => {
+afterEach(() => {
   connection?.dispose()
   connection = null
-  await server?.stop()
-  server = null
 })
 
 async function setup() {
-  server = new FakeRuntimeServer()
-  const port = await server.start()
-  connection = new WsConnection({ url: `ws://127.0.0.1:${port}/ws`, autoReconnect: false })
+  connection = new MemoryConnection()
+  const server = connection.runtime
 
   const controller = new WorkingDirController(connection)
   const seen: WorkingDirState[] = []
@@ -36,7 +31,7 @@ async function setup() {
   await connection.connect()
   await ready
 
-  return { controller, seen, handshake, server: server!, connection: connection! }
+  return { controller, seen, handshake, server, connection: connection! }
 }
 
 /** IDE 계약 골든 픽스처와 같은 모양 (vscode: workspace.working_dir_state.s2c.json). */

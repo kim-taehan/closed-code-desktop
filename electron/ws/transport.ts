@@ -26,9 +26,14 @@ export type ConnectionState = 'idle' | 'connecting' | 'open' | 'reconnecting' | 
 /**
  * 세션 계층(sessionWiring·ProjectSession·sessionWake)이 실제로 요구하는 **수명** API.
  *
- * `Transport` 는 프레임만 안다. 붙기·버리기·재연결·상태 알림은 그 위 계층이며,
- * WsConnection(davis) 과 OpencodeConnection(opencode) 이 둘 다 이걸 만족한다.
- * 배선이 어느 쪽을 쓰든 위층 코드가 같아지는 지점이다.
+ * `Transport` 는 프레임만 안다. 붙기·버리기·재연결·상태 알림은 그 위 계층이다.
+ *
+ * 원래는 `WsConnection`(davis) 과 `OpencodeConnection`(opencode) **둘 다**가 이걸
+ * 만족했고, 배선이 어느 쪽을 쓰든 위층 코드가 같아지는 것이 이 인터페이스의 값이었다.
+ * 2026-08-26 에 davis 쪽 구현을 지웠다 — 앱에 davis WS 를 여는 곳이 없어졌기 때문이다.
+ * **그래도 이 자리는 남는다.** 지금 프로덕션 구현은 `OpencodeConnection` 하나지만,
+ * 세션 계층 전체가 이 인터페이스만 알기에 시험이 `tests/fake-runtime/MemoryConnection`
+ * (인메모리 대역)으로 같은 코드 경로를 돌린다. 갈아끼울 자리가 실제로 갈아끼워진 셈이다.
  */
 export interface SessionConnection extends Transport {
   /** 열릴 때까지 기다린다. 실패하면 거부한다. */

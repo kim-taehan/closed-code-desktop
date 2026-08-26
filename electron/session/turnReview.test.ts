@@ -1,21 +1,17 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { TurnReviewStatus, type TurnReview } from '../../shared/protocol/turnReview'
-import { FakeRuntimeServer } from '../../tests/fake-runtime/FakeRuntimeServer'
+import { MemoryConnection } from '../../tests/fake-runtime/MemoryConnection'
 import { turnChangesFrame } from '../../tests/fake-runtime/fakeTurnReview'
-import { WsConnection } from '../ws/connection'
 import { Handshake } from './handshake'
 import { TurnReviewController } from './turnReview'
 
 // 턴 리뷰 (V2). 런타임이 이미 디스크에 썼고 우리는 판정만 전달한다.
 
-let server: FakeRuntimeServer | null = null
-let connection: WsConnection | null = null
+let connection: MemoryConnection | null = null
 
-afterEach(async () => {
+afterEach(() => {
   connection?.dispose()
   connection = null
-  await server?.stop()
-  server = null
 })
 
 const REVIEW = {
@@ -43,9 +39,8 @@ const REVIEW = {
 }
 
 async function setup() {
-  server = new FakeRuntimeServer()
-  const port = await server.start()
-  connection = new WsConnection({ url: `ws://127.0.0.1:${port}/ws`, autoReconnect: false })
+  connection = new MemoryConnection()
+  const server = connection.runtime
 
   const reviews = new TurnReviewController(connection)
   const seen: TurnReview[][] = []
@@ -57,7 +52,7 @@ async function setup() {
   await connection.connect()
   await ready
 
-  return { reviews, seen, handshake, server: server!, connection: connection! }
+  return { reviews, seen, handshake, server, connection: connection! }
 }
 
 describe('turn_changes 수신', () => {

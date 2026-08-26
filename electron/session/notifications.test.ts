@@ -28,7 +28,7 @@ async function startController(): Promise<{ seen: UserNotification[] }> {
   return { seen }
 }
 
-// 픽스처의 `replyTo: null` / `streamId: null` 은 옮기지 않는다 — FakeRuntimeServer 의
+// 픽스처의 `replyTo: null` / `streamId: null` 은 옮기지 않는다 — 가짜 런타임의
 // ServerFrame 이 두 필드를 optional 로 두어 null 을 받지 않고, 파싱도 kind·action·data
 // 셋만 본다. 계약에서 중요한 것은 **data 의 모양**이라 그쪽만 픽스처 그대로 옮긴다.
 /** 골든 픽스처 notification.notify.agent.s2c.json */

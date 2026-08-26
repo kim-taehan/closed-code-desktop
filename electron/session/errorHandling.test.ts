@@ -1,10 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Action, AuthState, Kind } from '../../shared/protocol/kinds'
-import { WsConnection } from '../ws/connection'
 import { Handshake } from './handshake'
 import { textOnlyTurn } from '../../tests/fake-runtime/turnScript'
 import { connectAndHandshake, countOf, type SessionFixture } from '../../tests/fake-runtime/chatSessionKit'
-import { FakeRuntimeServer } from '../../tests/fake-runtime/FakeRuntimeServer'
+import { MemoryConnection } from '../../tests/fake-runtime/MemoryConnection'
 
 // ══════════════════════════════════════════════════════════════
 //  에러 처리 전수 (설계 §8) — C2
@@ -18,42 +17,15 @@ afterEach(async () => {
   fixture = null
 })
 
-describe('§8 — 연결 실패와 재연결', () => {
-  it('연결이 안 되면 던지고, 자동 재연결이 꺼져 있으면 재시도하지 않는다', async () => {
-    const connection = new WsConnection({
-      url: 'ws://127.0.0.1:1/ws',
-      autoReconnect: false,
-      connectTimeoutMs: 200,
-    })
-
-    await expect(connection.connect()).rejects.toThrow()
-    expect(connection.attempts).toBe(0)
-    connection.dispose()
-  })
-
-  it('지수 백오프로 재시도한다', () => {
-    const connection = new WsConnection({
-      url: 'ws://127.0.0.1:1/ws',
-      initialReconnectDelayMs: 50,
-      maxReconnectDelayMs: 400,
-    })
-
-    const delays: number[] = []
-    for (let attempt = 0; attempt < 5; attempt++) {
-      delays.push(connection.nextDelay())
-      ;(connection as unknown as { reconnectAttempts: number }).reconnectAttempts = attempt + 1
-    }
-
-    expect(delays).toEqual([50, 100, 200, 400, 400])
-    connection.dispose()
-  })
-})
+// **「§8 — 연결 실패와 재연결」 두 건은 2026-08-26 에 삭제됐다.**
+// 연결 거부와 지수 백오프를 재던 것으로 `WsConnection` 고유의 성질이었는데, 앱이
+// opencode(HTTP+SSE)로 옮겨가며 그 클래스에 프로덕션 호출자가 없어져 함께 없어졌다.
+// **같은 자리를 지금 지키는 것은 `opencode/sse.ts` 의 재연결 백오프**이고 그쪽 시험이 있다.
+// 아래 §8 나머지는 전송이 아니라 프레임 계약을 재므로 인메모리 대역으로 옮겨 살아 있다.
 
 describe('§8 — 인증 실패', () => {
   it('auth_state 가 valid 가 아니면 자동 재시도 없이 실패한다', async () => {
-    const server = new FakeRuntimeServer({ authState: AuthState.INVALID })
-    const port = await server.start()
-    const connection = new WsConnection({ url: `ws://127.0.0.1:${port}/ws`, autoReconnect: false })
+    const connection = new MemoryConnection({ authState: AuthState.INVALID })
     const handshake = new Handshake(connection, { workspacePath: '/tmp' })
 
     const done = handshake.run()
@@ -64,7 +36,6 @@ describe('§8 — 인증 실패', () => {
 
     handshake.dispose()
     connection.dispose()
-    await server.stop()
   })
 })
 
