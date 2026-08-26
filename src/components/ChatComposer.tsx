@@ -16,7 +16,7 @@ import { parseMentions } from '../state/atMentions'
 import { useOpencodeCommands } from '../state/useOpencodeCommands'
 import { isRealFilePath } from '../state/editorContext'
 import { useSendQueue } from '../state/useSendQueue'
-import { useOptimisticBusy } from '../state/useOptimisticBusy'
+import type { OptimisticBusy } from '../state/useOptimisticBusy'
 import { useFileDrop } from '../state/useFileDrop'
 import { useModelSelect } from '../state/useModelSelect'
 import { isModelSwitcherEligible } from '../state/modelSelect'
@@ -39,7 +39,8 @@ export interface ChatComposerProps {
    *  **언마운트가 아니라 감추기다**: 지우면 쓰던 글·대기열이 함께 사라진다. */
   hidden?: boolean
   ready: boolean
-  isStreaming: boolean
+  /** 전송 직후의 「응답 중」 — App 이 들고 ChatPane 진행 표시와 공유한다 (useOptimisticBusy) */
+  optimistic: OptimisticBusy
   permissionMode: PermissionMode
   onPermissionMode: (mode: PermissionMode) => void
   /** 현재 세션 작업 경로 (ADR-036) — override 중일 때만 바가 뜬다 */
@@ -75,7 +76,7 @@ export function ChatComposer(props: ChatComposerProps) {
   const viewingFile =
     props.activeTab !== 'chat' && isRealFilePath(props.activeTab) ? props.activeTab : null
   // 전송 즉시 「응답 중」 으로 바뀐다 — turn_started 를 기다리지 않는다 (useOptimisticBusy).
-  const { busy, markSent } = useOptimisticBusy(props.isStreaming)
+  const { busy, markSent } = props.optimistic
   // **큐도 이 값을 본다.** `isStreaming` 만 보면 turn_started 가 오기 전에 두 번째 질문이
   // 큐를 그냥 지나쳐 바로 나가고, 그것이 큐가 막으려던 이중 전송이다.
   const queue = useSendQueue(props.project?.id ?? null, busy)

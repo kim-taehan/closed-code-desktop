@@ -13,6 +13,7 @@ import type { OpenFilesApi } from '../state/useOpenFiles'
 import { SCM_TAB, type ScmViewHandle } from '../state/useScmView'
 import { useExtensionViewCommand } from '../state/useExtensionViewCommand'
 import type { SessionSlice } from '../state/sessionSlice'
+import type { OptimisticBusy } from '../state/useOptimisticBusy'
 
 // 본문 한 갈래를 그린다 — 로그 탭 / 소스 관리 탭 / 파일·diff 탭 / 대화. 동시에 하나만 렌더된다.
 //
@@ -36,6 +37,8 @@ export interface MainViewProps {
   openFiles: OpenFilesApi
   gesture: MouseGestureApi
   slice: SessionSlice
+  /** 전송 직후의 「응답 중」 — 대화 갈래의 진행 표시가 turn_started 전에도 뜨게 한다 */
+  optimistic: OptimisticBusy
   scrollRef: RefObject<HTMLDivElement | null>
 }
 
@@ -107,6 +110,7 @@ export function MainView(props: MainViewProps) {
   return (
     <ChatPane
       slice={slice}
+      optimistic={props.optimistic}
       gesture={gesture}
       scrollRef={scrollRef}
       chatContext={openFiles.chatContext}

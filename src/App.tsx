@@ -32,6 +32,7 @@ import { useFavoriteWithToast } from './state/useGitActions'
 import { useAppGit } from './state/useAppGit'
 import { ToastStack } from './components/ToastStack'
 import { useOpenFiles } from './state/useOpenFiles'
+import { useOptimisticBusy } from './state/useOptimisticBusy'
 import { useActiveFileNotice } from './state/useActiveFileNotice'
 import { useDesktopMcpOpen } from './state/useDesktopMcpOpen'
 import { useMouseGesture } from './state/useMouseGesture'
@@ -52,6 +53,9 @@ export function App() {
   const sessions = useSessionState(projects.activeId)
   const { session, snapshot, history, reviews, permissionMode, workingDir, approvals, questions, plans, isStreaming } =
     sessions.active
+  // 전송 직후의 「응답 중」. 버튼(ChatComposer)과 진행 표시(ChatPane)가 같은 값을 봐야
+  // 해서 여기서 든다 — turn_started 전의 공백에 화면이 조용하면 멈춘 것처럼 보인다.
+  const optimistic = useOptimisticBusy(isStreaming)
   // "+" 는 폴더 대화상자로 직행하지 않고 런처를 거친다 (아는 프로젝트 재오픈이 더 흔하다)
   const [launcher, setLauncher] = useState(false)
   // 파일 트리 경로를 입력창으로 보내는 통로. nonce 로 같은 파일 두 번 골라도 반응하게 한다.
@@ -225,6 +229,7 @@ export function App() {
         openFiles={openFiles}
         gesture={gesture}
         slice={sessions.active}
+        optimistic={optimistic}
         scrollRef={scrollRef}
       />
 
@@ -253,7 +258,7 @@ export function App() {
       <ChatComposer
         hidden={hidesComposer(openFiles.active)}
         ready={ready}
-        isStreaming={isStreaming}
+        optimistic={optimistic}
         permissionMode={permissionMode}
         workingDir={workingDir}
         onPermissionMode={(mode: PermissionMode) => {
