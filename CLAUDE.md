@@ -1,7 +1,7 @@
 # CLAUDE.md — open-code-desktop
 
 opencode 헤드리스 서버(HTTP+SSE)에 붙는 Electron 데스크톱 클라이언트.
-프로젝트 개요·현재 상태·이벤트 매핑표는 `README.md`.
+프로젝트 개요·현재 상태·이벤트 매핑표는 `docs/DEVELOPMENT.md` (`README.md` 는 설치 안내 전용).
 
 `davis-code-desktop` 소스를 복사해 출발했다. **이 레포는 davis 제품 라인이 아니다** —
 메타레포(`../davis-code`)의 크로스레포 하네스·Jira 커밋 규칙 대상이 아니고, 독립적으로 굴린다.

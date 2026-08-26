@@ -3,6 +3,7 @@
 davis-code-desktop 문서 색인.
 
 ## 문서
+- [DEVELOPMENT.md](./DEVELOPMENT.md) — 개발·설계 문서 (구 루트 README — 루트는 설치 안내 전용이 됐다)
 - [BACKLOG.md](./BACKLOG.md) — 백로그
 - [STATUS.md](./STATUS.md) — 상태
 - [guide/](./guide/) — 사용자 가이드. `drafts/*.md` → `npm run guide:build` → `index.html`
