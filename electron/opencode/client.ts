@@ -13,6 +13,7 @@
 
 import { opencodeAuthHeaders } from './auth'
 import { fetchConfig, fetchProviders, type OpencodeConfig, type ProvidersResponse } from './configApi'
+import { httpFailure } from './httpError'
 import {
   deleteSession,
   listSessions,
@@ -117,7 +118,7 @@ export class OpencodeClient {
   private async get<T>(path: string): Promise<T> {
     const response = await this.fetchImpl(`${this.baseUrl}${path}`, { headers: this.headers })
     if (!response.ok) {
-      throw new Error(`opencode ${path} 실패: HTTP ${response.status} ${await response.text()}`)
+      throw new Error(await httpFailure(path, response))
     }
     return (await response.json()) as T
   }
@@ -138,7 +139,7 @@ export class OpencodeClient {
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     })
     if (!response.ok) {
-      throw new Error(`opencode ${path} 실패: HTTP ${response.status} ${await response.text()}`)
+      throw new Error(await httpFailure(path, response))
     }
     // 204 등 본문 없는 응답을 JSON.parse 하면 던진다.
     const text = await response.text()
