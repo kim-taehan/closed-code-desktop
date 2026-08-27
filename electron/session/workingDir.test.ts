@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { MemoryConnection } from '../../tests/fake-runtime/MemoryConnection'
+import { MemoryConnection } from '../../tests/runtime-protocol/MemoryConnection'
 import { Handshake } from './handshake'
 import {
   WORKING_DIR_INACTIVE,

@@ -21,7 +21,21 @@ opencode 헤드리스 서버(HTTP+SSE)에 붙는 Electron 데스크톱 클라이
 ## 작업할 때 알아야 할 것
 
 **갈아끼우는 자리는 `electron/ws/transport.ts` 의 `Transport`/`SessionConnection` 인터페이스다.**
-`electron/session/*` 전체가 이 인터페이스만 알고 ws 라이브러리를 직접 쓰지 않는다 (설계 §10 DIP).
+`electron/session/*` 의 컨트롤러·핸드셰이크·채팅은 이 인터페이스만 알고 전송 수단을 모른다
+(설계 §10 DIP). **예외는 배선 한 곳 — `electron/session/sessionWiring.ts` 뿐이다.**
+조립하는 자리는 어차피 구체 클래스를 이름으로 불러야 하고(`new OpencodeConnection`), 주소를
+푸는 것(`opencodeEndpoint`)도 같은 종류의 지식이라 그 한 파일에 모아 뒀다. 전송을 갈아끼울 때
+`session/` 안에서 고칠 자리는 거기 두 줄이고, 나머지는 한 줄도 안 고친다 — **그것이 이 문장이
+주장하는 전부다.** 팩토리로 주입해 그 두 줄까지 밖으로 뺄 수도 있지만, 프로덕션 구현이
+`OpencodeConnection` 하나뿐인 지금은 이음매만 하나 더 생긴다 (`WsConnection` 은 호출자가
+없어져 2026-08-26 에 삭제됐다). 갈아끼움이 실제로 되는지는 시험이 잰다 —
+`tests/runtime-protocol/MemoryConnection` 이 같은 인터페이스로 세션 계층 전체를 돌린다.
+
+> 이 문단은 한 번 거짓이었다: *"`session/*` **전체**가 이 인터페이스만 안다"* 고 적혀 있었는데
+> `sessionWiring.ts` 가 `OpencodeConnection` 을 직접 만들고 `projectSession.ts` 가
+> `opencodeEndpoint` 를 직접 불렀다 (감사 2026-08-26). 주소 해석을 배선으로 옮겨
+> **아는 곳을 둘에서 하나로 줄이고**, 문장을 그 하나를 인정하는 형태로 고쳤다.
+
 opencode 어댑터(`electron/opencode/`)는 davis 봉투(`kind`/`action`)를 흉내내 위층에 먹이는
 **부패방지 계층**이다 — 위층을 고치는 게 아니라 번역한다. 새 기능을 붙일 때도 이 원칙을 지킨다:
 `session/*` 를 고쳐야 할 것 같으면, 먼저 어댑터에서 번역으로 풀 수 있는지 본다.

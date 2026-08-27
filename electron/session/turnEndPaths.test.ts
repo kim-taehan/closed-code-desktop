@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Action, Kind } from '../../shared/protocol/kinds'
-import { streamStart, textChunk, turnStart } from '../../tests/fake-runtime/turnScript'
-import { connectAndHandshake, countOf, type SessionFixture } from '../../tests/fake-runtime/chatSessionKit'
+import { streamStart, textChunk, turnStart } from '../../tests/runtime-protocol/turnScript'
+import { connectAndHandshake, countOf, type SessionFixture } from '../../tests/runtime-protocol/chatSessionKit'
 
 // ══════════════════════════════════════════════════════════════
 //  턴 종료 경로 (desktop2 사후 분석 대응)

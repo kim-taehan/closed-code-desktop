@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { connectAndHandshake, type SessionFixture } from '../../tests/fake-runtime/chatSessionKit'
+import { connectAndHandshake, type SessionFixture } from '../../tests/runtime-protocol/chatSessionKit'
 import { NotificationController } from './notifications'
 import type { UserNotification } from '../../shared/protocol/notification'
 

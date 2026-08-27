@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { failedTurn, textOnlyTurn, turnPausedForApproval } from '../../tests/fake-runtime/turnScript'
-import { connectAndHandshake, countOf, textsOf, type SessionFixture } from '../../tests/fake-runtime/chatSessionKit'
+import { failedTurn, textOnlyTurn, turnPausedForApproval } from '../../tests/runtime-protocol/turnScript'
+import { connectAndHandshake, countOf, textsOf, type SessionFixture } from '../../tests/runtime-protocol/chatSessionKit'
 
 // 단일 턴 동작과 승인 응답. 멀티턴은 chatSessionMultiTurn.test.ts 에 있다.
 

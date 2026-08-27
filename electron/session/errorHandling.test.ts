@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Action, AuthState, Kind } from '../../shared/protocol/kinds'
 import { Handshake } from './handshake'
-import { textOnlyTurn } from '../../tests/fake-runtime/turnScript'
-import { connectAndHandshake, countOf, type SessionFixture } from '../../tests/fake-runtime/chatSessionKit'
-import { MemoryConnection } from '../../tests/fake-runtime/MemoryConnection'
+import { textOnlyTurn } from '../../tests/runtime-protocol/turnScript'
+import { connectAndHandshake, countOf, type SessionFixture } from '../../tests/runtime-protocol/chatSessionKit'
+import { MemoryConnection } from '../../tests/runtime-protocol/MemoryConnection'
 
 // ══════════════════════════════════════════════════════════════
 //  에러 처리 전수 (설계 §8) — C2

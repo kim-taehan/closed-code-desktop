@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { MemoryConnection } from '../../tests/fake-runtime/MemoryConnection'
-import type { FakeRuntimeOptions } from '../../tests/fake-runtime/runtimeProtocol'
+import { MemoryConnection } from '../../tests/runtime-protocol/MemoryConnection'
+import type { FakeRuntimeOptions } from '../../tests/runtime-protocol/runtimeProtocol'
 import { AuthState } from '../../shared/protocol/kinds'
 import { Handshake, type HandshakeStage, type HandshakeState } from './handshake'
 

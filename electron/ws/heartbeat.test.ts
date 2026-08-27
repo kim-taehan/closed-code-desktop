@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { MemoryConnection } from '../../tests/fake-runtime/MemoryConnection'
+import { MemoryConnection } from '../../tests/runtime-protocol/MemoryConnection'
 import { Heartbeat } from './heartbeat'
 
 // 하트비트 (설계 §4.3).

@@ -4,8 +4,8 @@ import {
   textOnlyTurn,
   turnPausedForApproval,
   turnResumedAfterApproval,
-} from '../../tests/fake-runtime/turnScript'
-import { connectAndHandshake, countOf, textsOf, type SessionFixture } from '../../tests/fake-runtime/chatSessionKit'
+} from '../../tests/runtime-protocol/turnScript'
+import { connectAndHandshake, countOf, textsOf, type SessionFixture } from '../../tests/runtime-protocol/chatSessionKit'
 import type { ChatSnapshot } from './chatSession'
 
 // 멀티턴 회귀 방지.

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { PermissionMode } from '../../shared/protocol/kinds'
-import { MemoryConnection } from '../../tests/fake-runtime/MemoryConnection'
+import { MemoryConnection } from '../../tests/runtime-protocol/MemoryConnection'
 import { Handshake } from './handshake'
 import { PermissionModeController } from './permissionMode'
 

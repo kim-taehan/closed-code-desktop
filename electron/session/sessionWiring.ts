@@ -1,6 +1,7 @@
 import type { SessionStatePayload } from '../../shared/ipc/channels'
 import type { SessionConnection } from '../ws/transport'
 import { OpencodeConnection } from '../opencode/connection'
+import { opencodeEndpoint } from '../opencode/endpoint'
 import { Heartbeat } from '../ws/heartbeat'
 import { Handshake } from './handshake'
 import { ChatSession } from './chatSession'
@@ -17,6 +18,16 @@ import type { ProjectSessionListener } from './projectSessionListener'
 // ProjectSession 의 배선 절차 — 연결 위에 컨트롤러들을 만들고 listener 로 잇는다.
 // 수명 판단(시작/종료/재연결)은 ProjectSession 에 남기고, 여기는 "무엇이 무엇에
 // 연결되는가"만 안다. ProjectSession 에서 응집 분리한 것으로 행동은 그대로다.
+//
+// **`session/` 안에서 구체 전송 구현을 이름으로 아는 곳은 이 파일 하나다** (설계 §10 DIP).
+// 컨트롤러 열한 개·Handshake·ChatSession 은 `ws/transport.ts` 의 인터페이스만 알고,
+// 전송을 갈아끼울 때 고칠 자리는 아래 `new OpencodeConnection` 한 줄이다.
+// 조립하는 곳은 어차피 구체 이름을 불러야 하므로 그 지식을 여기 모아 둔 것이지,
+// 위층으로 새어 나간 것이 아니다 — 팩토리로 주입하면 프로덕션 구현이 하나뿐인데
+// 이음매만 하나 더 생긴다. 시험은 `MemoryConnection` 으로 같은 인터페이스에 끼운다.
+//
+// 주소 해석(`opencodeEndpoint`)도 여기 있다. 2026-08-26 까지는 `ProjectSession` 이
+// 그걸 직접 불러서 **고칠 자리가 둘**이었고, 그래서 위 문장이 거짓이었다.
 
 /**
  * 소켓 생사 신호를 받을 곳. RuntimeManager 가 구현한다.
@@ -29,8 +40,8 @@ export interface LivenessSink {
 }
 
 export interface WireSessionArgs {
-  endpoint: { host: string; port: number; source: string }
-  config: { workspacePath: string; projectName?: string }
+  /** `opencodeUrl` 은 주소 해석의 입력이다 — 푼 결과는 `WiredSession.endpoint` 로 돌려준다 */
+  config: { workspacePath: string; projectName?: string; opencodeUrl: string }
   listener: ProjectSessionListener
   onHandshakeState: (state: SessionStatePayload['handshake']) => void
   onConnectionState: (state: SessionStatePayload['connection']) => void
@@ -41,6 +52,8 @@ export interface WireSessionArgs {
 }
 
 export interface WiredSession {
+  /** 붙은 자리. 화면·진단이 host/port 모양을 기대해서 푼 값을 그대로 돌려준다. */
+  endpoint: { host: string; port: number; source: string }
   connection: SessionConnection
   heartbeat: Heartbeat
   handshake: Handshake
@@ -55,7 +68,8 @@ export interface WiredSession {
 }
 
 export function wireSession(args: WireSessionArgs): WiredSession {
-  const { endpoint, config, listener } = args
+  const { config, listener } = args
+  const endpoint = opencodeEndpoint(config.opencodeUrl)
   const connection = new OpencodeConnection({ baseUrl: `http://${endpoint.host}:${endpoint.port}` })
   // **와치독을 끈다 (watchdogMs: 0).**
   //
@@ -117,6 +131,7 @@ export function wireSession(args: WireSessionArgs): WiredSession {
   notifications.start()
 
   return {
+    endpoint,
     connection,
     heartbeat,
     handshake,

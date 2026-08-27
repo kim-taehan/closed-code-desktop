@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { TurnReviewStatus, type TurnReview } from '../../shared/protocol/turnReview'
-import { MemoryConnection } from '../../tests/fake-runtime/MemoryConnection'
-import { turnChangesFrame } from '../../tests/fake-runtime/fakeTurnReview'
+import { MemoryConnection } from '../../tests/runtime-protocol/MemoryConnection'
+import { turnChangesFrame } from '../../tests/runtime-protocol/fakeTurnReview'
 import { Handshake } from './handshake'
 import { TurnReviewController } from './turnReview'
 

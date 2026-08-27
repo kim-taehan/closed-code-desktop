@@ -32,8 +32,10 @@ export type ConnectionState = 'idle' | 'connecting' | 'open' | 'reconnecting' | 
  * 만족했고, 배선이 어느 쪽을 쓰든 위층 코드가 같아지는 것이 이 인터페이스의 값이었다.
  * 2026-08-26 에 davis 쪽 구현을 지웠다 — 앱에 davis WS 를 여는 곳이 없어졌기 때문이다.
  * **그래도 이 자리는 남는다.** 지금 프로덕션 구현은 `OpencodeConnection` 하나지만,
- * 세션 계층 전체가 이 인터페이스만 알기에 시험이 `tests/fake-runtime/MemoryConnection`
- * (인메모리 대역)으로 같은 코드 경로를 돌린다. 갈아끼울 자리가 실제로 갈아끼워진 셈이다.
+ * 세션 계층의 컨트롤러·핸드셰이크·채팅이 이 인터페이스만 알기에 시험이
+ * `tests/runtime-protocol/MemoryConnection`(인메모리 대역)으로 같은 코드 경로를 돌린다.
+ * 갈아끼울 자리가 실제로 갈아끼워진 셈이다. **구체 구현을 이름으로 아는 곳은
+ * `session/sessionWiring.ts` 하나뿐이다** — 조립은 어차피 구체를 불러야 해서다.
  */
 export interface SessionConnection extends Transport {
   /** 열릴 때까지 기다린다. 실패하면 거부한다. */

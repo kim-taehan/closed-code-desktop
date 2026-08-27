@@ -62,9 +62,12 @@ session/*  ──davis 봉투(kind/action)──▶  OpencodeTransport  ──HT
              (한 줄도 안 고친다)             (양방향 번역만)                  (:4096)
 ```
 
-`electron/ws/transport.ts` 의 `Transport` 인터페이스가 갈아끼우는 자리다. 세션 계층 전체가
-이 인터페이스만 알기 때문에(설계 §10 DIP), 어댑터 하나로 `chunkRoutes` 매핑표·버블 묶기·
-승인 카드·턴 게이트가 전부 산다.
+`electron/ws/transport.ts` 의 `Transport` 인터페이스가 갈아끼우는 자리다. 세션 계층의
+컨트롤러·핸드셰이크·채팅이 이 인터페이스만 알기 때문에(설계 §10 DIP), 어댑터 하나로
+`chunkRoutes` 매핑표·버블 묶기·승인 카드·턴 게이트가 전부 산다.
+**구체 구현을 이름으로 아는 곳은 배선 하나뿐이다** — `electron/session/sessionWiring.ts` 가
+`OpencodeConnection` 을 만들고 `opencodeEndpoint` 로 주소를 푼다. 조립은 어딘가에서 구체
+이름을 불러야 하고, 그 자리를 한 파일로 못 박은 것이 여기서의 DIP 다 (`CLAUDE.md` 참조).
 
 | 파일 | 역할 |
 |---|---|
@@ -79,7 +82,10 @@ session/*  ──davis 봉투(kind/action)──▶  OpencodeTransport  ──HT
 | `electron/opencode/endpoint.ts` | 서버 주소 해석 (탐색 없음) |
 
 세션 계층이 요구하는 수명 API 는 `electron/ws/transport.ts` 의 **`SessionConnection`** 인터페이스로
-뽑아 뒀다. `WsConnection`(davis) 과 `OpencodeConnection` 이 둘 다 이걸 만족하므로 배선 코드가 같다.
+뽑아 뒀다. 원래는 `WsConnection`(davis) 과 `OpencodeConnection` 이 **둘 다** 이걸 만족하는 것이
+이 인터페이스의 값이었는데, 2026-08-26 에 davis 쪽 구현을 지웠다(앱에 호출자가 없다).
+지금 프로덕션 구현은 하나지만 시험이 `tests/runtime-protocol/MemoryConnection`(인메모리 대역)을
+같은 자리에 끼워 세션 계층 전체를 돌리므로, 갈아끼울 자리는 여전히 실제로 갈아끼워진다.
 
 ### 매핑 (실측 기준, opencode 1.17.18)
 

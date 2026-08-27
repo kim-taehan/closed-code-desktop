@@ -12,6 +12,11 @@
 // 죽은 잔재가 됐다 — 그 아래 **프레임 계약을 겨누던 시험들은 죽지 않았다.**
 // 그래서 상태기계만 떼어 남기고, 구동은 `MemoryConnection`(`Transport` 인메모리 대역)이
 // 맡는다. 재던 것이 무엇인지는 그대로다: 프레임이 오갈 때 세션 계층이 어떻게 구는가.
+//
+// **폴더 이름도 그때 거짓이 됐다.** `tests/fake-runtime` 은 "가짜 런타임 서버" 로 읽혔는데
+// 서버가 없어졌으므로 `tests/runtime-protocol` 로 고쳤다 (2026-08-26). 옆의
+// `tests/fake-opencode/` 가 `fake-` 를 유지하는 것은 **거기는 진짜로 서버**이기 때문이다 —
+// 이제 그 접두사 차이가 정보를 나른다.
 
 import { Action, AuthState, Kind, WorkspaceState } from '../../shared/protocol/kinds'
 import type { ServerFrame } from './turnScript'
