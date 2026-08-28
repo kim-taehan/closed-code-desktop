@@ -1,0 +1,35 @@
+{
+  "manifestVersion": 2,
+  "name": "code-map",
+  "displayName": "코드 지도",
+  "version": "0.1.0",
+  "main": "main.js",
+  "description": "프로젝트의 구조를 읽어 파일 사이의 의존을 그래프로 봅니다",
+  "engines": {
+    "code": "^0.1.0"
+  },
+  "contributes": {
+    "commands": [
+      {
+        "id": "codeMap.open",
+        "title": "코드 지도 열기"
+      },
+      {
+        "id": "codeMap.build",
+        "title": "지도 만들기",
+        "placement": "header"
+      },
+      {
+        "id": "codeMap.focus",
+        "title": "이 파일로 옮기기"
+      }
+    ],
+    "views": [
+      {
+        "id": "codeMap.board",
+        "title": "코드 지도",
+        "kind": "html"
+      }
+    ]
+  }
+}

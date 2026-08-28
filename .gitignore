@@ -44,3 +44,8 @@ dist-extensions/
 
 # 파이썬 산출물 (확장 시험 중 생김)
 __pycache__/
+
+# 확장 「코드 지도」가 쓰는 tree-sitter 문법(wasm). `scripts/fetch-grammars.mjs` 가 받는다.
+# **망 밖에서만 받고 레포에는 안 담는다** — build/vendor 와 같은 규칙이고, 크기(6.7MB)보다
+# 출처가 이유다: 받을 때 sha512 를 레지스트리 값과 대조하는데, 커밋해 버리면 아무도 다시 안 잰다.
+extensions/code-map/vendor/
