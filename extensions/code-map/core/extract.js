@@ -9,8 +9,9 @@ const { rulesetOf } = require('./languages')
 //                      lexical_declaration 14 · arrow_function 6 · import_statement 17
 //   RelayChatService.kt class_declaration 2 · function_declaration 5 · import 17
 //
-// ⚠️ Kotlin 의 수입 노드는 `import_header` 가 아니라 **`import`** 다. 이름만 보고 짐작하면
-// 수입이 0개로 나오고, 그러면 그래프에 간선이 하나도 안 생긴다 — 조용히 비는 실패다.
+// ⚠️ 수입 노드 이름이 언어마다 다르다 — Kotlin 은 `import_header` 가 아니라 **`import`**,
+// Java 는 **`import_declaration`** 이다. 이름만 보고 짐작하면 수입이 0개로 나오고,
+// 그러면 그래프에 간선이 하나도 안 생긴다 — 조용히 비는 실패다.
 
 /** 이름을 가진 것만 심볼로 친다. 익명 화살표함수는 **누를 수 없으므로** 목록에 두지 않는다 */
 const NAMED = {
@@ -24,6 +25,13 @@ const NAMED = {
     class_declaration: 'class',
     object_declaration: 'object',
     function_declaration: 'function',
+  },
+  java: {
+    class_declaration: 'class',
+    interface_declaration: 'interface',
+    enum_declaration: 'class',
+    record_declaration: 'class',
+    method_declaration: 'method',
   },
 }
 
@@ -55,11 +63,15 @@ function importSource(node) {
 }
 
 /**
- * Kotlin 수입은 필드가 없어 **본문 텍스트에서 읽는다.**
- * `import develop.x.Foo` · `import develop.x.Foo as Bar` · `import develop.x.*`
+ * Kotlin·Java 수입은 필드가 없어 **본문 텍스트에서 읽는다.**
+ *
+ *   Kotlin  `import a.b.Foo` · `import a.b.Foo as Bar` · `import a.b.*`
+ *   Java    `import a.b.Foo;` · `import static a.b.Foo.bar;` · `import a.b.*;`
+ *
+ * `static` 을 안 걷어내면 수입 경로가 `static` 이 되어 아무 파일과도 안 맞는다.
  */
-function kotlinImport(node) {
-  const match = /^import\s+([\w.*]+)/.exec(node.text)
+function packageImport(node) {
+  const match = /^import\s+(?:static\s+)?([\w.*]+)/.exec(node.text)
   return match ? match[1] : null
 }
 
@@ -90,8 +102,8 @@ function extract(root, languageId) {
     if (node.type === 'import_statement') {
       const source = importSource(node)
       if (source) imports.push({ source, line: node.startPosition.row + 1 })
-    } else if (node.type === 'import') {
-      const source = kotlinImport(node)
+    } else if (node.type === 'import' || node.type === 'import_declaration') {
+      const source = packageImport(node)
       if (source) imports.push({ source, line: node.startPosition.row + 1 })
     }
 

@@ -9,10 +9,14 @@ const LANGUAGES = {
   '.ts': { id: 'typescript', wasm: 'tree-sitter-typescript/tree-sitter-typescript.wasm' },
   '.tsx': { id: 'tsx', wasm: 'tree-sitter-typescript/tree-sitter-tsx.wasm' },
   '.kt': { id: 'kotlin', wasm: 'tree-sitter-kotlin/tree-sitter-kotlin.wasm' },
+  '.java': { id: 'java', wasm: 'tree-sitter-java/tree-sitter-java.wasm' },
 }
 
+/** 화면이 「무엇을 읽는지」 말할 때 쓰는 이름. 목록과 문구가 갈리면 한쪽이 낡는다 */
+const READS = 'TypeScript · Kotlin · Java'
+
 /** `listFiles` 에 넘길 glob. 여기 없는 확장자는 애초에 읽지 않는다 */
-const GLOB = '**/*.{ts,tsx,kt}'
+const GLOB = '**/*.{ts,tsx,kt,java}'
 
 /** 경로 → 문법. 모르는 확장자면 null (호출자가 건너뛴다) */
 function languageOf(path) {
@@ -28,4 +32,4 @@ function rulesetOf(languageId) {
   return languageId === 'tsx' ? 'typescript' : languageId
 }
 
-module.exports = { LANGUAGES, GLOB, languageOf, rulesetOf }
+module.exports = { LANGUAGES, GLOB, READS, languageOf, rulesetOf }

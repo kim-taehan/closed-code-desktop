@@ -41,15 +41,15 @@ function resolveRelative(fromPath, source, known) {
 }
 
 /**
- * Kotlin 의 수입을 파일로 바꾼다.
+ * Kotlin·Java 의 수입을 파일로 바꾼다.
  *
- * Kotlin 수입은 파일 경로가 아니라 **패키지 경로**(`develop.x.gateway.domain.RateLimit`)라
+ * 둘 다 파일 경로가 아니라 **패키지 경로**(`develop.x.gateway.domain.RateLimit`)라
  * 상대 경로 해석이 통하지 않는다. 대신 마지막 마디를 **그 이름을 선언한 파일**에서 찾는다 —
  * 한 프로젝트 안에서는 이것으로 충분하고, 못 찾으면 그리지 않는다(프로젝트 밖 수입이다).
  *
  * `import a.b.*` 는 무엇을 쓰는지 알 수 없어 **버린다.** 짐작해서 선을 그으면 틀린 선이 된다.
  */
-function resolveKotlin(source, declaredIn) {
+function resolvePackage(source, declaredIn) {
   const last = source.split('.').pop()
   if (!last || last === '*') return null
   return declaredIn.get(last) ?? null
@@ -82,7 +82,7 @@ function buildGraph(files) {
     for (const one of file.imports) {
       const to = one.source.startsWith('.')
         ? resolveRelative(file.path, one.source, known)
-        : resolveKotlin(one.source, declaredIn)
+        : resolvePackage(one.source, declaredIn)
       if (!to || to === file.path) continue
       const key = `${file.path}\0${to}`
       if (seen.has(key)) continue
@@ -105,4 +105,4 @@ function neighborhood(graph, path) {
   return { center: path, inbound, outbound }
 }
 
-module.exports = { buildGraph, neighborhood, normalize, resolveRelative, resolveKotlin }
+module.exports = { buildGraph, neighborhood, normalize, resolveRelative, resolvePackage }

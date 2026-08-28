@@ -1,4 +1,4 @@
-const { GLOB, languageOf } = require('./core/languages')
+const { GLOB, READS, languageOf } = require('./core/languages')
 const { parseFile } = require('./core/parser')
 const { extract } = require('./core/extract')
 const { buildGraph, neighborhood } = require('./core/graph')
@@ -27,7 +27,7 @@ function activate(code) {
 
   async function draw() {
     if (!graph) {
-      await code.view.setHtml(VIEW, emptyHtml('아직 지도가 없습니다. 「지도 만들기」를 누르세요.'))
+      await code.view.setHtml(VIEW, emptyHtml(`아직 지도가 없습니다. 「지도 만들기」를 누르세요. (${READS} 를 읽습니다)`))
       return
     }
     // 볼 자리를 못 정했으면 **가장 많이 참조되는 파일**을 연다 — 프로젝트의 중심일 가능성이 높다
@@ -64,7 +64,7 @@ function activate(code) {
   async function build() {
     const files = (await code.workspace.listFiles(GLOB)).filter((p) => !EXCLUDED.test(p))
     if (files.length === 0) {
-      code.progress('읽을 TypeScript·Kotlin 파일이 없습니다', undefined, undefined, { kind: 'fail' })
+      code.progress(`읽을 파일이 없습니다 — 지금은 ${READS} 만 읽습니다`, undefined, undefined, { kind: 'fail' })
       return
     }
 

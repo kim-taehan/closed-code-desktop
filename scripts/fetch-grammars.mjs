@@ -36,6 +36,7 @@ const PACKAGES = [
   { pkg: 'web-tree-sitter', version: '0.26.8', files: ['web-tree-sitter.cjs', 'web-tree-sitter.wasm', 'LICENSE'] },
   { pkg: 'tree-sitter-typescript', version: '0.23.2', files: ['tree-sitter-typescript.wasm', 'tree-sitter-tsx.wasm', 'LICENSE'] },
   { pkg: '@tree-sitter-grammars/tree-sitter-kotlin', version: '1.1.0', files: ['tree-sitter-kotlin.wasm', 'LICENSE'] },
+  { pkg: 'tree-sitter-java', version: '0.23.5', files: ['tree-sitter-java.wasm', 'LICENSE'] },
 ]
 
 function fail(message) {

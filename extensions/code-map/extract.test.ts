@@ -98,7 +98,37 @@ describe.skipIf(!vendored)('구조 추출', () => {
     ])
   })
 
+  /**
+   * Java 수입 노드는 **`import_declaration`** 이고 끝에 `;` 가 붙는다.
+   * `import static` 을 안 걷어내면 수입 경로가 `static` 이 되어 아무 파일과도 안 맞는다.
+   */
+  it('Java 수입과 선언을 읽는다', async () => {
+    const { symbols, imports } = await symbolsOf(
+      'A.java',
+      [
+        'package p;',
+        'import a.b.Foo;',
+        'import static a.b.Bar.baz;',
+        'public class Svc {',
+        '  public void run() {}',
+        '}',
+        'interface Port {}',
+      ].join('\n'),
+    )
+
+    expect(imports).toEqual([
+      { source: 'a.b.Foo', line: 2 },
+      { source: 'a.b.Bar.baz', line: 3 },
+    ])
+    expect(symbols).toEqual([
+      { name: 'Svc', kind: 'class', line: 4 },
+      { name: 'run', kind: 'method', line: 5 },
+      { name: 'Port', kind: 'interface', line: 7 },
+    ])
+  })
+
   it('모르는 확장자는 읽지 않는다', async () => {
     expect(await parseFile('a.py', 'def x(): pass')).toBeNull()
+    expect(await parseFile('a.md', '# hi')).toBeNull()
   })
 })

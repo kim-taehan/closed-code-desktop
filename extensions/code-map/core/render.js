@@ -9,6 +9,8 @@
 //   data-command="id" + data-arg   — 이 확장의 명령을 문자열 하나와 함께 돌린다
 // 임의의 값을 보낼 수 없어서, 「다른 파일로 옮겨 보기」는 경로 문자열 하나로 표현한다.
 
+const { READS } = require('./languages')
+
 const FOCUS = 'codeMap.focus'
 
 /** 이웃을 한쪽에 몇 개까지 그릴지. 넘치면 **몇 개를 뺐는지 화면에 적는다** */
@@ -160,7 +162,10 @@ function boardHtml(graph, view, stats) {
     `<div class="label">심볼 ${symbols.length}</div>` +
     symbolList(view.center, symbols) +
     `<div class="label">지도</div>` +
-    `<p class="sub">파일 ${stats.files} · 심볼 ${stats.symbols} · 간선 ${stats.edges}<br>${stats.seconds}초에 읽음</p>` +
+    `<p class="sub">파일 ${stats.files} · 심볼 ${stats.symbols} · 간선 ${stats.edges}<br>` +
+    // **무엇을 읽었는지 항상 적는다.** 안 적으면 Java 프로젝트에서 「파일 1개」가 나올 때
+    // 지도가 깨진 것으로 읽힌다 — 실제로는 읽을 수 있는 파일이 그것뿐이었다 (실측 사례)
+    `${stats.seconds}초에 읽음 · ${READS}</p>` +
     failed +
     `</div></div>`
   )

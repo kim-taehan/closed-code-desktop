@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest'
 // 확장은 CJS 라 `require` 로 싣는다 (호스트가 `require` 로 싣는 것과 같은 길).
 // `extensions/` 는 CommonJS tsconfig 만 본다 — `import.meta.url` 을 쓰면 TS1343 으로 깨진다
 const require_ = createRequire(__filename)
-const { buildGraph, neighborhood, normalize, resolveRelative, resolveKotlin } = require_('./core/graph')
+const { buildGraph, neighborhood, normalize, resolveRelative, resolvePackage } = require_('./core/graph')
 
 const file = (path: string, imports: string[], symbols: { name: string; kind: string }[] = []) => ({
   path,
@@ -47,13 +47,13 @@ describe('TypeScript 상대 수입', () => {
   })
 })
 
-describe('Kotlin 수입', () => {
-  // Kotlin 수입은 파일 경로가 아니라 **패키지 경로**라 상대 해석이 통하지 않는다.
+describe('Kotlin·Java 수입', () => {
+  // Kotlin·Java 수입은 파일 경로가 아니라 **패키지 경로**라 상대 해석이 통하지 않는다.
   // 마지막 마디를 그 이름을 선언한 파일에서 찾는다.
   const declaredIn = new Map([['RateLimit', 'gateway/domain/RateLimit.kt']])
 
   it('마지막 마디로 선언한 파일을 찾는다', () => {
-    expect(resolveKotlin('develop.x.gateway.domain.RateLimit', declaredIn)).toBe('gateway/domain/RateLimit.kt')
+    expect(resolvePackage('develop.x.gateway.domain.RateLimit', declaredIn)).toBe('gateway/domain/RateLimit.kt')
   })
 
   /**
@@ -63,11 +63,12 @@ describe('Kotlin 수입', () => {
    * 「틀린 것」이 훨씬 나쁘다 — 없으면 더 찾아보지만, 틀리면 그대로 믿는다.
    */
   it('와일드카드는 그리지 않는다', () => {
-    expect(resolveKotlin('develop.x.gateway.domain.*', declaredIn)).toBeNull()
+    expect(resolvePackage('develop.x.gateway.domain.*', declaredIn)).toBeNull()
   })
 
   it('프로젝트 밖 수입은 그리지 않는다', () => {
-    expect(resolveKotlin('kotlinx.coroutines.flow.Flow', declaredIn)).toBeNull()
+    expect(resolvePackage('kotlinx.coroutines.flow.Flow', declaredIn)).toBeNull()
+    expect(resolvePackage('java.util.List', declaredIn)).toBeNull()
   })
 })
 
