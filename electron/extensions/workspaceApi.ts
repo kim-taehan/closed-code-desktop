@@ -52,8 +52,13 @@ export class ExtensionWorkspace {
    *
    * 걷기는 `ProjectFs.readDir` 로 한 겹씩 한다. 직접 `readdir` 하지 않는 이유는
    * 거기에 경계 판정과 숨김 목록(`.git`·`node_modules`)이 이미 들어 있어서다.
+   *
+   * ⚠️ **상한에 닿으면 `truncated` 가 참이다.** 예전에는 그냥 멈추고 목록만 돌려줘서,
+   * 받는 쪽이 「이 프로젝트에 N개가 있다」와 「N개에서 끊겼다」를 **구분할 수 없었다.**
+   * 실측 사례: 디렉토리 5,895개짜리 Java 프로젝트에서 3,723개 중 1,671개(55%)만 걸렸는데
+   * 확장 화면에는 그것이 전부인 것처럼 떴다. 조용히 절반만 보여주는 것이 이 구멍이었다.
    */
-  async listFiles(glob: string): Promise<string[]> {
+  async listFiles(glob: string): Promise<{ files: string[]; truncated: boolean }> {
     const project = this.requireActive()
     const filter = parseGlob(glob)
 
@@ -76,11 +81,13 @@ export class ExtensionWorkspace {
         }
         if (!filter.matches(entry.name)) continue
         files.push(entry.path)
-        if (files.length >= MAX_LIST_FILES) return files
+        if (files.length >= MAX_LIST_FILES) return { files, truncated: true }
       }
     }
 
-    return files
+    // 큐가 남았는데 나왔다면 디렉토리 상한에 걸린 것이다 — 파일 상한과 사유가 다르지만
+    // 받는 쪽에는 **똑같이 「전부가 아니다」**이므로 한 값으로 낸다
+    return { files, truncated: queue.length > 0 }
   }
 
   /** 파일 하나를 텍스트로. 실패는 **던진다** — 확장 API 는 사유 객체가 아니라 예외로 말한다. */

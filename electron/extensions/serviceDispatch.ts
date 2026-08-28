@@ -140,6 +140,8 @@ export async function dispatchExtensionApi(deps: DispatchDeps, request: RpcReque
   switch (request.method) {
     case METHOD_GET_PROJECT_PATH:
       return workspace.getProjectPath()
+    // `{files, truncated}` 를 그대로 보낸다. 확장에게 목록만 주면 **잘렸다는 사실이
+    // 여기서 사라진다** — 자기 이름을 아는 자식 쪽(`extensionApi`)이 그걸 받아 알린다
     case METHOD_LIST_FILES:
       return workspace.listFiles(requireString(params['glob'], 'glob'))
     case METHOD_READ_FILE:
