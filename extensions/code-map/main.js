@@ -35,15 +35,24 @@ function activate(code) {
     await code.view.setHtml(VIEW, boardHtml(graph, neighborhood(graph, center), stats))
   }
 
+  /**
+   * 처음 열 때 보여줄 파일. **가장 많이 참조되는 것**이 프로젝트의 중심일 가능성이 높다.
+   *
+   * ⚠️ **동점을 명시적으로 깬다.** 안 그러면 파일을 훑는 순서가 승자를 정하는데, 그건
+   * 디렉토리 나열 순서라 판이 바뀌면 달라진다 — 같은 코드에서 다른 화면이 열린다.
+   * 들어오는 수 → 심볼 수 → 경로 순으로 내려간다.
+   */
   function busiest() {
     const inbound = new Map()
     for (const edge of graph.edges) inbound.set(edge.to, (inbound.get(edge.to) ?? 0) + 1)
-    let best = graph.nodes[0]?.path ?? ''
-    let most = -1
-    for (const [path, count] of inbound) {
-      if (count > most) { most = count; best = path }
-    }
-    return best
+
+    const score = (node) => [inbound.get(node.path) ?? 0, node.symbols.length]
+    const ranked = [...graph.nodes].sort((a, b) => {
+      const [ai, as] = score(a)
+      const [bi, bs] = score(b)
+      return bi - ai || bs - as || a.path.localeCompare(b.path)
+    })
+    return ranked[0]?.path ?? ''
   }
 
   /**

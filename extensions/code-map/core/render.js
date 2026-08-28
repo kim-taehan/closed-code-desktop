@@ -22,13 +22,24 @@ function baseName(path) {
   return path.slice(path.lastIndexOf('/') + 1)
 }
 
+/**
+ * 긴 경로를 **디렉토리 경계에서** 접히게 한다.
+ *
+ * 그냥 두면 낱말 한가운데서 끊겨 `develop/ x/llm/…` 처럼 보인다 — 경로를 눈으로 따라가는
+ * 것이 이 줄의 유일한 쓸모인데 그게 안 된다. `<wbr>` 은 **접어도 되는 자리**만 알려 주고
+ * 글자를 더하지 않는다.
+ */
+function breakablePath(path) {
+  return escapeHtml(path).split('/').join('/<wbr>')
+}
+
 const STYLE = `
 :root { color-scheme: dark light; }
 body { margin: 0; font: 13px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", "Apple SD Gothic Neo", sans-serif; }
 .wrap { display: flex; height: 100vh; }
 .canvas { flex: 1; min-width: 0; overflow: auto; }
 .side { width: 260px; flex: none; border-left: 1px solid rgba(139,148,158,0.2); padding: 14px; overflow: auto; }
-h2 { margin: 0 0 2px; font: 600 13px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; word-break: break-all; }
+h2 { margin: 0 0 2px; font: 600 13px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
 .sub { margin: 0 0 14px; font-size: 11px; opacity: 0.62; font-variant-numeric: tabular-nums; }
 .label { font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.55; margin: 14px 0 5px; }
 .sym { display: block; padding: 3px 6px; border-radius: 5px; cursor: pointer;
@@ -144,7 +155,7 @@ function boardHtml(graph, view, stats) {
     `<div class="wrap">` +
     `<div class="canvas">${graphSvg(view)}</div>` +
     `<div class="side">` +
-    `<h2>${escapeHtml(view.center)}</h2>` +
+    `<h2>${breakablePath(view.center)}</h2>` +
     `<p class="sub">${node ? node.lines : 0}줄 · 들어옴 ${view.inbound.length} · 나감 ${view.outbound.length}</p>` +
     `<div class="label">심볼 ${symbols.length}</div>` +
     symbolList(view.center, symbols) +
@@ -155,4 +166,4 @@ function boardHtml(graph, view, stats) {
   )
 }
 
-module.exports = { boardHtml, emptyHtml, graphSvg, symbolList, escapeHtml, FOCUS, MAX_SIDE }
+module.exports = { boardHtml, emptyHtml, graphSvg, symbolList, escapeHtml, breakablePath, FOCUS, MAX_SIDE }

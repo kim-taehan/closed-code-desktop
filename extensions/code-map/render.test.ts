@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 
 // `extensions/` 는 CommonJS tsconfig 만 본다 — `import.meta.url` 을 쓰면 TS1343 으로 깨진다
 const require_ = createRequire(__filename)
-const { boardHtml, graphSvg, symbolList, escapeHtml, MAX_SIDE } = require_('./core/render')
+const { boardHtml, graphSvg, symbolList, escapeHtml, breakablePath, MAX_SIDE } = require_('./core/render')
 
 const graph = {
   nodes: [{ path: 'a/center.ts', lines: 42, symbols: [{ name: 'Foo', kind: 'class', line: 7 }] }],
@@ -40,6 +40,18 @@ describe('글자 새김', () => {
 
     expect(html).toContain('Map&lt;string&gt;')
     expect(html).not.toContain('<string>')
+  })
+})
+
+describe('긴 경로', () => {
+  /** 낱말 한가운데서 끊기면 경로를 눈으로 못 따라간다 — 접을 자리를 디렉토리 경계로 준다 */
+  it('디렉토리 경계에서 접히게 표시한다', () => {
+    expect(breakablePath('a/b/c.kt')).toBe('a/<wbr>b/<wbr>c.kt')
+  })
+
+  // `<wbr>` 을 넣느라 새김을 건너뛰면 경로가 태그가 된다
+  it('접을 자리를 넣어도 새김은 그대로다', () => {
+    expect(breakablePath('a/<b>/c.ts')).toBe('a/<wbr>&lt;b&gt;/<wbr>c.ts')
   })
 })
 
