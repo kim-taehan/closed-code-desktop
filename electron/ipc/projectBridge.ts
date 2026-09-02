@@ -1,5 +1,4 @@
 import { dialog, ipcMain, type BrowserWindow } from 'electron'
-import { describeError } from '../../shared/errors/describeError'
 import {
   Channel,
   type ProjectFavoritePayload,
@@ -11,16 +10,14 @@ import {
 } from '../../shared/ipc/channels'
 import { registerFsHandlers } from './projectFsHandlers'
 import { registerRunListHandlers } from './runListHandlers'
+import { registerServerHandlers } from './serverHandlers'
 import { runListDir } from '../run/runListDir'
 import { ProjectFs } from '../projects/projectFs'
 import { pickAttachments, resolveAttachments } from '../projects/attachmentPicker'
 import { listFiles, searchText } from '../projects/projectSearch'
-import { checkModels, pingOpencode } from '../opencode/probe'
-import { fetchCommands } from '../opencode/commandList'
-import { disposeInstance, readOpencodeConfig, writeOpencodeConfig } from '../settings/opencodeConfig'
 import type { SettingsStore } from '../settings/settingsStore'
 import type { AppSettings } from '../../shared/settings/appSettings'
-import type { ServerControlPayload, ServerStatusPayload } from '../../shared/ipc/diagnosticsTypes'
+import type { ServerStatusPayload } from '../../shared/ipc/diagnosticsTypes'
 import type { ProjectRecord } from '../../shared/projects/projectRecord'
 import type { ProjectRegistry } from '../projects/projectRegistry'
 
@@ -149,34 +146,6 @@ export class ProjectBridge {
     ipcMain.handle(Channel.RUNTIME_RESTART, () =>
       this.listener.onRestartRuntime(this.registry.openProjects),
     )
-    ipcMain.handle(Channel.COMMAND_LIST, async () => {
-      // 목록은 **디렉토리마다 다르다** — 활성 프로젝트 경로를 반드시 실어 보낸다
-      // (빼면 서버 cwd 의 목록이 온다. commandList.ts 머리말).
-      const result = await fetchCommands(this.serverUrl(), this.registry.active?.root ?? '')
-      // 못 받아도 빈 목록으로 돌려준다 — 사유만 함께 알린다
-      return {
-        ok: result.error === undefined,
-        commands: result.commands,
-        ...(result.error ? { error: result.error } : {}),
-      }
-    })
-    // opencode 자신의 설정 — 활성 프로젝트의 `opencode.json` 하나만 다룬다.
-    ipcMain.handle(Channel.OPENCODE_CONFIG_READ, () =>
-      readOpencodeConfig(this.registry.active?.root ?? '', this.serverUrl()),
-    )
-    ipcMain.handle(Channel.OPENCODE_CONFIG_WRITE, (_event, payload: { path: string; content: string }) =>
-      writeOpencodeConfig(payload.path, payload.content),
-    )
-    // instance 를 버리면 설정을 다시 읽는다. **버린 자리에는 세션도 MCP 등록도 없다** —
-    // 그래서 곧바로 다시 붙인다 (SESSION_RECONNECT 와 같은 경로).
-    ipcMain.handle(Channel.OPENCODE_CONFIG_RELOAD, async () => {
-      const active = this.registry.active
-      if (!active) return { ok: false, error: '열린 프로젝트가 없습니다' }
-      const result = await disposeInstance(active.root, this.serverUrl())
-      if (!result.ok) return result
-      await this.listener.onReconnect(active)
-      return result
-    })
     ipcMain.handle(Channel.PROJECT_LIST_FILES, () => {
       const root = this.registry.active?.root
       return root ? listFiles(root) : { files: [], dirs: [], truncated: false }
@@ -191,47 +160,18 @@ export class ProjectBridge {
     ipcMain.handle(Channel.ATTACH_RESOLVE, (_event, payload: { paths: string[] }) =>
       resolveAttachments(payload.paths, this.registry.active?.root ?? null),
     )
-    // 화면이 주소를 실어 보내던 자리다. 이제 고칠 주소가 없다 — 서버는 우리가 띄우고,
-    // 진단은 **그 서버**만 본다. (설정 화면에서 주소를 바꿔 저장 전에 확인하던 흐름이
-    // 통째로 없어졌다. `shared/settings/appSettings.ts` 의 `opencodeUrl` 제거 근거와 같다.)
-    ipcMain.handle(Channel.MODEL_CHECK, async () => {
-      const result = await checkModels(this.serverUrl())
-      return { ok: result.ok, message: result.detail }
-    })
-    ipcMain.handle(Channel.SERVER_PING, () => pingOpencode(this.serverUrl()))
-    ipcMain.handle(Channel.SERVER_STATUS, () => this.listener.serverStatus())
-    // 서버 조작. **실패를 삼키지 않는다** — 실행 파일을 못 찾았다는 사유가 여기로 온다.
-    ipcMain.handle(Channel.SERVER_CONTROL, async (_event, payload: ServerControlPayload) => {
-      if (this.registry.active === null) {
-        return { ok: false, error: '열린 프로젝트가 없습니다', status: this.listener.serverStatus() }
-      }
-      try {
-        await this.listener.onServerControl(payload.action)
-        const status = this.listener.serverStatus()
-        // **떠 있어야 성공이다.** 조작이 예외 없이 끝나도 서버가 없으면 실패다
-        // (시작·다시 시작에서 spawn 이 조용히 못 붙는 경우).
-        //
-        // ⚠️ **`status.running` 으로 재지 않는다.** 그것은 "우리 표에 있나" 일 뿐이라
-        // 자식이 SIGKILL 돼도 exit 이 도착하기 전까지 참으로 남는다 — 그때 이 자리는
-        // **아무것도 안 하고 성공을 돌려준다** (실측 2026-08-16, contract-qa).
-        // 물어야 할 것은 하나다: **그 주소가 지금 응답하나.**
-        if (payload.action !== 'stop') {
-          const health = await pingOpencode(this.serverUrl())
-          if (!health.ok) {
-            return { ok: false, error: `서버가 응답하지 않습니다 — ${health.detail}`, status }
-          }
-        }
-        return { ok: true, status }
-      } catch (error) {
-        return {
-          ok: false,
-          error: describeError(error),
-          status: this.listener.serverStatus(),
-        }
-      }
-    })
     // 파일 읽기/쓰기/OS 열기/디렉토리 — 300줄 상한 때문에 등록만 갈라냈다
     registerFsHandlers(this.fs)
+    // 명령 목록·opencode 설정·프로브·서버 조작 — **활성 프로젝트의 서버**에 묻는 여덟 채널.
+    // 이 클래스가 프로젝트 목록을 쥐고 있다는 것 말고는 목록과 상관이 없어 통째로 갈라냈다
+    // (`serverHandlers.ts` 머리말).
+    registerServerHandlers({
+      activeProject: () => this.registry.active,
+      serverUrl: () => this.serverUrl(),
+      onReconnect: (project) => this.listener.onReconnect(project),
+      serverStatus: () => this.listener.serverStatus(),
+      onServerControl: (action) => this.listener.onServerControl(action),
+    })
     // 실행 목록 읽기. **열린 프로젝트만** 안다 — fs 경계와 같은 근거를 쓴다.
     // 목록은 프로젝트 밖(앱 저장소)에 있어 `ProjectFs` 가 못 닿는다 (`runListHandlers.ts`).
     registerRunListHandlers({

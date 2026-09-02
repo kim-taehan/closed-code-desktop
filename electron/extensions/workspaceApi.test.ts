@@ -2,7 +2,7 @@ import { mkdtemp, mkdir, realpath, rm, symlink, writeFile } from 'node:fs/promis
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { ExtensionWorkspace, MAX_LIST_FILES, type ActiveProjectSource } from './workspaceApi'
+import { ExtensionWorkspace, MAX_LIST_FILES, MAX_WALK_DIRS, type ActiveProjectSource } from './workspaceApi'
 
 // 진짜 임시 디렉토리를 쓴다 (registry.test.ts·resolveInside.test.ts 와 같은 관례).
 // 확장이 프로젝트 밖을 못 읽는 것이 이 API 의 존재 이유라, 가짜 fs 로는 그걸 못 잠근다.
@@ -75,14 +75,14 @@ describe('listFiles', () => {
     await write('src/deep/c.ts', '')
     await write('src/d.md', '')
 
-    expect(await workspace().listFiles('**/*.ts')).toEqual(['a.ts', 'src/b.ts', 'src/deep/c.ts'])
+    expect(await workspace().listFiles('**/*.ts')).toEqual({ files: ['a.ts', 'src/b.ts', 'src/deep/c.ts'], truncated: false })
   })
 
   it('`**/` 가 없으면 한 겹만 본다', async () => {
     await write('a.ts', '')
     await write('src/b.ts', '')
 
-    expect(await workspace().listFiles('*.ts')).toEqual(['a.ts'])
+    expect(await workspace().listFiles('*.ts')).toEqual({ files: ['a.ts'], truncated: false })
   })
 
   it('.git·node_modules 를 훑지 않는다 (ProjectFs 의 숨김 목록을 그대로 쓴다)', async () => {
@@ -90,7 +90,7 @@ describe('listFiles', () => {
     await write('node_modules/pkg/index.ts', '')
     await write('.git/hooks/x.ts', '')
 
-    expect(await workspace().listFiles('**/*.ts')).toEqual(['a.ts'])
+    expect(await workspace().listFiles('**/*.ts')).toEqual({ files: ['a.ts'], truncated: false })
   })
 
   it.skipIf(process.platform === 'win32')('밖을 가리키는 심링크를 따라가지 않는다', async () => {
@@ -99,7 +99,7 @@ describe('listFiles', () => {
     await symlink(outside, join(root, 'link'), 'dir')
 
     // 링크는 디렉토리로 보이지만 그 안을 읽으려면 경계를 넘어야 하고, ProjectFs 가 거기서 막는다
-    expect(await workspace().listFiles('**/*.ts')).toEqual(['a.ts'])
+    expect(await workspace().listFiles('**/*.ts')).toEqual({ files: ['a.ts'], truncated: false })
   })
 
   it('모르는 glob 은 던진다', async () => {
@@ -113,6 +113,32 @@ describe('listFiles', () => {
   it('상한이 실제로 걸린다 — 목록 길이가 그대로 RPC 왕복 수다', async () => {
     // 완화 방향 회귀 방지: 상한을 없애거나 늘리면 이 단언이 깨진다
     expect(MAX_LIST_FILES).toBeLessThanOrEqual(5_000)
+  })
+
+  /**
+   * **상한에 걸린 것을 말한다.**
+   *
+   * 예전에는 그냥 멈추고 목록만 돌려줘서, 받는 쪽이 「이 프로젝트에 N개가 있다」와
+   * 「N개에서 끊겼다」를 **구분할 수 없었다.** 실측 사례: 디렉토리 5,895개짜리 Java
+   * 프로젝트에서 3,723개 중 1,671개(55%)만 걸렸는데 확장 화면에는 그것이 전부인 것처럼
+   * 떴다. 절반을 보여주면서 전부라고 주장하는 것이 이 구멍이었다.
+   */
+  it('디렉토리 상한에 걸리면 잘렸다고 말한다', async () => {
+    // 상한보다 한 겹 더 만든다 — 훑기는 루트부터 세므로 이만큼이면 큐가 남는다
+    await Promise.all(
+      Array.from({ length: MAX_WALK_DIRS + 1 }, (_, i) => mkdir(join(root, `d${i}`), { recursive: true })),
+    )
+    await write('a.ts', '')
+
+    const result = await workspace().listFiles('**/*.ts')
+
+    expect(result.truncated, '큐가 남았는데 조용히 끝내면 화면이 절반을 전부라고 말한다').toBe(true)
+  })
+
+  it('다 훑었으면 안 잘렸다고 말한다', async () => {
+    await write('src/a.ts', '')
+
+    expect((await workspace().listFiles('**/*.ts')).truncated).toBe(false)
   })
 })
 

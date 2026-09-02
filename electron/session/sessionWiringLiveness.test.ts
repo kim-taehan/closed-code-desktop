@@ -27,8 +27,7 @@ async function wireAgainstFake(liveness?: LivenessSink) {
   const server = new FakeOpencodeServer()
   const port = await server.start()
   const wired = wireSession({
-    endpoint: { host: '127.0.0.1', port, source: 'test' },
-    config: { workspacePath: '/tmp/project' },
+    config: { workspacePath: '/tmp/project', opencodeUrl: `http://127.0.0.1:${port}` },
     listener: noopListener,
     onHandshakeState: () => {},
     onConnectionState: () => {},

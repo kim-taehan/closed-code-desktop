@@ -12,6 +12,7 @@
     "build": "npm run typecheck && npm run build:renderer && npm run build:electron",
     "start": "npm run build && electron .",
     "opencode:fetch": "node scripts/fetch-opencode.mjs",
+    "grammars:fetch": "node scripts/fetch-grammars.mjs",
     "dist:mac": "node scripts/fetch-opencode.mjs --check mac-arm64 mac-x64 && npm run build && electron-builder --mac",
     "dist:win": "node scripts/fetch-opencode.mjs --check win-x64 && npm run build && electron-builder --win",
     "test": "vitest run",

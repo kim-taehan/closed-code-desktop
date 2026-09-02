@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { commandSlots, viewCommands } from './extensionCommandSlots'
+import { commandSlots, viewCommands, fileCommands } from './extensionCommandSlots'
 
 // 명령을 **자리 셋**으로 나누는 규칙 (기획서 §3).
 //
@@ -92,5 +92,49 @@ describe('뷰에 묶은 준비 행동', () => {
     const typo = [{ id: 'ts.x', title: 'X', placement: 'header' as const, view: 'ts.없는뷰' }]
     expect(viewCommands(typo, 'ts.screens')).toEqual([])
     expect(commandSlots(typo).header).toEqual([])
+  })
+})
+
+describe('파일 트리 우클릭 자리', () => {
+  const entry = (name: string, commands: unknown[]) =>
+    ({ name, displayName: name, version: '1.0.0', dir: `/x/${name}`, enabled: true,
+       contributes: { commands } }) as never
+
+  /**
+   * **확장 하나가 아니라 설치된 전부에서 걷는다.** 이 메뉴는 프로젝트 탭에 살고, 사용자는
+   * 그때 어느 확장 패널도 안 보고 있을 수 있다 — 확장을 먼저 골라야 뜨면 자리의 뜻이 없다.
+   */
+  it('설치된 확장 전부에서 걷는다', () => {
+    const found = fileCommands([
+      entry('code-map', [{ id: 'codeMap.reveal', title: '코드 지도에서 보기', placement: 'file' }]),
+      entry('other', [{ id: 'other.look', title: '살펴보기', placement: 'file' }]),
+    ])
+
+    expect(found.map((one) => one.extension)).toEqual(['code-map', 'other'])
+    expect(found.map((one) => one.command.id)).toEqual(['codeMap.reveal', 'other.look'])
+  })
+
+  it('다른 자리의 명령은 안 걷는다', () => {
+    const found = fileCommands([
+      entry('x', [
+        { id: 'x.a', title: 'A', placement: 'header' },
+        { id: 'x.b', title: 'B', placement: 'menu' },
+        { id: 'x.c', title: 'C' },
+      ]),
+    ])
+
+    expect(found).toEqual([])
+  })
+
+  /** 반대 방향도 잠근다 — file 명령이 아래 바의 큰 버튼이나 `⋯` 로 새면 자리가 둘이 된다 */
+  it('file 명령은 주 행동이나 ⋯ 로 새지 않는다', () => {
+    const slots = commandSlots([
+      { id: 'x.reveal', title: '보기', placement: 'file' },
+      { id: 'x.main', title: '주 행동' },
+    ])
+
+    expect(slots.primary?.id).toBe('x.main')
+    expect(slots.menu).toEqual([])
+    expect(slots.header).toEqual([])
   })
 })

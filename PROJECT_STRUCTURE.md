@@ -78,7 +78,7 @@ davis-code-desktop/
 │
 ├── tests/                # 통합 테스트
 │   ├── smoke/            # 스모크 테스트 (4 개)
-│   └── fake-runtime/     # 가짜 런타임 서버 (테스트 유틸리티)
+│   └── runtime-protocol/ # davis 런타임 프레임 계약의 인메모리 대역 (서버 아님)
 │
 ├── scripts/              # 빌드/개발 스크립트
 │   ├── dev.mjs           # 개발 서버 시작 스크립트

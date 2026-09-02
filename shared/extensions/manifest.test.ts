@@ -278,4 +278,22 @@ describe('description 은 목록 한 줄에 실린다', () => {
       expect(result.manifest.description).toBeUndefined()
     }
   })
+
+  /**
+   * 파일 트리 우클릭 자리. 위 셋과 달리 **확장 패널이 아니라 프로젝트 탭**에 산다 —
+   * 그 확장을 켜 놓지 않아도 뜨는 자리라, 모르는 값으로 떨어지면 메뉴가 조용히 빈다.
+   */
+  it('file 자리를 알아본다', () => {
+    const result = parseManifest({
+      manifestVersion: 2,
+      name: 'x',
+      version: '1.0.0',
+      main: 'main.js',
+      contributes: { commands: [{ id: 'x.reveal', title: '지도에서 보기', placement: 'file' }] },
+    })
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+
+    expect(result.manifest.contributes?.commands?.[0]?.placement).toBe('file')
+  })
 })

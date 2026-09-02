@@ -1,4 +1,4 @@
-import type { ExtensionSkip } from './service'
+import type { ExtensionSkip } from './serviceLoad'
 import type { ExtensionProgressKind, ExtensionProgressLane } from '../../shared/ipc/extensionPayloads'
 
 // `ExtensionService` 가 쓰는 모양 검사·변환만 모았다.

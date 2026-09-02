@@ -34,15 +34,36 @@ async function runOnce(group, command, args, label) {
   if (code !== 0) throw new Error(`${label} 실패 (exit ${code})`)
 }
 
+/**
+ * 우리 vite 가 준비되기 전에 죽으면 그 사실을 던진다.
+ *
+ * ⚠️ **이것만으로는 위 사고를 못 막는다** (2026-08-27 실측). 남의 서버는 첫 폴링에
+ * 곧바로 200 을 주는데 vite 가 포트 충돌로 죽는 데는 1초 넘게 걸려서, 경합은 **언제나
+ * 폴링이 이긴다.** 로그에도 `electron 시작` 이 `Port ... already in use` 보다 먼저 찍혔다.
+ * 그 사고를 막는 것은 `main` 의 선점 검사이고, 이 함수는 **다른 이유로 죽었을 때**
+ * 30초를 기다리지 않게 해 주는 몫이다.
+ */
+function died(child) {
+  return new Promise((_, reject) => {
+    child.once('exit', (code) => {
+      reject(new Error(`vite 가 준비되기 전에 죽었습니다 (exit ${code}) — ${DEV_SERVER_URL} 을 다른 프로세스가 쓰고 있는지 보세요`))
+    })
+  })
+}
+
+/** 그 주소에 지금 누가 답하나. **누구인지는 안 묻는다** — 그래서 아래 선점 검사가 필요하다 */
+async function responds(url) {
+  try {
+    return (await fetch(url)).ok
+  } catch {
+    return false
+  }
+}
+
 async function waitForServer(url, timeoutMs) {
   const deadline = Date.now() + timeoutMs
   while (Date.now() < deadline) {
-    try {
-      const response = await fetch(url)
-      if (response.ok) return
-    } catch {
-      // 아직 안 떴다 — 계속 기다린다
-    }
+    if (await responds(url)) return
     await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS))
   }
   throw new Error(`개발 서버가 ${timeoutMs}ms 안에 뜨지 않았습니다: ${url}`)
@@ -62,9 +83,22 @@ async function main() {
     console.log('[dev] electron 컴파일 중…')
     await runOnce(group, 'npx', ['tsc', '-p', 'tsconfig.electron.json'], 'electron 컴파일')
 
+    // **띄우기 전에 물어본다.** 이미 누가 답하면 그건 우리 vite 가 아니다.
+    //
+    // vite 는 `strictPort` 라 포트를 옮기지 않고 죽는데, 아래 폴링은 "누가 답하나" 만 보므로
+    // **남의 서버를 우리 것으로 읽는다.** 그러면 electron 이 떠서 다른 앱의 렌더러를
+    // 이 앱의 메인 프로세스에 붙인다 — 2026-08-27 에 실제로 그렇게 떴고, 증상이
+    // "우리 앱인데 화면이 남의 것" 이라 원인을 찾기 어려웠다.
+    if (await responds(DEV_SERVER_URL)) {
+      throw new Error(
+        `${DEV_SERVER_URL} 을 이미 다른 프로세스가 쓰고 있습니다. ` +
+          '그 프로세스를 끄고 다시 실행하세요 (vite 는 strictPort 라 포트를 옮기지 않습니다).',
+      )
+    }
+
     console.log('[dev] vite 개발 서버 시작…')
-    group.spawn('npx', ['vite'])
-    await waitForServer(DEV_SERVER_URL, READY_TIMEOUT_MS)
+    const vite = group.spawn('npx', ['vite'])
+    await Promise.race([waitForServer(DEV_SERVER_URL, READY_TIMEOUT_MS), died(vite)])
 
     console.log(`[dev] electron 시작 (${DEV_SERVER_URL})`)
     const electron = group.spawn('npx', ['electron', '.'], {

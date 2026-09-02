@@ -1,28 +1,23 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { FakeRuntimeServer } from '../../tests/fake-runtime/FakeRuntimeServer'
+import { MemoryConnection } from '../../tests/runtime-protocol/MemoryConnection'
+import type { FakeRuntimeOptions } from '../../tests/runtime-protocol/runtimeProtocol'
 import { AuthState } from '../../shared/protocol/kinds'
-import { WsConnection } from '../ws/connection'
 import { Handshake, type HandshakeStage, type HandshakeState } from './handshake'
 
-let server: FakeRuntimeServer | null = null
-let connection: WsConnection | null = null
+let connection: MemoryConnection | null = null
 
-afterEach(async () => {
+afterEach(() => {
   connection?.dispose()
   connection = null
-  await server?.stop()
-  server = null
 })
 
-async function setup(serverOptions?: ConstructorParameters<typeof FakeRuntimeServer>[0]) {
-  server = new FakeRuntimeServer(serverOptions)
-  const port = await server.start()
-  connection = new WsConnection({ url: `ws://127.0.0.1:${port}/ws?csid=c1`, autoReconnect: false })
-  return { server, connection }
+async function setup(serverOptions?: FakeRuntimeOptions) {
+  connection = new MemoryConnection(serverOptions)
+  return { server: connection.runtime, connection }
 }
 
 function makeHandshake(
-  connection: WsConnection,
+  connection: MemoryConnection,
   overrides: Partial<ConstructorParameters<typeof Handshake>[1]> = {},
 ) {
   const states: HandshakeState[] = []

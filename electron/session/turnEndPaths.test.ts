@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Action, Kind } from '../../shared/protocol/kinds'
-import { streamStart, textChunk, turnStart } from '../../tests/fake-runtime/turnScript'
-import { connectAndHandshake, countOf, type SessionFixture } from '../../tests/fake-runtime/chatSessionKit'
+import { streamStart, textChunk, turnStart } from '../../tests/runtime-protocol/turnScript'
+import { connectAndHandshake, countOf, type SessionFixture } from '../../tests/runtime-protocol/chatSessionKit'
 
 // ══════════════════════════════════════════════════════════════
 //  턴 종료 경로 (desktop2 사후 분석 대응)
@@ -162,8 +162,8 @@ describe('턴 도중 소켓이 끊기는 경우', () => {
     await vi.waitFor(() => expect(countOf(fixture!.events, 'turn_started')).toBe(1))
     expect(fixture.chat.isTurnOpen).toBe(true)
 
-    // 서버가 사라진다
-    await fixture.server.stop()
+    // 상대가 사라진다 (예전에는 소켓 서버를 껐다 — 지금은 연결이 끊긴다)
+    fixture.connection.drop()
 
     await vi.waitFor(() => expect(countOf(fixture!.events, 'turn_ended')).toBe(1))
     const ended = fixture.events.find((event) => event.type === 'turn_ended') as {
@@ -178,7 +178,7 @@ describe('턴 도중 소켓이 끊기는 경우', () => {
   it('턴이 없을 때 끊기면 turn_ended 를 만들지 않는다', async () => {
     fixture = await connectAndHandshake({ onChatRequest: () => [] })
 
-    await fixture.server.stop()
+    fixture.connection.drop()
     await new Promise((resolve) => setTimeout(resolve, 100))
 
     expect(countOf(fixture.events, 'turn_ended')).toBe(0)

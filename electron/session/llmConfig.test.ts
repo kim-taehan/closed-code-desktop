@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { connectAndHandshake, type SessionFixture } from '../../tests/fake-runtime/chatSessionKit'
+import { connectAndHandshake, type SessionFixture } from '../../tests/runtime-protocol/chatSessionKit'
 import { LlmConfigController } from './llmConfig'
 import type { LlmModelStatePayload } from '../../shared/protocol/llmConfig'
 
-// llm_config status/models 왕복 (DC-1322 미러). fake-runtime 으로 WS 계약 전체를 재생한다.
+// llm_config status/models 왕복 (DC-1322 미러). runtime-protocol 대역으로 프레임 계약 전체를 재생한다.
 // 핵심: project 는 allowed_models 가 곧 선택지(빈 값 fail-closed), personal 은 models 를
 // ack replyTo 로 짝지어 라이브 조회하며, 실패·무응답은 error 로 표면화된다.
 

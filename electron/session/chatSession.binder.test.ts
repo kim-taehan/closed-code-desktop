@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { textOnlyTurn, turnPausedForApproval } from '../../tests/fake-runtime/turnScript'
-import { connectAndHandshake, countOf, type SessionFixture } from '../../tests/fake-runtime/chatSessionKit'
+import { textOnlyTurn, turnPausedForApproval } from '../../tests/runtime-protocol/turnScript'
+import { connectAndHandshake, countOf, type SessionFixture } from '../../tests/runtime-protocol/chatSessionKit'
 import type { TurnBinder } from './turnBinder'
 
 // 확장이 채팅으로 물은 턴을 되찾는 배선 (설계 2026-08-13).

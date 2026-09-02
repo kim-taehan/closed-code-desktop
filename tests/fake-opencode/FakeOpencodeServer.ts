@@ -13,7 +13,9 @@ import { MIN_OPENCODE_VERSION } from '../../shared/opencode/version'
  */
 const FAKE_OPENCODE_VERSION = MIN_OPENCODE_VERSION
 
-// 가짜 opencode 헤드리스 서버. davis 시절 `tests/fake-runtime` 이 하던 자리를 대신한다.
+// 가짜 opencode 헤드리스 서버. davis 시절 `tests/runtime-protocol`(당시 `fake-runtime`)
+// 안에 있던 진짜 WS 서버 `FakeRuntimeServer` 가 하던 자리를 대신한다 — **서버 노릇은
+// 이제 여기만 한다.** 그쪽에 남은 것은 프레임 계약과 인메모리 대역뿐이라 이름도 그렇게 바뀌었다.
 //
 // 실물의 **계약을 그대로** 흉내내는 것이 목적이다. 실물과 어긋난 가짜는 초록을 주면서
 // 버그를 통과시킨다 (실제로 겪었다 — `{data:...}` 래핑과 `data`/`properties` 필드명).

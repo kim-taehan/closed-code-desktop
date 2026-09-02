@@ -2,16 +2,17 @@ import { describeError } from '../../shared/errors/describeError'
 import { HandlerSet, type Unsubscribe } from '../ws/transport'
 import { ViewEmitters } from './viewEmitters'
 import { ExtensionHost, type ForkFn } from './host'
-import { errorResponse, METHOD_LOAD_EXTENSIONS, NOTICE_READY, okResponse, type RpcRequest } from './rpc'
+import { errorResponse, NOTICE_READY, okResponse, type RpcRequest } from './rpc'
 import { ProjectEnvelope } from './projectEnvelope'
 import { ViewOwnership } from './viewOwnership'
 import { createInvoker, type Invoker } from './serviceInvoke'
-import { toSkips } from './serviceParse'
 import { dispatchExtensionApi, portsOf, type DispatchPorts } from './serviceDispatch'
-import { defaultExtensionsDir, scanExtensions, type ExtensionScan, type SkippedExtension } from './registry'
-import { disabledNames, onlyEnabled, withEnabled, type ListedExtension } from './serviceEnabled'
-import type { ExtensionLoadFailed } from './extensionLoader'
+import { ExtensionLoader, type ExtensionListing } from './serviceLoad'
 import type { ExtensionProgressPayload } from '../../shared/ipc/extensionPayloads'
+
+// 훑기·싣기의 정본은 `serviceLoad.ts` 다. 목록 타입도 그쪽에 산다 —
+// 여기서 다시 내보내는 것은 **바깥이 계속 `service` 를 유일한 표면으로 보게** 하기 위해서다.
+export type { ExtensionListing, ExtensionSkip } from './serviceLoad'
 
 // main 쪽 확장 진입점. 바깥(IPC 배선·메뉴)이 확장에 닿는 유일한 표면이다.
 //
@@ -20,18 +21,6 @@ import type { ExtensionProgressPayload } from '../../shared/ipc/extensionPayload
 //
 // **호스트 수명은 여기서 정책을 갖지 않는다** — 기동·종료·크래시는 ExtensionHost 것이고,
 // 이 클래스는 그 위에 "무엇을 싣고 무엇을 답할지" 만 얹는다 (host.ts 머리말과 같은 경계).
-
-/** 훑기 단계 사유 + 싣기 단계 사유. 사람에게 "왜 안 뜨는지" 를 끝까지 알려주려면 둘 다 필요하다. */
-export interface ExtensionSkip {
-  dir: string
-  reason: SkippedExtension['reason'] | ExtensionLoadFailed['reason']
-  detail?: string
-}
-
-export interface ExtensionListing {
-  extensions: ListedExtension[]
-  skipped: ExtensionSkip[]
-}
 
 /**
  * 확장 API 를 뒤에서 받쳐 주는 배선(`DispatchPorts`)을 그대로 물려받는다 —
@@ -54,15 +43,14 @@ export interface ExtensionServiceOptions extends DispatchPorts {
 
 export class ExtensionService {
   private readonly host: ExtensionHost
-  private readonly extensionsDir: string
   /** 뷰로 올라온 것들(행·화면·트리). 겉봉 규칙이 같아 한곳에 모아 뒀다. */
   private readonly views = new ViewEmitters()
   private readonly logHandlers = new HandlerSet<[string]>()
   /** 결과 행·트리·화면에 붙일 프로젝트 겉봉. 규칙은 `projectEnvelope.ts` 에 있다. */
   private readonly envelope = new ProjectEnvelope()
   private readonly ownership = new ViewOwnership() // redraw 가 남의 프로젝트 화면을 나르지 않게 — 규칙은 viewOwnership.ts
-  private scanning: Promise<ExtensionScan> | null = null
-  private loadFailures: ExtensionSkip[] = []
+  /** 훑기·싣기. **언제 다시 하는지는 여기가 정하고** 어떻게 하는지는 저쪽이 안다 (`serviceLoad.ts`). */
+  private readonly loader: ExtensionLoader
   /** 싣기가 끝났는가. 목록·명령이 이걸 기다린다 — 안 기다리면 기동 직후 호출이 빈손으로 돌아온다. */
   private loaded: Promise<void> | null = null
   private markReady: (() => void) | null = null
@@ -71,7 +59,12 @@ export class ExtensionService {
 
   constructor(private readonly options: ExtensionServiceOptions) {
     this.host = new ExtensionHost({ entryPath: options.entryPath, fork: options.fork })
-    this.extensionsDir = options.extensionsDir ?? defaultExtensionsDir()
+    this.loader = new ExtensionLoader({
+      ...(options.extensionsDir !== undefined ? { extensionsDir: options.extensionsDir } : {}),
+      ...(options.disabledNames !== undefined ? { disabledNames: options.disabledNames } : {}),
+      request: (method, params) => this.host.request(method, params),
+      log: (line) => this.logHandlers.emit(line),
+    })
     this.invoke = createInvoker({
       request: (method, params) => this.host.request(method, params),
       during: (projectId, work) => this.envelope.during(projectId, work),
@@ -82,7 +75,7 @@ export class ExtensionService {
     // 자식이 떴다는 신호를 기다렸다가 싣는다. 그전에 보내면 리스너가 없어 사라진다.
     this.loaded = new Promise<void>((resolve) => {
       this.markReady = resolve
-    }).then(() => this.loadAll())
+    }).then(() => this.loader.loadAll())
 
     this.host.onLog((line) => this.logHandlers.emit(line))
     this.host.onMessage((message) => {
@@ -95,18 +88,10 @@ export class ExtensionService {
     this.host.start()
   }
 
-  /**
-   * 훑기 결과 + 싣기 실패를 합친 목록. 화면·IPC 가 이걸 그대로 쓴다.
-   *
-   * **꺼 둔 확장도 여기 남는다.** 목록에서까지 사라지면 다시 켤 방법이 없다.
-   */
+  /** 훑기 결과 + 싣기 실패를 합친 목록 (`serviceLoad.listing`). 여기 몫은 `settled()` 하나다. */
   async listExtensions(): Promise<ExtensionListing> {
     await this.settled()
-    const scan = await this.scan()
-    return {
-      extensions: withEnabled(scan.extensions, await this.disabled()),
-      skipped: [...scan.skipped, ...this.loadFailures],
-    }
+    return this.loader.listing()
   }
 
   /**
@@ -126,8 +111,10 @@ export class ExtensionService {
   async reload(): Promise<void> {
     // 기동 직후 첫 싣기와 겹치면 두 번 싣게 된다. 앞엣것이 끝난 뒤에 다시 훑는다.
     await this.settled()
-    this.scanning = null
-    this.loaded = this.loadAll()
+    // **훑기만 잊는다.** 싣기 실패 기록은 그대로 둔다 — 자식이 그대로라 그 실패도 그대로다
+    // (자식을 갈아끼우는 `restart` 만 그것까지 지운다).
+    this.loader.forgetScan()
+    this.loaded = this.loader.loadAll()
     await this.loaded
   }
 
@@ -148,12 +135,12 @@ export class ExtensionService {
     // 자식이 뜨기도 전에 싣기를 시작한다.
     await this.host.stop()
 
-    this.scanning = null
-    this.loadFailures = []
+    this.loader.forgetScan()
+    this.loader.forgetFailures()
     this.ownership.clear() // 저장된 화면이 자식과 함께 죽었다 — 옛 주인 기록이 새 redraw 를 막으면 안 된다
     this.loaded = new Promise<void>((resolve) => {
       this.markReady = resolve
-    }).then(() => this.loadAll())
+    }).then(() => this.loader.loadAll())
 
     // `start` 가 아니라 `respawn` 이다 — 유예 시간을 넘겨 kill 로 갔다면 자식 자리가
     // 아직 차 있어 `start()` 는 "이미 실행 중" 으로 던진다 (`host.respawn` 머리말).
@@ -230,47 +217,6 @@ export class ExtensionService {
   /** 싣기가 끝날 때까지 기다린다. start() 전이면 기다릴 것이 없다. */
   private async settled(): Promise<void> {
     if (this.loaded) await this.loaded
-  }
-
-  /** 훑기는 한 번만 한다 — 실린 것은 자식 안에 이미 고정돼 있어 다시 훑으면 목록이 거짓말을 한다. */
-  private scan(): Promise<ExtensionScan> {
-    this.scanning ??= scanExtensions(this.extensionsDir)
-    return this.scanning
-  }
-
-  private disabled(): Promise<ReadonlySet<string>> {
-    return disabledNames(this.options.disabledNames, (message) =>
-      this.logHandlers.emit(`[확장] ${message}`),
-    )
-  }
-
-  private async loadAll(): Promise<void> {
-    const scan = await this.scan()
-    // 훑기 단계 사유를 여기서 **반드시 흘린다.** 안 그러면 사유가 반환값까지만 살고 아무도 안 읽어,
-    // 사용자에게는 "복사했는데 안 뜬다" 로만 끝난다 (`_workspace/46` 결함 #3 = 강제사항 F).
-    // 화면 노출은 다음 단계(IPC)가 하고, 여기서는 앱 로그창까지 보낸다.
-    this.report(scan.skipped.map((skip) => ({ dir: skip.dir, reason: skip.reason })), '건너뜀')
-
-    // ponytail: 꺼도 **이미 실린 코드는 여기서 멈추지 않는다** — 자식의 require 캐시에 남은
-    // 모듈이 걸어 둔 타이머·리스너는 앱을 껐다 켤 때까지 돈다. 확실히 멈추려면 자식을
-    // 다시 띄워야 하는데 그러면 다른 확장이 쥔 상태까지 날아간다 (`reload` 와 같은 판단).
-    const enabled = onlyEnabled(scan.extensions, await this.disabled())
-
-    try {
-      const result = await this.host.request(METHOD_LOAD_EXTENSIONS, { extensions: enabled })
-      this.loadFailures = toSkips(result)
-      this.report(this.loadFailures, '싣기 실패')
-    } catch (error) {
-      // 호스트가 죽었거나 답이 깨졌다. 목록은 훑기 결과만 남고 명령은 전부 거부된다.
-      this.logHandlers.emit(`[확장] 싣기 요청 실패: ${describeError(error)}`)
-    }
-  }
-
-  /** 못 실은 확장을 사유와 함께 로그로 남긴다. 빈 목록이면 아무것도 찍지 않는다. */
-  private report(skips: ExtensionSkip[], label: string): void {
-    for (const skip of skips) {
-      this.logHandlers.emit(`[확장] ${label} ${skip.dir}: ${skip.reason}${skip.detail ? ` — ${skip.detail}` : ''}`)
-    }
   }
 
   /** 자식이 부른 code.* 를 대신 수행하고 반드시 답한다 — 답을 빠뜨리면 확장의 await 가 영원히 걸린다. */

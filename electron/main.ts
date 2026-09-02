@@ -15,6 +15,7 @@ import { captureConsole, logStore } from './logs/logStore'
 import { OpencodeServerPool } from './opencode/serverPool'
 import { ServerPidStore } from './opencode/pidStore'
 import { installQuitGuard } from './app/quitGuard'
+import { disposeWindowScoped } from './app/windowTeardown'
 import { applyDockIcon } from './app/dockIcon'
 import type { ExtensionService } from './extensions/service'
 import { launchExtensionHost } from './extensions/appLaunch'
@@ -259,29 +260,18 @@ void app.whenReady().then(async () => {
 })
 
 app.on('window-all-closed', () => {
-  // 우리가 띄운 서버를 정리하고 나서 종료한다 (`bridge.dispose` 가 풀까지 거둔다).
-  // macOS 는 여기서 앱이 안 죽는다 — 독에서 되살리면 서버도 다시 뜬다.
+  // 거두는 순서와 그 사유는 `app/windowTeardown.ts` 가 정본이다.
+  // 여기 남는 것은 **모듈 변수를 비우는 일**뿐이다 — 저쪽이 대신 못 한다.
   ipcMain.removeAllListeners(Channel.NOTIFY_TASK_DONE)
-  projects?.dispose()
+  disposeWindowScoped({ projects, logs, drawer, git, extensionIpc, bridge, mcp: desktopMcp }, () => {
+    bridge = null
+  })
   projects = null
-  logs?.dispose()
   logs = null
-  // 창이 사라지면 드로어도 없다. 서버 쪽 pty 는 그대로 둔다 — 창을 다시 만들면 되찾는다.
-  void drawer?.dispose()
   drawer = null
   mainWindow = null
-  // MCP 서버는 계속 듣는다 (포트·토큰이 바뀌면 opencode 쪽 등록이 죽는다).
-  // 등록 표시만 비워, 창을 되살렸을 때 다시 등록되게 한다.
-  desktopMcp?.forgetRegistrations()
-  git?.dispose()
   git = null
-  // 창이 다시 만들어지면 register() 가 다시 불린다 — 안 풀면 두 번째 등록에서 던진다
-  extensionIpc?.dispose()
   extensionIpc = null
-  void bridge?.dispose().finally(() => {
-    bridge = null
-    if (process.platform !== 'darwin') app.quit()
-  })
 })
 
 // 앱이 완전히 종료되기 전에 정리한다 (⌘Q 등). **끝날 때까지 붙잡는다** —

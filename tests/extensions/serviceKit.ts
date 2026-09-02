@@ -10,7 +10,7 @@ import { createNotice, NOTICE_READY, parseRpcMessage, type RpcMessage } from '..
 //
 // `service.test.ts` 와 `serviceRowEnvelope.test.ts` 가 함께 쓴다 — 겉봉 시험을 더하면서
 // 300줄 상한에 걸려 갈라냈고, 그때 공용으로 뺐다
-// (`tests/fake-runtime/chatSessionKit.ts` 가 같은 자리에 있는 것과 같은 이유).
+// (`tests/runtime-protocol/chatSessionKit.ts` 가 같은 자리에 있는 것과 같은 이유).
 
 export class NullStream implements HostStream {
   on(_event: 'data', _listener: (chunk: unknown) => void): void {}

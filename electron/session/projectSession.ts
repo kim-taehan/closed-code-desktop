@@ -4,7 +4,6 @@ import type { ChatSendContext } from '../../shared/ipc/chatPayloads'
 import type { SessionStatePayload } from '../../shared/ipc/channels'
 import { normalizeSendContext } from './editorContext'
 import type { SessionConnection } from '../ws/transport'
-import { opencodeEndpoint } from '../opencode/endpoint'
 import type { Heartbeat } from '../ws/heartbeat'
 import type { Handshake } from './handshake'
 import type { ChatSession } from './chatSession'
@@ -37,6 +36,9 @@ export interface ProjectSessionConfig {
    * 기본값(`127.0.0.1:4096`)이 있었다 — 서버가 앱 전체에 하나였을 때다. 지금은
    * **프로젝트마다 하나를 우리가 띄우고**(`opencode/serverPool.ts`) 그 주소를 받아 오므로,
    * 기본값으로 물러나는 것은 곧 남의 프로젝트 서버에 붙는 것이다.
+   *
+   * 이 클래스는 문자열을 **그대로 배선에 넘긴다** — host/port 로 푸는 것은
+   * `sessionWiring` 몫이다 (거기가 구체 전송을 아는 유일한 자리라서).
    */
   opencodeUrl: string
 }
@@ -83,20 +85,22 @@ export class ProjectSession {
    * **사용자가 띄운 한 곳** → **`SessionBridge` 가 이 프로젝트용으로 띄운 서버**
    * (`opencode/serverPool.ts`). 세션은 그 차이를 몰라도 된다 — 못 띄웠으면 여기까지
    * 오지도 않고, 떠 있는데 못 붙으면 connect() 가 거부하며 이유가 그대로 화면에 뜬다.
+   *
+   * **주소를 푸는 것도 여기가 아니다.** URL 모양을 아는 것은 opencode 어댑터의 성질이라
+   * `sessionWiring` 이 풀어서 돌려주고, 이 클래스는 진단용으로 받아 든다.
    */
   async start(): Promise<void> {
-    const endpoint = opencodeEndpoint(this.config.opencodeUrl)
-    this.endpoint = endpoint
+    // 배선이 먼저다 — endpoint 를 배선에게서 받아야 첫 상태에 실을 수 있다.
+    // wireSession 은 구독만 걸 뿐 connect 전에 아무것도 emit 하지 않으므로
+    // (컨트롤러의 start() 는 전부 onMessage 구독뿐이다) 첫 상태 알림 내용은 그대로다.
+    this.wire()
     this.emitState({ stage: 'awaiting_connected' }, 'connecting')
-
-    this.wire(endpoint)
     await this.run()
   }
 
   /** 컨트롤러 생성·구독·시작은 sessionWiring 몫이다 — 여기는 수명 판단만 남긴다 */
-  private wire(endpoint: { host: string; port: number; source: string }): void {
+  private wire(): void {
     const wired = wireSession({
-      endpoint,
       config: this.config,
       listener: this.listener,
       onHandshakeState: (state) => this.emitState(state),
@@ -104,6 +108,7 @@ export class ProjectSession {
       // 확장이 이 프로젝트의 채팅으로 물으면 그 턴을 되찾을 자리 (설계 2026-08-13)
       ...(this.listener.binder ? { binder: this.listener.binder } : {}),
     })
+    this.endpoint = wired.endpoint
     this.connection = wired.connection
     this.heartbeat = wired.heartbeat
     this.handshake = wired.handshake

@@ -52,9 +52,12 @@ export type ExtensionViewKind = 'table' | 'tree' | 'list' | 'html'
  *
  * - `header` — 준비 행동. 헤더 오른쪽에 작게. 프로젝트당 한 번이면 되는 일
  * - `menu`   — 마무리·드문 것. `⋯` 안으로. 늘 보이면 주 행동과 경쟁한다
+ * - `file`   — **파일 트리 우클릭 메뉴.** 대상 파일 경로가 `selection` 으로 함께 간다.
+ *              위 셋과 달리 이 자리는 확장 패널이 아니라 **프로젝트 탭**에 산다 —
+ *              보던 파일에서 확장을 부르는 길이고, 그 확장을 켜 놓지 않아도 뜬다
  * - 없으면   — **주 행동.** 아래 고정 바에 크게. 여럿이면 첫 번째만 크고 나머지는 `⋯` 로
  */
-export type ExtensionCommandPlacement = 'header' | 'menu'
+export type ExtensionCommandPlacement = 'header' | 'menu' | 'file'
 
 export interface ExtensionCommand {
   id: string
@@ -265,7 +268,7 @@ function toCommand(value: unknown): ExtensionCommand | null {
   return {
     id,
     title,
-    ...(placement === 'header' || placement === 'menu' ? { placement } : {}),
+    ...(placement === 'header' || placement === 'menu' || placement === 'file' ? { placement } : {}),
     ...(placement === 'header' && typeof view === 'string' && view !== '' ? { view } : {}),
     ...(inPanelHeader && typeof icon === 'string' && icon !== '' ? { icon: [...icon][0] } : {}),
   }

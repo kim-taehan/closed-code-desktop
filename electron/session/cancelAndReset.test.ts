@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { streamStart, textChunk, turnPausedForQuestion, turnStart } from '../../tests/fake-runtime/turnScript'
-import { connectAndHandshake, countOf, type SessionFixture } from '../../tests/fake-runtime/chatSessionKit'
+import { streamStart, textChunk, turnPausedForQuestion, turnStart } from '../../tests/runtime-protocol/turnScript'
+import { connectAndHandshake, countOf, type SessionFixture } from '../../tests/runtime-protocol/chatSessionKit'
 
 // 취소와 새 대화.
 // 둘 다 없으면 잘못 시작한 응답을 멈출 방법도, 새로 시작할 방법도 없다.

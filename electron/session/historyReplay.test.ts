@@ -9,8 +9,8 @@ import {
   turnStart,
   userQuestionChunk,
   type ServerFrame,
-} from '../../tests/fake-runtime/turnScript'
-import { connectAndHandshake, countOf, textsOf, type SessionFixture } from '../../tests/fake-runtime/chatSessionKit'
+} from '../../tests/runtime-protocol/turnScript'
+import { connectAndHandshake, countOf, textsOf, type SessionFixture } from '../../tests/runtime-protocol/chatSessionKit'
 import { ChatHistoryController } from './chatHistory'
 
 // 이력 재생 중 죽은 인터럽트 억제 (vscode DC-866 미러).

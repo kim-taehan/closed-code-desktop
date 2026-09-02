@@ -12,7 +12,7 @@ import { applyPermissionMode } from './agents'
 import { mcpConfigFrame } from './mcpConfig'
 import { nextSession, reusableSession, type SessionState } from './sessionSwitch'
 import { SseStream } from './sse'
-import { translate, type TranslateContext } from './translate'
+import { isErrorFrame, translate, type TranslateContext } from './translate'
 import { syncWorkspace } from './workspace'
 import type { OpencodeEvent } from './events'
 
@@ -282,12 +282,12 @@ export class OpencodeTransport implements Transport {
     const eventSession = (event.properties as Record<string, unknown> | undefined)?.['sessionID']
     if (typeof eventSession === 'string' && this.sessionId && eventSession !== this.sessionId) return
 
-    // 턴이 없는 동안 도착한 스트림 이벤트는 버린다 (핸드셰이크용 system 프레임만 통과).
+    // 턴이 없는 동안 온 스트림 프레임은 버린다 — system 과 **오류**만 통과시킨다.
     // 없으면 종료 신호가 겹칠 때 stream_end 가 두 번 나가 이미 닫힌 턴을 또 닫는다
-    // (겹치는 것이 실측이라는 근거는 `translate.ts` 의 SESSION_IDLE 분기).
+    // (겹침은 실측 — `translate.ts` 의 SESSION_IDLE 분기. 오류를 빼 두는 이유는 `isErrorFrame`).
     const context: TranslateContext = { streamId: this.streamId ?? 'no-stream', cancelling: this.cancelling }
     for (const frame of translate(event, context)) {
-      if (this.streamId === null && frame['kind'] !== Kind.SYSTEM) continue
+      if (this.streamId === null && frame['kind'] !== Kind.SYSTEM && !isErrorFrame(frame)) continue
       this.emit(frame)
       // 턴이 닫히면 취소 기억도 함께 푼다 — 다음 턴의 진짜 실패를 취소로 오독하지 않도록.
       if (frame['action'] === Action.STREAM_END) {

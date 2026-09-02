@@ -150,7 +150,27 @@ export function createExtensionApi(call: RpcCall, extensionName: string, extensi
   return {
     workspace: {
       getProjectPath: async () => asString(await call(METHOD_GET_PROJECT_PATH), METHOD_GET_PROJECT_PATH),
-      listFiles: async (glob) => asStrings(await call(METHOD_LIST_FILES, { glob }), METHOD_LIST_FILES),
+      /**
+       * **확장에게는 예전과 똑같이 `string[]` 만 준다.** 달라진 것은 잘렸을 때
+       * 진행 줄이 한 줄 나간다는 것뿐이라 확장 코드는 안 고쳐도 된다.
+       *
+       * 알리는 자리가 여기인 이유는 **이름** 때문이다 — 진행 줄에는 낸 확장 이름이
+       * 있어야 하는데(`emitProgress`), 호스트는 `listFiles` 를 누가 불렀는지 모른다.
+       */
+      listFiles: async (glob) => {
+        const answer = await call(METHOD_LIST_FILES, { glob })
+        const listing = (answer ?? {}) as Record<string, unknown>
+        const files = asStrings(listing['files'], METHOD_LIST_FILES)
+        if (listing['truncated'] === true) {
+          // 진행 줄과 같은 길로 나간다. **기다리지 않는다** — 알림이 실패해도 훑기는 끝났다
+          void call(METHOD_PROGRESS, {
+            extension: extensionName,
+            text: `프로젝트가 커서 ${files.length}개까지만 훑었습니다 — 목록이 전부가 아닙니다`,
+            kind: 'note',
+          }).catch(() => {})
+        }
+        return files
+      },
       readFile: async (relativePath) =>
         asString(await call(METHOD_READ_FILE, { path: relativePath }), METHOD_READ_FILE),
       activeFile: async () => asActiveFile(await call(METHOD_ACTIVE_FILE)),

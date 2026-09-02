@@ -1,26 +1,21 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { PermissionMode } from '../../shared/protocol/kinds'
-import { FakeRuntimeServer } from '../../tests/fake-runtime/FakeRuntimeServer'
-import { WsConnection } from '../ws/connection'
+import { MemoryConnection } from '../../tests/runtime-protocol/MemoryConnection'
 import { Handshake } from './handshake'
 import { PermissionModeController } from './permissionMode'
 
 // 권한 모드 전환 (ADR-011 §4).
 
-let server: FakeRuntimeServer | null = null
-let connection: WsConnection | null = null
+let connection: MemoryConnection | null = null
 
-afterEach(async () => {
+afterEach(() => {
   connection?.dispose()
   connection = null
-  await server?.stop()
-  server = null
 })
 
 async function setup() {
-  server = new FakeRuntimeServer()
-  const port = await server.start()
-  connection = new WsConnection({ url: `ws://127.0.0.1:${port}/ws`, autoReconnect: false })
+  connection = new MemoryConnection()
+  const server = connection.runtime
 
   const controller = new PermissionModeController(connection)
   const seen: PermissionMode[] = []
@@ -32,7 +27,7 @@ async function setup() {
   await connection.connect()
   await ready
 
-  return { controller, seen, handshake, server: server!, connection: connection! }
+  return { controller, seen, handshake, server, connection: connection! }
 }
 
 describe('모드 전환', () => {

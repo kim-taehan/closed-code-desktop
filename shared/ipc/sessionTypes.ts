@@ -9,7 +9,8 @@ export type HandshakeStage =
   | 'ready'
   | 'failed'
 
-/** WsConnection 의 상태를 그대로 옮긴 것 */
+/** davis `WsConnection` 의 상태를 그대로 옮긴 것. 그 클래스는 2026-08-26 에 지웠고
+ *  (davis WS 전송이 죽었다) 값 목록은 `OpencodeConnection` 이 그대로 이어받았다. */
 export type ConnectionState = 'idle' | 'connecting' | 'open' | 'reconnecting' | 'closed'
 
 export interface HandshakeFailure {

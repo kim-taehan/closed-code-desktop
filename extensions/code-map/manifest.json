@@ -1,0 +1,40 @@
+{
+  "manifestVersion": 2,
+  "name": "code-map",
+  "displayName": "코드 지도",
+  "version": "0.1.0",
+  "main": "main.js",
+  "description": "프로젝트를 층 단면도로 보고, 파일 하나를 고치면 어디까지 번지는지 봅니다",
+  "engines": {
+    "code": "^0.1.0"
+  },
+  "contributes": {
+    "commands": [
+      {
+        "id": "codeMap.open",
+        "title": "코드 지도 열기"
+      },
+      {
+        "id": "codeMap.build",
+        "title": "지도 만들기",
+        "placement": "header"
+      },
+      {
+        "id": "codeMap.focus",
+        "title": "이 파일로 옮기기"
+      },
+      {
+        "id": "codeMap.reveal",
+        "title": "코드 지도에서 보기",
+        "placement": "file"
+      }
+    ],
+    "views": [
+      {
+        "id": "codeMap.board",
+        "title": "코드 지도",
+        "kind": "html"
+      }
+    ]
+  }
+}

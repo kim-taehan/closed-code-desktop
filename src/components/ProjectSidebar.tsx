@@ -291,7 +291,7 @@ export function ProjectSidebar(props: ProjectSidebarProps) {
       </div>
 
       {/* 메뉴·이름 창은 트리 **바깥 층**에 뜬다 — 트리는 스크롤 칸이라 안에 그리면 잘린다 */}
-      <FileTreeOverlays files={files} />
+      <FileTreeOverlays files={files} extensions={extensions} />
     </aside>
   )
 }

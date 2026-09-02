@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { turnPausedForPlan, turnPausedForQuestion } from '../../tests/fake-runtime/turnScript'
-import { connectAndHandshake, countOf, type SessionFixture } from '../../tests/fake-runtime/chatSessionKit'
+import { turnPausedForPlan, turnPausedForQuestion } from '../../tests/runtime-protocol/turnScript'
+import { connectAndHandshake, countOf, type SessionFixture } from '../../tests/runtime-protocol/chatSessionKit'
 
 // HIL 인터럽트(ask_user 질문 · 계획 승인) 왕복 (DC-644/776).
 //

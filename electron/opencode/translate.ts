@@ -39,6 +39,17 @@ function chunkFrame(data: Record<string, unknown>, streamId: string): Frame {
   return { kind: Kind.CHAT, action: Action.STREAM_CHUNK, data, streamId }
 }
 
+/**
+ * 화면에 남길 **오류** 프레임인가.
+ *
+ * `transport.ts` 는 턴이 없는 동안 온 스트림 프레임을 버리는데, 그때 이것만 통과시킨다 —
+ * 닫을 턴이 없어도 오류는 사용자가 봐야 한다. 모양(`STREAM_CHUNK` 안의 `messageType`)을
+ * 아는 곳이 여기라 판별도 여기 둔다.
+ */
+export function isErrorFrame(frame: Frame): boolean {
+  return (frame['data'] as Record<string, unknown> | undefined)?.['messageType'] === ChunkType.ERROR
+}
+
 function streamEnd(streamId: string, data: Record<string, unknown>): Frame {
   return { kind: Kind.CHAT, action: Action.STREAM_END, data, streamId }
 }

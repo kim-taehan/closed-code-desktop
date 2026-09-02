@@ -7,13 +7,13 @@ import {
   thinkingChunk,
   turnEnd,
   turnStart,
-} from '../../tests/fake-runtime/turnScript'
+} from '../../tests/runtime-protocol/turnScript'
 import {
   connectAndHandshake,
   countOf,
   textsOf,
   type SessionFixture,
-} from '../../tests/fake-runtime/chatSessionKit'
+} from '../../tests/runtime-protocol/chatSessionKit'
 import type { ChatSnapshot } from './chatSession'
 import { setup } from './chunkTestKit'
 

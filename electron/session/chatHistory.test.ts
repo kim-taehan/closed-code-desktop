@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { FakeRuntimeServer } from '../../tests/fake-runtime/FakeRuntimeServer'
-import { textOnlyTurn } from '../../tests/fake-runtime/turnScript'
-import { WsConnection } from '../ws/connection'
+import { MemoryConnection } from '../../tests/runtime-protocol/MemoryConnection'
+import type { FakeRuntimeOptions } from '../../tests/runtime-protocol/runtimeProtocol'
+import { textOnlyTurn } from '../../tests/runtime-protocol/turnScript'
 import { Handshake } from './handshake'
 import { ChatHistoryController } from './chatHistory'
 import type { ChatHistoryState } from './chatHistory'
@@ -9,14 +9,11 @@ import type { ChatHistoryState } from './chatHistory'
 // 채팅 이력.
 // ⚠️ 이 도메인은 snake_case 가 정본이다 — chat 도메인과 반대라 실수하기 쉽다.
 
-let server: FakeRuntimeServer | null = null
-let connection: WsConnection | null = null
+let connection: MemoryConnection | null = null
 
-afterEach(async () => {
+afterEach(() => {
   connection?.dispose()
   connection = null
-  await server?.stop()
-  server = null
 })
 
 const SAMPLE = [
@@ -24,10 +21,9 @@ const SAMPLE = [
   { chat_id: 'c2', title: '둘째 대화', created_at: '2026-07-20T10:00:00Z', message_count: 7 },
 ]
 
-async function setup(options: ConstructorParameters<typeof FakeRuntimeServer>[0] = {}) {
-  server = new FakeRuntimeServer({ history: SAMPLE, ...options })
-  const port = await server.start()
-  connection = new WsConnection({ url: `ws://127.0.0.1:${port}/ws`, autoReconnect: false })
+async function setup(options: FakeRuntimeOptions = {}) {
+  connection = new MemoryConnection({ history: SAMPLE, ...options })
+  const server = connection.runtime
 
   const history = new ChatHistoryController(connection)
   const states: ChatHistoryState[] = []
@@ -39,7 +35,7 @@ async function setup(options: ConstructorParameters<typeof FakeRuntimeServer>[0]
   await connection.connect()
   await ready
 
-  return { history, states, handshake, server: server!, connection: connection! }
+  return { history, states, handshake, server, connection: connection! }
 }
 
 describe('목록 조회', () => {
