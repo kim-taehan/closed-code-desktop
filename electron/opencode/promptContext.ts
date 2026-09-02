@@ -18,8 +18,11 @@
 //   - `dirtyFiles` — davis runtime 은 그 턴 동안 그 파일 쓰기를 **거부**했다. 글로 적어
 //     부탁하는 것과 거부하는 것은 다르므로, 지킬 수 없는 약속을 흉내내지 않는다
 //   - `autoContext` — 최근 저장 파일. runtime 이 넣던 것이고 대체가 필요한지 아직 안 봤다
-//   - `images` — opencode 는 `prompt.files` 에 `data:` URI 로 받는다(저장까지 확인). 다만
-//     지금 모델(glm-5.2)이 비전이 없어 provider 가 HTTP 400 을 준다
+//
+// **이미 옮긴 것:** `images` 는 이 번역(글로)을 거치지 않고 `legacyChat.ts` 의 `sendPrompt` 가
+// `file` part(`data:` URI) 로 직접 실어 `prompt_async` 로 보낸다. 한때 `glm-5.2`(비전 없음)가
+// 400 을 준 것으로 여기 미이치로 적혀 있었는데(2026-08-28 이전), 그 모델은 종료됐고 기본
+// 모델 `gateway-local/qwen3.8-27b` 은 이미지 입력을 받는다( desktop/CLAUDE.md 모델 표).
 
 /** 한 줄이 한 경로다. 공백이 든 경로도 그대로 간다. */
 const OPEN = '<attached_context>'

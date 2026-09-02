@@ -27,15 +27,53 @@ describe('프롬프트', () => {
     ])
   })
 
-  // 세션이 이미 아는 값이라 안 싣는다. 최소 본문으로도 MCP 도구가 실리는 것을 캡처로 확인했고,
-  // model 을 여기 또 실으면 `models.ts` 와 진실의 출처가 둘이 된다.
-  it('model 도 ?directory= 도 안 싣는다', async () => {
-    const { calls, post } = recorder()
-    await sendPrompt(post, 'ses_1', '안녕')
-    expect(calls[0]?.path).not.toContain('directory')
-    expect(calls[0]?.body).not.toHaveProperty('model')
+    // 세션이 이미 아는 값이라 안 싣는다. 최소 본문으로도 MCP 도구가 실리는 것을 캡처로 확인했고,
+    // model 을 여기 또 실으면 `models.ts` 와 진실의 출처가 둘이 된다.
+    it('model 도 ?directory= 도 안 싣는다', async () => {
+      const { calls, post } = recorder()
+      await sendPrompt(post, 'ses_1', '안녕')
+      expect(calls[0]?.path).not.toContain('directory')
+      expect(calls[0]?.body).not.toHaveProperty('model')
+    })
+
+    // 이미지는 텍스트 뒤에 `file` part 로 실린다 — `data:` URI 가 `url` 이다.
+    it('이미지가 있으면 file part 를 text 뒤에 붙인다', async () => {
+      const { calls, post } = recorder()
+      await sendPrompt(post, 'ses_1', '이거 봐', [{ data: 'QUJD', mediaType: 'image/png' }])
+      expect(calls).toEqual([
+        {
+          path: '/session/ses_1/prompt_async',
+          body: {
+            parts: [
+              { type: 'text', text: '이거 봐' },
+              { type: 'file', mime: 'image/png', url: 'data:image/png;base64,QUJD' },
+            ],
+          },
+        },
+      ])
+    })
+
+    it('여러 장이면 순서대로, mediaType 에 맞게 data URI 접두어가 갈린다', async () => {
+      const { calls, post } = recorder()
+      await sendPrompt(post, 'ses_1', '두 장', [
+        { data: 'QUJD', mediaType: 'image/png' },
+        { data: 'REVG', mediaType: 'image/jpeg' },
+      ])
+      const parts = (calls[0]?.body as { parts: Array<Record<string, unknown>> }).parts
+      expect(parts[0]).toEqual({ type: 'text', text: '두 장' })
+      expect(parts[1]).toEqual({ type: 'file', mime: 'image/png', url: 'data:image/png;base64,QUJD' })
+      expect(parts[2]).toEqual({ type: 'file', mime: 'image/jpeg', url: 'data:image/jpeg;base64,REVG' })
+    })
+
+    // 빈 배열·undefined 는 parts 를 text 하나만 만들게 한다 — 안 붙인 것이다.
+    it('이미지가 없으면 text part 하나뿐이다', async () => {
+      const { calls, post } = recorder()
+      await sendPrompt(post, 'ses_1', '안녕', [])
+      expect(calls).toEqual([
+        { path: '/session/ses_1/prompt_async', body: { parts: [{ type: 'text', text: '안녕' }] } },
+      ])
+    })
   })
-})
 
 describe('중단', () => {
   // 레거시 턴에 `/api/…/interrupt` 를 넣으면 204 를 주고 아무 일도 안 일어난다 (실측).

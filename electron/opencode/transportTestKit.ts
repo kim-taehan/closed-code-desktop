@@ -72,3 +72,25 @@ export async function tick(times = 6): Promise<void> {
   for (let i = 0; i < times; i += 1) await Promise.resolve()
   await new Promise((resolve) => setTimeout(resolve, 0))
 }
+
+/** 채팅을 거칠 준비된 세션 — 가짜 서버·transport·누린 프레임을 한 세트로 준다. */
+export async function readySession() {
+  const server = fakeServer()
+  const transport = makeTransport(server)
+  const frames: string[] = []
+  transport.onMessage((raw) => frames.push(raw))
+  transport.open()
+  await tick()
+  server.emit('server.connected')
+  await tick()
+  transport.send(
+    JSON.stringify({
+      kind: 'workspace',
+      action: 'workspace_sync',
+      reqId: 'r',
+      data: { workspace: { workspacePath: '/tmp/proj' } },
+    }),
+  )
+  await tick()
+  return { server, transport, frames }
+}

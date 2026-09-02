@@ -31,7 +31,7 @@ export async function sendChatRequest(
   const query = withPromptContext(typeof data['query'] === 'string' ? data['query'] : '', data)
   const requested = typeof data['model'] === 'string' ? toModelRef(data['model']) : null
   await model.apply(sessionId, requested)
-  await client.prompt(sessionId, query)
+  await client.prompt(sessionId, query, imagesFrom(data))
 }
 
 /**
@@ -48,4 +48,26 @@ export async function sendChatRequest(
  */
 export async function interruptTurn(client: OpencodeClient, sessionId: string): Promise<void> {
   await client.interrupt(sessionId)
+}
+
+/**
+ * `chat_request.data.images` 를 뽑아낸다 (davis 계약 `shared/protocol/chatImage.ts`).
+ *
+ * 망가진 항목은 건너뛴다 — 목록 하나 때문에 질문이 안 나가면 안 된다. 비면 `undefined` 를
+ * 돌려 `sendPrompt` 가 `file` part 를 안 붙이게 한다.
+ */
+function imagesFrom(data: Record<string, unknown>): Array<{ data: string; mediaType: string }> | undefined {
+  const raw = data['images']
+  if (!Array.isArray(raw)) return undefined
+  const images = raw
+    .filter(isImage)
+    .map((image) => ({ data: image.data, mediaType: image.mediaType }))
+  return images.length > 0 ? images : undefined
+}
+
+/** base64 · mediaType 이 비어 있으면 그 항목만 버린다. */
+function isImage(value: unknown): value is { data: string; mediaType: string } {
+  if (value === null || typeof value !== 'object') return false
+  const image = value as { data?: unknown; mediaType?: unknown }
+  return typeof image.data === 'string' && image.data !== '' && typeof image.mediaType === 'string' && image.mediaType !== ''
 }

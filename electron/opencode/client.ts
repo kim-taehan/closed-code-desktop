@@ -239,9 +239,16 @@ export class OpencodeClient {
     await this.post(`/api/session/${sessionId}/model`, { model })
   }
 
-  /** 프롬프트를 보낸다 (레거시 세대 — 실측과 본문 규칙은 `legacyChat.ts`). */
-  async prompt(sessionId: string, text: string): Promise<void> {
-    await sendPrompt((path, body) => this.post(path, body), sessionId, text)
+  /**
+   * 프롬프트를 보낸다 (레거시 세대 — 실측과 본문 규칙은 `legacyChat.ts`).
+   * 이미지는 `file` part 로 실린다 (data: URI) — 안 쓰면 LLM 쪽에 한 바이트도 안 간다.
+   */
+  async prompt(
+    sessionId: string,
+    text: string,
+    images?: Array<{ data: string; mediaType: string }>,
+  ): Promise<void> {
+    await sendPrompt((path, body) => this.post(path, body), sessionId, text, images)
   }
 
   /**

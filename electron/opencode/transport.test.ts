@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { Handshake } from '../session/handshake'
 import { OpencodeTransport } from './transport'
-import { fakeServer, makeTransport, tick } from './transportTestKit'
+import { fakeServer, makeTransport, readySession, tick } from './transportTestKit'
 
 // 이 파일의 목적은 조각 검증이 아니라 **실제 Handshake 가 이 어댑터로 4단계를 통과하는가** 다.
 // 위층을 고치지 않는 것이 부패방지 계층의 계약이므로, 위층 진짜 코드를 그대로 물려 확인한다.
@@ -96,27 +96,6 @@ describe('핸드셰이크 4단계', () => {
 })
 
 describe('채팅', () => {
-  async function readySession() {
-    const server = fakeServer()
-    const transport = makeTransport(server)
-    const frames: string[] = []
-    transport.onMessage((raw) => frames.push(raw))
-    transport.open()
-    await tick()
-    server.emit('server.connected')
-    await tick()
-    transport.send(
-      JSON.stringify({
-        kind: 'workspace',
-        action: 'workspace_sync',
-        reqId: 'r',
-        data: { workspace: { workspacePath: '/tmp/proj' } },
-      }),
-    )
-    await tick()
-    return { server, transport, frames }
-  }
-
   it('chat_request 는 stream_start 를 먼저 내고 prompt 를 쏜다', async () => {
     const { server, transport, frames } = await readySession()
     transport.send(
@@ -134,6 +113,31 @@ describe('채팅', () => {
     const prompt = server.find((call) => call.url.endsWith('/prompt_async'))
     expect(prompt?.url).toBe('http://127.0.0.1:4096/session/ses_fake/prompt_async')
     expect(prompt?.body).toEqual({ parts: [{ type: 'text', text: '안녕' }] })
+    transport.close()
+  })
+
+  // data.images 가 `prompt_async` 본문의 `file` part 로까지 내려오는지를 **전 흐름에서** 본다.
+  // `legacyChat.test.ts` 가 parts 조립만 잴 때, 여기는 봉투 → transport → client 까지
+  // 이미지가 한 바이트도 안 잃고 가는지를 잠근다.
+  it('chat_request 의 images 는 file part 로 prompt_async 본문에 실린다', async () => {
+    const { server, transport } = await readySession()
+    transport.send(
+      JSON.stringify({
+        kind: 'chat',
+        action: 'chat_request',
+        reqId: 'r',
+        data: { query: '이거 봐', images: [{ data: 'QUJD', mediaType: 'image/png' }] },
+      }),
+    )
+    await tick()
+
+    const prompt = server.find((call) => call.url.endsWith('/prompt_async'))
+    expect(prompt?.body).toEqual({
+      parts: [
+        { type: 'text', text: '이거 봐' },
+        { type: 'file', mime: 'image/png', url: 'data:image/png;base64,QUJD' },
+      ],
+    })
     transport.close()
   })
 

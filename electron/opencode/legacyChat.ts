@@ -38,9 +38,26 @@ export type PostJson = (path: string, body: unknown) => Promise<unknown>
  * 본문에 204 를 즉시 준다 (실측 10ms 대 1909ms). 어댑터는 진행을 전부 SSE 로 받으므로
  * 응답 본문에 쓸 것이 없고, 턴 내내 HTTP 요청을 붙들 이유도 없다. 둘 다 `tools` 에
  * MCP 도구를 싣는 것은 같은 캡처에서 확인했다.
+ *
+ * **이미지는 `file` part 로 실는다 (`data:` URI).** 스키마 `FilePartInput` 의 필수 셋은
+ * `type:'file'` · `mime` · `url` 이고, `url` 이 곧 `data:<mime>;base64,…` 이다 — `source` 는
+ * 불필요하다(이것을 `prompt.files` 로 보내면 `provider 가 media type 을 거절한다` 는
+ * `promptContext.ts` 의 실측과 다르지 않다. 같은 `data:` URI 를 `url` 로 주면 통한다).
+ * `promptContext.ts` 의 `glm-5.2`(비전 없음) 주석은 2026-08-28에 그 모델이 종료된 이후
+ * **낡았다** — 기본 모델 `gateway-local/qwen3.8-27b` 은 이미지 입력을 받는다
+ * (`desktop/CLAUDE.md` 모델 표).
  */
-export async function sendPrompt(post: PostJson, sessionId: string, text: string): Promise<void> {
-  await post(`/session/${sessionId}/prompt_async`, { parts: [{ type: 'text', text }] })
+export async function sendPrompt(
+  post: PostJson,
+  sessionId: string,
+  text: string,
+  images?: Array<{ data: string; mediaType: string }>,
+): Promise<void> {
+  const parts: Array<Record<string, unknown>> = [{ type: 'text', text }]
+  for (const image of images ?? []) {
+    parts.push({ type: 'file', mime: image.mediaType, url: `data:${image.mediaType};base64,${image.data}` })
+  }
+  await post(`/session/${sessionId}/prompt_async`, { parts })
 }
 
 /**
