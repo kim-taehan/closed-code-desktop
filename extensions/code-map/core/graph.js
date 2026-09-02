@@ -55,11 +55,15 @@ function resolvePackage(source, declaredIn) {
   return declaredIn.get(last) ?? null
 }
 
+/** 타입이 아니라 **값**을 선언하는 것들. 이름으로 파일을 찾는 표에 넣지 않는다 */
+const VALUE_KINDS = new Set(['function', 'method', 'constructor'])
+
 /**
  * 파일별 추출 결과 → 그래프.
  *
- * @param files `[{ path, symbols, imports }]`
- * @returns `{ nodes: [{path, symbols, lines}], edges: [{from, to}] }` — 간선은 중복 없이
+ * @param files `[{ path, symbols, imports, kin }]`
+ * @returns `{ nodes: [{path, symbols, lines}], edges, kinEdges }` — 둘 다 `[{from, to}]` 이고
+ *          각각 중복이 없다. `edges` 는 수입, `kinEdges` 는 상속·구현이다 (아래 사유 참조)
  */
 function buildGraph(files) {
   const known = new Set(files.map((f) => f.path))
@@ -70,7 +74,9 @@ function buildGraph(files) {
   const declaredIn = new Map()
   for (const file of files) {
     for (const symbol of file.symbols) {
-      if (symbol.kind !== 'function' && symbol.kind !== 'method' && !declaredIn.has(symbol.name)) {
+      // 함수·메서드·**생성자**는 타입이 아니다. 생성자 이름은 클래스와 같아서 넣어도 값이
+      // 같지만, 「타입을 선언한 자리」라는 이 표의 뜻이 흐려진다
+      if (!VALUE_KINDS.has(symbol.kind) && !declaredIn.has(symbol.name)) {
         declaredIn.set(symbol.name, file.path)
       }
     }
@@ -91,8 +97,68 @@ function buildGraph(files) {
     }
   }
 
+  // 상속·구현은 **수입과 다른 선**이다. 같은 배열에 섞으면 화면이 둘을 구분할 수 없고,
+  // 「이 포트의 구현체가 어디 있나」가 다시 안 보이게 된다. 그래서 갈라 둔다.
+  //
+  // 대부분 수입 간선과 겹친다(구현하려면 대개 수입해야 한다). 겹치는 것을 지우지 않는다 —
+  // 같은 두 파일이 **두 가지 이유로** 이어져 있다는 것이 사실이고, 화면은 그것을 말해야 한다.
+  const kinSeen = new Set()
+  const kinEdges = []
+  for (const file of files) {
+    for (const name of file.kin ?? []) {
+      const to = declaredIn.get(name)
+      if (!to || to === file.path) continue
+      const key = `${file.path}\0${to}`
+      if (kinSeen.has(key)) continue
+      kinSeen.add(key)
+      kinEdges.push({ from: file.path, to })
+    }
+  }
+
   const nodes = files.map((f) => ({ path: f.path, symbols: f.symbols, lines: f.lines }))
-  return { nodes, edges }
+  return { nodes, edges, kinEdges }
+}
+
+/**
+ * **이 파일을 고치면 어디까지 번지나.**
+ *
+ * 들어오는 방향으로 끝까지 따라가며 촌수별로 묶는다. 「직접 참조 수」와 다른 값이고,
+ * 순위가 실제로 뒤집힌다 — langrisser 실측에서 `MetricRank` 는 직접 들어옴이 **1개(38위)**
+ * 인데 반경은 10개(10위)다. `Player` 를 거쳐 번지기 때문이고, 정렬로는 나오지 않는다.
+ *
+ * **수입과 상속을 함께 센다.** 인터페이스를 고치면 구현체가 깨지는데, 같은 패키지에 있으면
+ * 수입 문장이 아예 없어서 수입 간선만으로는 그 관계가 안 보인다.
+ *
+ * ⚠️ 이 값은 **닿는 범위**이지 깨지는 범위가 아니다. 파일 단위 간선에서 나온 값이라
+ * 「이 41개가 전부 고장난다」는 뜻이 될 수 없다 — 화면이 그 구분을 흐리면 숫자를 못 믿게 된다.
+ *
+ * @returns `{ rings: [[path...]], total }` — rings[0] 이 1촌. 촌수 안에서는 경로순으로 고정한다
+ */
+function blastRadius(graph, path) {
+  const reverse = new Map()
+  for (const edge of [...graph.edges, ...(graph.kinEdges ?? [])]) {
+    if (!reverse.has(edge.to)) reverse.set(edge.to, [])
+    reverse.get(edge.to).push(edge.from)
+  }
+
+  const seen = new Set([path])
+  const rings = []
+  let frontier = [path]
+  while (frontier.length > 0) {
+    const next = []
+    for (const one of frontier) {
+      for (const from of reverse.get(one) ?? []) {
+        if (seen.has(from)) continue
+        seen.add(from)
+        next.push(from)
+      }
+    }
+    if (next.length === 0) break
+    // 훑는 순서가 화면을 정하지 않게 못 박는다 — 같은 코드면 같은 그림이어야 한다
+    rings.push(next.sort())
+    frontier = next
+  }
+  return { rings, total: seen.size - 1 }
 }
 
 /**
@@ -105,4 +171,4 @@ function neighborhood(graph, path) {
   return { center: path, inbound, outbound }
 }
 
-module.exports = { buildGraph, neighborhood, normalize, resolveRelative, resolvePackage }
+module.exports = { buildGraph, neighborhood, blastRadius, normalize, resolveRelative, resolvePackage }

@@ -102,22 +102,96 @@ describe('코드 지도 확장 — 무수정으로 도는가', () => {
    * 문법 경로가 틀리면 심볼이 0개가 되는데, 그건 예외가 아니라 빈 결과라 단위 시험으로는
    * 안 잡힌다.
    */
-  it('지도를 만들면 심볼과 이웃이 화면에 뜬다', async () => {
+  it('지도를 만들면 단면도와 심볼이 화면에 뜬다', async () => {
     await sampleProject()
     const { service, html } = startService()
 
     await service.runCommand('codeMap.build', 'p1')
     const body = html.get(BOARD) ?? ''
 
-    // 가장 많이 참조되는 파일이 가운데로 온다 — center.ts 를 둘이 수입한다
-    expect(body).toContain('src/center.ts')
-    // 심볼은 누를 수 있어야 한다 (다리 규약)
-    expect(body).toContain('data-open="src/center.ts"')
-    expect(body).toContain('Center')
-    expect(body).toContain('run')
-    // 이웃 — 들어옴(user.ts) · 나감(helper.ts)
-    expect(body).toContain('user.ts')
-    expect(body).toContain('helper.ts')
+    // 모든 파일이 단면도에 셀로 선다 — 누르면 옮겨 갈 수 있어야 한다
+    expect(body).toContain('data-arg="src/center.ts"')
+    expect(body).toContain('data-arg="kt/Domain.kt"')
+    // 층 이름을 못 찾는 픽스처라 폴더 모드다. 그 사실을 화면이 말한다
+    expect(body).toContain('방향은 재지 않습니다')
+  })
+
+  /**
+   * **가장 많이 참조되는 것과 가장 크게 흔드는 것은 다르다.** 이 작은 픽스처에서도 갈린다:
+   * `center.ts` 는 직접 들어옴이 2(user·other)로 1위지만, `helper.ts` 는 1(center)뿐인데
+   * 그 뒤로 user·other 가 더 매달려 반경이 3이다. 처음 여는 자리는 반경 쪽이다.
+   */
+  it('직접 참조 1위가 아니라 반경 1위를 연다', async () => {
+    await sampleProject()
+    const { service, html } = startService()
+
+    await service.runCommand('codeMap.build', 'p1')
+    const body = html.get(BOARD) ?? ''
+
+    expect(body, 'helper.ts 의 심볼이 옆에 떠 있어야 한다').toContain('data-open="src/helper.ts"')
+    expect(body).toContain('1촌 1')
+    expect(body).toContain('2촌 2')
+  })
+
+  /**
+   * ⚠️ **활성 파일은 `{ path, line? }` 객체로 온다** (`extensionLoader.ts` 의 `ActiveFileRef`).
+   * 한동안 문자열로 받고 있었고, 그러면 비교가 언제나 거짓이라 **예외 없이 아무 일도
+   * 안 일어났다.** 화면이 안 바뀌는 것이 유일한 증상이라 눈으로는 못 잡는다.
+   */
+  it('편집기에서 파일을 옮기면 지도가 따라간다', async () => {
+    await sampleProject()
+    const { service, html } = startService()
+
+    await service.runCommand('codeMap.build', 'p1')
+    await service.activeFileChanged({ path: 'kt/Domain.kt', line: 2 }, 'p1')
+
+    expect(html.get(BOARD) ?? '').toContain('data-open="kt/Domain.kt"')
+  })
+
+  /**
+   * 프로젝트 트리 우클릭으로 들어오는 길. **지도가 아직 없을 수 있다** — 사용자는 확장
+   * 패널을 연 적도 없이 파일을 우클릭했다. `focus` 를 그대로 부르면 조건에서 걸려
+   * 아무 일도 안 일어나므로, 없으면 먼저 만든다.
+   */
+  it('지도가 없어도 우클릭 진입은 지도를 만들고 그 파일을 연다', async () => {
+    await sampleProject()
+    const { service, html } = startService()
+
+    // build 를 한 번도 안 불렀다
+    await service.runCommand('codeMap.reveal', 'p1', ['kt/Domain.kt'])
+
+    expect(html.get(BOARD) ?? '').toContain('data-open="kt/Domain.kt"')
+  })
+
+  /**
+   * ⚠️ **부르는 자리가 둘이고 인자 모양이 다르다.** 화면 다리는 문자열 하나를,
+   * 파일 트리 우클릭은 `selection` 배열을 보낸다. 한쪽만 받으면 다른 쪽이 **예외 없이
+   * 조용히** 죽는다.
+   */
+  it('문자열로 와도 배열로 와도 같은 파일을 연다', async () => {
+    await sampleProject()
+    const { service, html } = startService()
+
+    await service.runCommand('codeMap.build', 'p1')
+    await service.runCommand('codeMap.focus', 'p1', 'kt/Domain.kt')
+    const fromString = html.get(BOARD)
+
+    await service.runCommand('codeMap.focus', 'p1', 'src/helper.ts')
+    await service.runCommand('codeMap.focus', 'p1', ['kt/Domain.kt'])
+
+    expect(html.get(BOARD)).toBe(fromString)
+  })
+
+  it('지도에 없는 파일을 열면 화면을 안 바꾼다', async () => {
+    await sampleProject()
+    const { service, html } = startService()
+
+    await service.runCommand('codeMap.build', 'p1')
+    const before = html.get(BOARD)
+
+    await service.activeFileChanged({ path: 'readme.md' }, 'p1')
+
+    expect(html.get(BOARD)).toBe(before)
   })
 
   /** `.tsx` 문법을 안 실으면 이 파일만 조용히 빈 결과가 된다 */
@@ -128,6 +202,7 @@ describe('코드 지도 확장 — 무수정으로 도는가', () => {
     await service.runCommand('codeMap.build', 'p1')
     await service.runCommand('codeMap.focus', 'p1', 'src/View.tsx')
 
+    expect(html.get(BOARD)).toContain('data-open="src/View.tsx"')
     expect(html.get(BOARD)).toContain('View')
   })
 
@@ -140,8 +215,8 @@ describe('코드 지도 확장 — 무수정으로 도는가', () => {
     await service.runCommand('codeMap.focus', 'p1', 'kt/Domain.kt')
     const body = html.get(BOARD) ?? ''
 
-    expect(body).toContain('kt/Domain.kt')
-    expect(body, 'Service.kt 가 Domain 을 수입하므로 들어오는 이웃이다').toContain('Service.kt')
+    expect(body).toContain('data-open="kt/Domain.kt"')
+    expect(body, 'Service.kt 가 Domain 을 수입하므로 1촌이다').toContain('1촌 1')
   })
 
   /**

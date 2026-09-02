@@ -32,12 +32,35 @@ const NAMED = {
     enum_declaration: 'class',
     record_declaration: 'class',
     method_declaration: 'method',
+    // `method_declaration` 과 **다른 노드**다. 이름이 비슷해 한 번 빠뜨렸고, 그러면 생성자만
+    // 조용히 목록에서 사라진다 — 실측으로 langrisser 에서 심볼 7개가 그렇게 없었다.
+    constructor_declaration: 'constructor',
   },
 }
 
+function fieldNode(node, field) {
+  return node.childForFieldName ? node.childForFieldName(field) : null
+}
+
 function fieldText(node, field) {
-  const child = node.childForFieldName ? node.childForFieldName(field) : null
+  const child = fieldNode(node, field)
   return child ? child.text : null
+}
+
+/**
+ * 선언이 **실제로 시작하는 줄**.
+ *
+ * ⚠️ `node.startPosition` 을 쓰면 안 된다 — `class_declaration` 노드는 **애노테이션부터**
+ * 시작한다. langrisser 의 `Player` 는 `@Entity`·`@Table`… 여섯 개가 붙어 있어 노드는 17줄,
+ * 진짜 `class Player` 는 32줄이다. 눌러서 가면 애노테이션 무더기 한가운데로 떨어진다.
+ *
+ * 실측: 심볼 256개 중 **102개(40%)** 가 어긋나 있었고, 클래스·인터페이스만 보면
+ * 46개 중 32개(70%)다. 메서드도 `@Override` 하나에 한 줄씩 밀린다.
+ * 이름 노드가 없으면 노드 시작으로 물러난다 (없는 것보다 낫다).
+ */
+function declarationLine(node) {
+  const name = fieldNode(node, 'name')
+  return (name ?? node).startPosition.row + 1
 }
 
 /**
@@ -53,6 +76,57 @@ function arrowSymbol(node) {
   if (!value || (value.type !== 'arrow_function' && value.type !== 'function_expression')) return null
   const name = fieldText(node, 'name')
   return name ? { name, kind: 'function' } : null
+}
+
+/**
+ * 상속·구현으로 이어지는 **타입 이름들**.
+ *
+ * ⚠️ **네 언어가 전부 다른 모양이다** (실측 2026-08-30). 필드로만 짜면 Java 클래스만
+ * 걸리고 나머지는 조용히 0이 된다:
+ *
+ *   Java 클래스     필드 `superclass`("extends Base") · `interfaces`("implements P, Q")
+ *   Java 인터페이스  자식 `extends_interfaces`("extends Q")   — 필드가 없다
+ *   Kotlin         자식 `delegation_specifiers`("P, Base()")  — 상속·구현을 구분하지 않는다
+ *   TypeScript 클래스    자식 `class_heritage`("extends Base implements P")
+ *   TypeScript 인터페이스 자식 `extends_type_clause`("extends Q")
+ *
+ * 그래서 **자식 노드 타입**으로 찾고, 글자에서 키워드를 걷어낸다. Kotlin 이 둘을 안 가르므로
+ * 우리도 안 가른다 — 「이어져 있다」까지만 말하고 방향은 주장하지 않는다.
+ */
+const KIN_NODES = new Set([
+  'superclass',
+  'super_interfaces',
+  'extends_interfaces',
+  'delegation_specifiers',
+  'class_heritage',
+  'extends_type_clause',
+])
+
+/** 이름으로 쓸 수 있는 것만 남긴다 — 제네릭을 걷어내고 남은 `>` 같은 부스러기를 거른다 */
+const NAME_LIKE = /^[A-Za-z_$][\w$.]*$/
+
+function kinNames(node) {
+  const out = []
+  for (let i = 0; i < node.childCount; i += 1) {
+    const child = node.child(i)
+    if (!KIN_NODES.has(child.type)) continue
+    // ⚠️ **쉼표로만 가르면 안 된다.** TypeScript 의 `class_heritage` 는
+    // `extends Base implements Port, Other` 가 통째로 한 덩어리라 `Base` 와 `Port` 사이에
+    // 쉼표가 없다 — 실측에서 `"Base   Port"` 라는 이름이 나왔다. 공백으로도 가른다.
+    // 제네릭·생성자 인자를 **먼저** 걷어낸다 (`Comparable<Foo, Bar>` 안의 쉼표 때문에).
+    const flat = child.text
+      .replace(/<[^>]*>/g, ' ')
+      .replace(/\([^)]*\)/g, ' ')
+      .replace(/\b(extends|implements)\b/g, ' ')
+      .replace(/:/g, ' ')
+    for (const piece of flat.split(/[,\s]+/)) {
+      if (!NAME_LIKE.test(piece)) continue
+      // `a.b.Port` → `Port`. 그래프가 이름으로 파일을 찾으므로 마지막 마디만 쓴다
+      const name = piece.split('.').pop()
+      if (name) out.push(name)
+    }
+  }
+  return out
 }
 
 /** `import x from './y'` 의 `'./y'`. 따옴표를 벗긴다 */
@@ -80,22 +154,35 @@ function packageImport(node) {
  *
  * @param root tree-sitter 루트 노드
  * @param languageId `languages.js` 의 id
- * @returns `{ symbols: [{name, kind, line}], imports: [{source, line}] }` — line 은 1부터
+ * @returns `{ symbols: [{name, kind, line, params?}], imports: [{source, line}], kin: [이름] }`
+ *          line 은 1부터이고 **선언 이름의 줄**이다 (`declarationLine` 머리말)
  */
 function extract(root, languageId) {
   const ruleset = rulesetOf(languageId)
   const named = NAMED[ruleset] ?? {}
   const symbols = []
   const imports = []
+  /** 이 파일이 상속·구현으로 이어지는 타입 이름들. 중복 없이, 자기 이름은 빼고 */
+  const kin = []
 
   const visit = (node) => {
     const kind = named[node.type]
     if (kind) {
       const name = fieldText(node, 'name')
       // 이름을 못 읽으면 **버린다.** 「(익명)」을 목록에 넣으면 누를 수 없는 줄이 쌓인다
-      if (name) symbols.push({ name, kind, line: node.startPosition.row + 1 })
+      if (name) {
+        const params = fieldText(node, 'parameters')
+        symbols.push({
+          name,
+          kind,
+          line: declarationLine(node),
+          ...(params ? { params: params.replace(/\s+/g, ' ') } : {}),
+        })
+        for (const one of kinNames(node)) if (one !== name && !kin.includes(one)) kin.push(one)
+      }
     } else if (ruleset === 'typescript') {
       const arrow = arrowSymbol(node)
+      // 화살표함수에는 애노테이션이 안 붙으므로 노드 시작이 곧 선언 줄이다
       if (arrow) symbols.push({ ...arrow, line: node.startPosition.row + 1 })
     }
 
@@ -111,7 +198,7 @@ function extract(root, languageId) {
   }
 
   visit(root)
-  return { symbols, imports }
+  return { symbols, imports, kin }
 }
 
 module.exports = { extract, NAMED }

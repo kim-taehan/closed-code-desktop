@@ -5,12 +5,18 @@ import { describe, expect, it } from 'vitest'
 // 확장은 CJS 라 `require` 로 싣는다 (호스트가 `require` 로 싣는 것과 같은 길).
 // `extensions/` 는 CommonJS tsconfig 만 본다 — `import.meta.url` 을 쓰면 TS1343 으로 깨진다
 const require_ = createRequire(__filename)
-const { buildGraph, neighborhood, normalize, resolveRelative, resolvePackage } = require_('./core/graph')
+const { buildGraph, neighborhood, blastRadius, normalize, resolveRelative, resolvePackage } = require_('./core/graph')
 
-const file = (path: string, imports: string[], symbols: { name: string; kind: string }[] = []) => ({
+const file = (
+  path: string,
+  imports: string[],
+  symbols: { name: string; kind: string }[] = [],
+  kin: string[] = [],
+) => ({
   path,
   imports: imports.map((source, i) => ({ source, line: i + 1 })),
   symbols: symbols.map((s, i) => ({ ...s, line: i + 1 })),
+  kin,
   lines: 10,
 })
 
@@ -108,6 +114,84 @@ describe('그래프 조립', () => {
     const files = [file('a/util.kt', [], [{ name: 'run', kind: 'function' }]), file('a/uses.kt', ['x.y.run'])]
 
     expect(buildGraph(files).edges).toEqual([])
+  })
+})
+
+describe('상속·구현 간선', () => {
+  const port = { name: 'PlayerStore', kind: 'interface' }
+
+  it('구현하는 파일에서 선언한 파일로 긋는다', () => {
+    const graph = buildGraph([
+      file('app/PlayerStore.kt', [], [port]),
+      file('adapter/JpaPlayerStore.kt', [], [{ name: 'JpaPlayerStore', kind: 'class' }], ['PlayerStore']),
+    ])
+
+    expect(graph.kinEdges).toEqual([{ from: 'adapter/JpaPlayerStore.kt', to: 'app/PlayerStore.kt' }])
+  })
+
+  /**
+   * **수입 간선과 섞지 않는다.** 같은 두 파일이 수입으로도 상속으로도 이어질 수 있고,
+   * 그 둘은 화면에서 다른 선이다 — 합치면 「이 포트의 구현체가 어디 있나」가 다시 안 보인다.
+   */
+  it('같은 짝이 수입과 상속 양쪽에 있어도 각자 남는다', () => {
+    const graph = buildGraph([
+      file('app/PlayerStore.kt', [], [port]),
+      file('adapter/Jpa.kt', ['x.y.PlayerStore'], [{ name: 'Jpa', kind: 'class' }], ['PlayerStore']),
+    ])
+
+    expect(graph.edges).toEqual([{ from: 'adapter/Jpa.kt', to: 'app/PlayerStore.kt' }])
+    expect(graph.kinEdges).toEqual([{ from: 'adapter/Jpa.kt', to: 'app/PlayerStore.kt' }])
+  })
+
+  it('프로젝트 밖 타입을 상속하면 긋지 않는다', () => {
+    const graph = buildGraph([file('a/X.kt', [], [{ name: 'X', kind: 'class' }], ['RuntimeException'])])
+
+    expect(graph.kinEdges).toEqual([])
+  })
+})
+
+describe('영향 반경', () => {
+  // C ← B ← A. C 를 고치면 B 가 1촌, A 가 2촌이다
+  const chain = () =>
+    buildGraph([
+      file('a/C.ts', []),
+      file('a/B.ts', ['./C']),
+      file('a/A.ts', ['./B']),
+    ])
+
+  it('촌수별로 갈라 끝까지 따라간다', () => {
+    expect(blastRadius(chain(), 'a/C.ts')).toEqual({ rings: [['a/B.ts'], ['a/A.ts']], total: 2 })
+  })
+
+  /** 직접 참조 수와 **다른 값**이다 — 이게 같으면 이 함수를 만든 이유가 없다 */
+  it('직접 들어옴이 하나여도 반경은 더 클 수 있다', () => {
+    const graph = chain()
+    const direct = graph.edges.filter((e: { to: string }) => e.to === 'a/C.ts').length
+
+    expect(direct).toBe(1)
+    expect(blastRadius(graph, 'a/C.ts').total).toBe(2)
+  })
+
+  it('아무도 안 쓰면 반경이 0이다', () => {
+    expect(blastRadius(chain(), 'a/A.ts')).toEqual({ rings: [], total: 0 })
+  })
+
+  // 고리가 있으면 다시 세지 않는다 — 안 그러면 무한히 돈다
+  it('순환이 있어도 같은 파일을 두 번 세지 않는다', () => {
+    const graph = buildGraph([file('a/X.ts', ['./Y']), file('a/Y.ts', ['./X'])])
+
+    expect(blastRadius(graph, 'a/X.ts').total).toBe(1)
+  })
+
+  /** 같은 패키지 안에서는 수입 문장이 없다 — 상속을 안 세면 그 관계가 통째로 빠진다 */
+  it('상속으로만 이어진 것도 반경에 든다', () => {
+    const graph = buildGraph([
+      file('a/Port.kt', [], [{ name: 'Port', kind: 'interface' }]),
+      file('a/Impl.kt', [], [{ name: 'Impl', kind: 'class' }], ['Port']),
+    ])
+
+    expect(graph.edges, '수입은 하나도 없다').toEqual([])
+    expect(blastRadius(graph, 'a/Port.kt').total).toBe(1)
   })
 })
 
