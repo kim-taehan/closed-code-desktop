@@ -6,7 +6,8 @@
 
 import { spawn } from 'node:child_process'
 
-const DEV_SERVER_URL = 'http://localhost:5273'
+const DEV_SERVER_PORT = process.argv[2] ?? '5273'
+const DEV_SERVER_URL = `http://localhost:${DEV_SERVER_PORT}`
 const READY_TIMEOUT_MS = 30_000
 const POLL_INTERVAL_MS = 200
 
@@ -97,7 +98,7 @@ async function main() {
     }
 
     console.log('[dev] vite 개발 서버 시작…')
-    const vite = group.spawn('npx', ['vite'])
+    const vite = group.spawn('npx', ['vite', `--port`, DEV_SERVER_PORT, '--strictPort'])
     await Promise.race([waitForServer(DEV_SERVER_URL, READY_TIMEOUT_MS), died(vite)])
 
     console.log(`[dev] electron 시작 (${DEV_SERVER_URL})`)
