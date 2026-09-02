@@ -14,6 +14,13 @@ import { useDismissOnOutside } from '../state/useDismiss'
 /** 고른 것. 대상 경로는 부르는 쪽이 이미 안다 */
 export type FileTreeMenuPick = 'newFile' | 'newDir' | 'rename' | 'trash'
 
+/** 확장이 이 메뉴에 얹은 항목 하나 (`placement: 'file'`) */
+export interface FileTreeMenuExtra {
+  extension: string
+  id: string
+  title: string
+}
+
 export interface FileTreeMenuProps {
   /** 화면 좌표 (contextmenu 이벤트의 clientX/Y) */
   x: number
@@ -25,6 +32,15 @@ export interface FileTreeMenuProps {
    */
   isDirectory: boolean
   onPick: (pick: FileTreeMenuPick) => void
+  /**
+   * 확장이 얹은 항목들. **맨 위**에 두고 구분선으로 가른다 — 아래 넷은 전부 *파일을 바꾸는*
+   * 일이고 이쪽은 *파일을 이해하는* 일이라, 섞이면 손이 미끄러진다. 되돌릴 수 없는 것
+   * (휴지통)에서 가장 먼 자리이기도 하다.
+   *
+   * 폴더에는 안 뜬다 — 지금 이 자리를 쓰는 명령들이 파일 하나를 겨눈다.
+   */
+  extras?: readonly FileTreeMenuExtra[]
+  onRunExtra?: (extra: FileTreeMenuExtra) => void
   onDismiss: () => void
 }
 
@@ -36,7 +52,7 @@ const ITEMS: { pick: FileTreeMenuPick; label: string; danger?: boolean }[] = [
   { pick: 'trash', label: '휴지통으로', danger: true },
 ]
 
-export function FileTreeMenu({ x, y, isDirectory, onPick, onDismiss }: FileTreeMenuProps) {
+export function FileTreeMenu({ x, y, isDirectory, onPick, extras, onRunExtra, onDismiss }: FileTreeMenuProps) {
   const ref = useRef<HTMLDivElement>(null)
   useDismissOnOutside(ref, onDismiss, true)
 
@@ -51,6 +67,22 @@ export function FileTreeMenu({ x, y, isDirectory, onPick, onDismiss }: FileTreeM
 
   return (
     <div className="tab-menu" role="menu" ref={ref} style={{ left: x, top: y }} aria-label="파일 메뉴">
+      {!isDirectory &&
+        (extras ?? []).map((extra) => (
+          <button
+            key={`${extra.extension}:${extra.id}`}
+            type="button"
+            role="menuitem"
+            className="tab-menu__item"
+            onClick={() => {
+              onRunExtra?.(extra)
+              onDismiss()
+            }}
+          >
+            {extra.title}
+          </button>
+        ))}
+      {!isDirectory && (extras ?? []).length > 0 && <div className="tab-menu__sep" />}
       {ITEMS.map((item) => (
         <button
           key={item.pick}

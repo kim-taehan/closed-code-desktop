@@ -3043,6 +3043,14 @@ body {
   background: var(--dc-surface);
 }
 
+/* 확장이 얹은 항목과 앱의 파일 조작을 가르는 줄 (`FileTreeMenu` 의 `extras`).
+   위는 *파일을 이해하는* 일, 아래는 *파일을 바꾸는* 일이라 섞이면 손이 미끄러진다. */
+.tab-menu__sep {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--dc-border);
+}
+
 /* 되돌리기 어려운 항목 (`FileTreeMenu` 의 「휴지통으로」).
    **글자만 물들인다** — 면까지 채우면 목록에서 그 줄로 눈이 먼저 가는데, 이 메뉴에서
    가장 자주 쓰는 것은 위의 셋이다. 색만으로 가르지 않으려고 자리도 맨 아래에 둔다. */

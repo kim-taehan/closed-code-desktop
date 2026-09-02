@@ -1,4 +1,5 @@
 import type { ExtensionCommand } from '../../shared/extensions/manifest'
+import type { ExtensionEntryPayload } from '../../shared/ipc/extensionPayloads'
 
 // 확장이 선언한 명령을 **자리 셋**으로 나눈다 (기획서 §3).
 //
@@ -37,6 +38,25 @@ export interface CommandSlots {
  */
 export function viewCommands(commands: readonly ExtensionCommand[], viewId: string): ExtensionCommand[] {
   return commands.filter((one) => one.placement === 'header' && one.view === viewId)
+}
+
+/**
+ * 파일 트리 우클릭 메뉴에 낼 것들.
+ *
+ * **`commandSlots` 와 달리 확장 하나가 아니라 설치된 전부에서 걷는다** — 이 메뉴는
+ * 프로젝트 탭에 살고, 사용자는 그때 어느 확장 패널도 안 보고 있을 수 있다. 「보던 파일에서
+ * 확장을 부른다」가 이 자리의 뜻이라, 확장을 먼저 골라야 뜨면 그 뜻이 사라진다.
+ *
+ * 선언 순서를 지킨다 (`menu` 와 같은 규칙).
+ */
+export function fileCommands(
+  extensions: readonly ExtensionEntryPayload[],
+): { extension: string; command: ExtensionCommand }[] {
+  return extensions.flatMap((one) =>
+    (one.contributes?.commands ?? [])
+      .filter((command) => command.placement === 'file')
+      .map((command) => ({ extension: one.name, command })),
+  )
 }
 
 export function commandSlots(commands: readonly ExtensionCommand[]): CommandSlots {
