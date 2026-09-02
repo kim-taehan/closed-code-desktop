@@ -17,7 +17,7 @@ import { useOpencodeCommands } from '../state/useOpencodeCommands'
 import { isRealFilePath } from '../state/editorContext'
 import { useSendQueue } from '../state/useSendQueue'
 import type { OptimisticBusy } from '../state/useOptimisticBusy'
-import { useFileDrop } from '../state/useFileDrop'
+import { useFileTreeDrop } from '../state/useFileTreeDrop'
 import { useModelSelect } from '../state/useModelSelect'
 import { isModelSwitcherEligible } from '../state/modelSelect'
 import { ModelSwitch } from './ModelSwitch'
@@ -73,8 +73,7 @@ export function ChatComposer(props: ChatComposerProps) {
   // (`git:staged:…`)과 확장 화면 탭(`ext:{확장}:{뷰}`)은 가짜 경로라, 그대로 쓰면
   // `<루트>/ext:screen-scenario:…` 같은 없는 파일을 첨부해 보낸다.
   // 실측(2026-08-14): 확장 판을 열어 둔 채로 입력창에 그 줄이 붙어 나갔다.
-  const viewingFile =
-    props.activeTab !== 'chat' && isRealFilePath(props.activeTab) ? props.activeTab : null
+  const viewingFile = props.activeTab !== 'chat' && isRealFilePath(props.activeTab) ? props.activeTab : null
   // 전송 즉시 「응답 중」 으로 바뀐다 — turn_started 를 기다리지 않는다 (useOptimisticBusy).
   const { busy, markSent } = props.optimistic
   // **큐도 이 값을 본다.** `isStreaming` 만 보면 turn_started 가 오기 전에 두 번째 질문이
@@ -89,8 +88,7 @@ export function ChatComposer(props: ChatComposerProps) {
   // 입력창에 밖에서 글을 넣는 통로는 하나로 합친다 — 파일 픽·스킬·대기열 되돌리기가
   // 각자 nonce 를 가지면 "가장 최근 것" 을 못 가려 이전 것에 영영 가린다.
   const [insert, setInsert] = useState({ text: '', nonce: 0, replace: false })
-  const push = (text: string, replace = false) =>
-    setInsert(({ nonce }) => ({ text, nonce: nonce + 1, replace }))
+  const push = (text: string, replace = false) => setInsert(({ nonce }) => ({ text, nonce: nonce + 1, replace }))
 
   // App 이 파일 트리에서 고른 경로를 이 통로로 넘긴다
   useEffect(() => {
@@ -201,13 +199,14 @@ export function ChatComposer(props: ChatComposerProps) {
     props.onSelectTab('chat')
   }
 
-  const drop = useFileDrop(props.attachments.addPaths)
-
+  const treeDrop = useFileTreeDrop((path) => push(path))
   return (
     <div
       className={`composer-bar${props.hidden ? ' composer-bar--hidden' : ''}`}
-      {...drop.handlers}
-      style={drop.over ? { outline: '2px dashed var(--dc-accent)', outlineOffset: -2 } : undefined}
+      onDragOver={treeDrop.handlers.onDragOver}
+      onDragLeave={treeDrop.handlers.onDragLeave}
+      onDrop={treeDrop.handlers.onDrop}
+      style={treeDrop.over ? { outline: '2px dashed var(--dc-accent)', outlineOffset: -2 } : undefined}
     >
       {/* 「중단」 알약이 있던 자리 — 버튼은 전송 버튼(↑→■)으로 옮겨졌고 (Composer.tsx),
           여기 남는 것은 상한을 넘겼을 때의 안내뿐이다. 말없이 되돌리면 사용자는

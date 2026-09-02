@@ -123,4 +123,24 @@ describe('파일 트리', () => {
     expect(directory!.getAttribute('aria-expanded')).toBe('false')
     expect(plain!.getAttribute('aria-expanded')).toBeNull()
   })
+
+  it('파일 행은 draggable 이고, 폴더는 아니다', () => {
+    const api = tree({ children: { '': [dir('src'), file('a.ts')] } })
+    render(<FileTree tree={api} onOpenFile={() => {}} onPickFile={() => {}} />)
+
+    const [directory, plain] = screen.getAllByRole('treeitem')
+    expect(directory!.getAttribute('draggable')).toBe('false')
+    expect(plain!.getAttribute('draggable')).toBe('true')
+  })
+
+  it('파일을 드래그하면 text/plain 에 경로를 넣는다', () => {
+    const api = tree({ children: { '': [file('src/index.ts')] } })
+    render(<FileTree tree={api} onOpenFile={() => {}} onPickFile={() => {}} />)
+
+    const row = screen.getByRole('treeitem')
+    const dataTransfer = { setData: vi.fn(), effectAllowed: '' }
+    fireEvent.dragStart(row, { dataTransfer })
+    expect(dataTransfer.setData).toHaveBeenCalledWith('text/plain', 'src/index.ts')
+    expect(dataTransfer.effectAllowed).toBe('copy')
+  })
 })

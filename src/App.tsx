@@ -36,6 +36,7 @@ import { useOptimisticBusy } from './state/useOptimisticBusy'
 import { useActiveFileNotice } from './state/useActiveFileNotice'
 import { useDesktopMcpOpen } from './state/useDesktopMcpOpen'
 import { useMouseGesture } from './state/useMouseGesture'
+import { useFileDrop } from './state/useFileDrop'
 import { tabNavigation } from './state/tabCycle'
 import { projectNavigation } from './state/projectCycle'
 import { MainView } from './components/MainView'
@@ -96,6 +97,7 @@ export function App() {
 
   // 설정이 비어 있으면 최초 등록 팝업을 연다 — 자동 오픈 게이트는 AppDialogs 가 쥔다
   const attachments = useAttachments()
+  const fileDrop = useFileDrop(attachments.addPaths)
   // 스트리밍으로 내용이 늘면 따라 내려간다 (위로 올려 읽는 중이면 그대로 둔다)
   const scrollRef = useRef<HTMLDivElement>(null)
   useStickToBottom(scrollRef, snapshot.messages)
@@ -203,7 +205,13 @@ export function App() {
       )}
       {activeProject && <SidebarResizer sidebar={sidebar} />}
 
-      <div className="app-main">
+      <div
+        className="app-main"
+        onDragOver={fileDrop.handlers.onDragOver}
+        onDragLeave={fileDrop.handlers.onDragLeave}
+        onDrop={fileDrop.handlers.onDrop}
+        style={fileDrop.over ? { outline: '2px dashed var(--dc-accent)', outlineOffset: -2 } : undefined}
+      >
       {projects.error && (
         <div className="dc-projects__error" role="alert" onClick={projects.dismissError}>
           {projects.error}
@@ -253,7 +261,6 @@ export function App() {
 
       {/* 질문·계획도 승인처럼 큐 — 맨 앞 하나만 내려보내고, 답하면 다음이 나온다 */}
       <InterruptCards approvals={approvals} question={questions[0] ?? null} plan={plans[0] ?? null} resolve={sessions} />
-
       {/* 소스 관리 탭에서는 감춘다 — 언마운트하지 않는다 (쓰던 글이 사라진다, useScmView) */}
       <ChatComposer
         hidden={hidesComposer(openFiles.active)}

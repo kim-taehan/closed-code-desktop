@@ -170,6 +170,12 @@ function Node({
           onContextMenu(entry.path, entry.isDirectory, event.clientX, event.clientY)
         }}
         onClick={() => (entry.isDirectory ? tree.toggle(entry.path) : onOpenFile(entry.path))}
+        draggable={!entry.isDirectory}
+        onDragStart={(event) => {
+          if (entry.isDirectory) return
+          event.dataTransfer.setData('text/plain', entry.path)
+          event.dataTransfer.effectAllowed = 'copy'
+        }}
       >
         {/* 글자(▸)로 그리면 작은 크기에서 점처럼 뭉개진다 — CSS 로 그린다 */}
         <span
