@@ -4211,6 +4211,59 @@ body {
   background: color-mix(in srgb, var(--dc-accent) 28%, transparent);
 }
 
+/* 파일 안에서 찾기 패널 (⌘F, `@codemirror/search`) — 기본 스타일은 밝은 회색 상자라
+   테마와 따로 논다. 앱 토큰으로 다시 입힌다. 패널은 편집기 위(top)에 뜬다. */
+.dc-viewer__editor .cm-panels {
+  background: var(--dc-layer);
+  border: none;
+  color: var(--dc-text);
+}
+
+.dc-viewer__editor .cm-panels.cm-panels-top {
+  border-bottom: 1px solid var(--dc-border);
+}
+
+.dc-viewer__editor .cm-search {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  font: inherit;
+  font-size: 12px;
+}
+
+.dc-viewer__editor .cm-search input,
+.dc-viewer__editor .cm-search button {
+  font: inherit;
+  font-size: 12px;
+  color: var(--dc-text);
+  background: var(--dc-surface);
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius-sm);
+  padding: 3px 7px;
+}
+
+.dc-viewer__editor .cm-search button:hover {
+  border-color: var(--dc-accent);
+}
+
+.dc-viewer__editor .cm-search label {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--dc-text-muted);
+}
+
+/* 찾은 곳 표시 — 지금 자리는 강조색, 나머지는 옅게 (대화 코드 블록의 강조와 같은 계열) */
+.dc-viewer__editor .cm-searchMatch {
+  background: color-mix(in srgb, var(--dc-accent) 22%, transparent);
+}
+
+.dc-viewer__editor .cm-searchMatch.cm-searchMatch-selected {
+  background: color-mix(in srgb, var(--dc-accent) 50%, transparent);
+}
+
 /* 탭의 미저장 표시(●) */
 .main-tab__dirty {
   margin-right: 4px;

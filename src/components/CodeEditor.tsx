@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands'
 import { HighlightStyle, LanguageDescription, syntaxHighlighting } from '@codemirror/language'
 import { languages } from '@codemirror/language-data'
+import { search, searchKeymap } from '@codemirror/search'
 import { Compartment, EditorState, Prec, Transaction } from '@codemirror/state'
 import { EditorView, drawSelection, keymap, lineNumbers } from '@codemirror/view'
 import { tags } from '@lezer/highlight'
@@ -88,7 +89,13 @@ export function CodeEditor({
           history(),
           drawSelection(),
           SHELL_DRAWER_KEYS,
-          keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
+          // 파일 안에서 찾기 — ⌘F 로 패널을 연다 (davis-code-desktop `680678a` 에서 가져왔다).
+          // 창 전역 단축키는 ⌘F 를 **일부러 흘려보낸다** (`useShortcuts.ts` — ⌘⇧F 는 프로젝트 전체 검색).
+          // 패널은 편집기 위에 띄운다: 아래에 두면 입력창과 겹쳐 가려진다.
+          // Esc 로 패널이 닫히는 것은 searchKeymap 이 맡는다 — 전역 Esc(응답 중단)는 패널 입력칸에
+          // 포커스가 있으면 양보한다(`useShortcuts.ts` 의 `borrowed`).
+          search({ top: true }),
+          keymap.of([...searchKeymap, ...defaultKeymap, ...historyKeymap, indentWithTab]),
           syntaxHighlighting(HIGHLIGHT),
           language.current.of([]),
           EditorView.updateListener.of((update) => {
