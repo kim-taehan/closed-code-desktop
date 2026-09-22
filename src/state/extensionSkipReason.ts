@@ -6,7 +6,7 @@
 // 화면이 이 표를 못 찾으면 코드값을 그대로 보여준다 — 감추면 사용자가 고칠 수 없고,
 // main 에 사유가 하나 늘어도 화면이 조용히 틀리지 않는다.
 //
-// 순서는 로더의 판정 순서다: 파일 → JSON → 매니페스트.
+// 순서는 로더의 판정 순서다: 파일 → JSON → 매니페스트 → 호스트 판.
 
 export const SKIP_REASON_LABEL: Record<string, string> = {
   // 파일 단계
@@ -23,4 +23,7 @@ export const SKIP_REASON_LABEL: Record<string, string> = {
   unsafe_name: 'name 에 경로 문자(/ \\ ..)를 쓸 수 없습니다',
   missing_version: 'version 이 없습니다',
   missing_main: 'main 이 없습니다',
+
+  // 호스트 판 단계
+  unsupported_engine: '이 앱이 주는 확장 API 판과 맞지 않습니다 (engines.code)',
 }

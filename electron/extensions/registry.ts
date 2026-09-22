@@ -6,6 +6,7 @@ import {
   type ExtensionManifest,
   type ManifestParseFailure,
 } from '../../shared/extensions/manifest'
+import { satisfiesEngine } from './engineCheck'
 
 // 설치된 확장을 훑어 목록을 만든다.
 //
@@ -16,13 +17,14 @@ import {
 //
 // 훑기 골격은 `electron/runtime/instanceScanner.ts:51-77` 을 그대로 따랐다.
 
-/** 확장 하나를 못 실은 사유. 파일 단계 4개 + 매니페스트 파서가 돌려준 것. */
+/** 확장 하나를 못 실은 사유. 파일 단계 4개 + 매니페스트 파서가 돌려준 것 + 호스트 판 불일치. */
 export type ExtensionSkipReason =
   | 'no_manifest'
   | 'unreadable'
   | 'invalid_json'
   | 'broken_link'
   | ManifestParseFailure
+  | 'unsupported_engine'
 
 export interface LoadedExtension {
   /** 확장 디렉토리의 절대경로. `manifest.main` 을 여기 기준으로 푼다 (P2) */
@@ -133,7 +135,12 @@ async function loadExtension(dir: string): Promise<LoadResult> {
     return { ok: false, reason: 'invalid_json' }
   }
 
-  return parseManifest(data)
+  const parsed = parseManifest(data)
+  // 호스트가 모르는 API 를 부를 확장은 싣지 않는다 — 실리면 실행 중에야 터진다 (`engineCheck.ts`)
+  if (parsed.ok && parsed.manifest.engines !== undefined && !satisfiesEngine(parsed.manifest.engines.code)) {
+    return { ok: false, reason: 'unsupported_engine' }
+  }
+  return parsed
 }
 
 function isNotFound(error: unknown): boolean {

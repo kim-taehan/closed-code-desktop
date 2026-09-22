@@ -155,6 +155,16 @@ describe('건너뛴 것은 사유와 함께 돌려준다', () => {
     expect(scan.skipped).toEqual([{ dir, reason: 'missing_main' }])
   })
 
+  it('이 호스트가 못 채우는 engines 는 unsupported_engine — 실행 중에 터지기 전에 거른다', async () => {
+    const root = await makeExtensionsDir()
+    const dir = await writeExtension(root, 'too-new', { ...VALID, engines: { code: '^9.0.0' } })
+    await writeExtension(root, 'fits', { ...VALID, name: 'fits', engines: { code: '^0.1.0' } })
+
+    const scan = await scanExtensions(root)
+    expect(scan.skipped).toEqual([{ dir, reason: 'unsupported_engine' }])
+    expect(scan.extensions.map((one) => one.manifest.name)).toEqual(['fits'])
+  })
+
   it('읽을 수 없으면 unreadable — 없는 것과 구분한다', async () => {
     // 권한으로 막는 방법이 안 통하는 환경이 둘 있다:
     // root 로 돌리면 권한이 무시되고, Windows 는 chmod 가 사실상 무력하다.
