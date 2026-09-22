@@ -8,6 +8,7 @@ import type { ExtensionAskText } from './serviceDispatch'
 import type { ProjectExtensionsPort } from './projectExtensions'
 import type { UiPorts } from './uiRouter'
 import type { ExtensionAiPort } from './aiDispatch'
+import type { ExtensionSecrets } from './secretStore'
 
 // 확장 호스트를 **띄우는** 자리. `main.ts` 에서 갈라냈다 — `appPorts.ts` 와 같은 이유로,
 // 저쪽은 배선만 하는 자리인데 300줄 상한에 닿았다.
@@ -41,6 +42,8 @@ export interface AppHostDeps {
   ui?: UiPorts
   /** 확장 전용 AI 세션 (`code.ai.run`). 앱 수명 — 서버 풀과 같다 (`opencode/extensionRun.ts`) */
   ai?: ExtensionAiPort
+  /** 확장의 비밀 (`code.secrets`). 앱 수명 — 지우기 정리도 같은 것을 본다 (`secretStore.ts`) */
+  secrets?: ExtensionSecrets
   log: (line: string) => void
 }
 
@@ -67,6 +70,7 @@ export function startExtensionHost(deps: AppHostDeps): {
     projects: deps.projects,
     ...(deps.ui === undefined ? {} : { ui: deps.ui }),
     ...(deps.ai === undefined ? {} : { ai: deps.ai }),
+    ...(deps.secrets === undefined ? {} : { secrets: deps.secrets }),
   })
   service.onLog((line) => deps.log(`[확장 호스트] ${line.trim()}`))
   service.onExit((code) => deps.log(`[확장 호스트] 종료 code=${code}`))

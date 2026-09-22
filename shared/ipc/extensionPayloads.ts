@@ -35,6 +35,11 @@ export interface ExtensionEntryPayload {
    * 여기서 그리므로 납작하게 펼 수가 없다. 나머지 필드는 위처럼 추린다.
    */
   contributes?: ExtensionContributes
+  /**
+   * 뒷단이 `code.http.fetch` 로 닿는 **출처** (매니페스트 3판 `network`). 켜기 스위치 옆에 한 줄로 보인다 —
+   * 켜는 사람이 이 확장이 어디로 나가는지 알고 켠다. 없으면 바깥에 안 닿는 확장이다.
+   */
+  network?: string[]
 }
 
 /**

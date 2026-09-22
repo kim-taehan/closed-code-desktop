@@ -6,6 +6,11 @@ import { parseGlob } from './globFilter'
 // 확장(자식)이 아니라 여기서 파일을 여는 이유가 둘이다:
 // 1. 어떤 프로젝트가 열려 있는지는 main 만 안다. 자식에 사본을 두면 프로젝트를 바꾼 뒤
 //    낡은 루트로 읽는다.
+//
+// **어느 프로젝트를 읽는지는 부르는 쪽이 정한다 (G-1, 2026-09-22).** 예전에는 여기서 화면에 떠 있는
+// 프로젝트(`active`)를 읽었다 — 핸들러가 P 를 위해 도는 중에 사용자가 Q 로 옮기면 `readFile` 이 Q 를
+// 읽었다 (프로젝트 사이 누수). 이제 `serviceDispatch` 가 웹뷰·AI 와 같은 규칙(`resolveProject` →
+// `requireEnabled`)으로 정한 프로젝트 id 를 받아 **열린 프로젝트 중 그것**을 읽는다.
 // 2. `ProjectFs` 머리말이 "프로젝트 파일을 읽는 유일한 통로" 라고 못 박았다.
 //    확장용 읽기 경로를 따로 만들면 경계·크기 상한·바이너리 판정이 두 벌이 된다.
 //
@@ -21,9 +26,11 @@ export const MAX_LIST_FILES = 5_000
 /** 훑을 수 있는 최대 디렉토리 수. 파일이 안 걸려도 걷기 자체가 끝나야 한다. */
 export const MAX_WALK_DIRS = 2_000
 
-/** 열린 프로젝트를 아는 쪽. `ProjectRegistry` 가 이 모양을 만족한다. */
+/**
+ * 열린 프로젝트를 아는 쪽. `ProjectRegistry` 가 이 모양을 만족한다.
+ * `active` 는 더 안 본다 (G-1) — 화면에 무엇이 떠 있는지는 읽을 프로젝트를 정하지 않는다.
+ */
 export interface ActiveProjectSource {
-  readonly active: { id: string; root: string } | null
   readonly openProjects: { id: string; root: string }[]
 }
 
@@ -42,9 +49,9 @@ export class ExtensionWorkspace {
     })
   }
 
-  /** 현재 프로젝트의 절대경로. 열린 것이 없으면 던진다 — 빈 문자열을 주면 확장이 루트로 오해한다. */
-  getProjectPath(): string {
-    return this.requireActive().root
+  /** 그 프로젝트의 절대경로. 열려 있지 않으면 던진다 — 빈 문자열을 주면 확장이 루트로 오해한다. */
+  getProjectPath(projectId: string): string {
+    return this.requireOpen(projectId).root
   }
 
   /**
@@ -58,8 +65,8 @@ export class ExtensionWorkspace {
    * 실측 사례: 디렉토리 5,895개짜리 Java 프로젝트에서 3,723개 중 1,671개(55%)만 걸렸는데
    * 확장 화면에는 그것이 전부인 것처럼 떴다. 조용히 절반만 보여주는 것이 이 구멍이었다.
    */
-  async listFiles(glob: string): Promise<{ files: string[]; truncated: boolean }> {
-    const project = this.requireActive()
+  async listFiles(projectId: string, glob: string): Promise<{ files: string[]; truncated: boolean }> {
+    const project = this.requireOpen(projectId)
     const filter = parseGlob(glob)
 
     const files: string[] = []
@@ -91,16 +98,16 @@ export class ExtensionWorkspace {
   }
 
   /** 파일 하나를 텍스트로. 실패는 **던진다** — 확장 API 는 사유 객체가 아니라 예외로 말한다. */
-  async readFile(relativePath: string): Promise<string> {
-    const project = this.requireActive()
+  async readFile(projectId: string, relativePath: string): Promise<string> {
+    const project = this.requireOpen(projectId)
     const result = await this.fs.readFile(project.id, relativePath)
     if (!result.ok) throw new Error(`파일을 읽을 수 없습니다 (${result.reason}): ${relativePath}`)
     return result.text
   }
 
-  private requireActive(): { id: string; root: string } {
-    const active = this.source()?.active ?? null
-    if (active === null) throw new Error('열린 프로젝트가 없습니다')
-    return active
+  private requireOpen(projectId: string): { id: string; root: string } {
+    const project = this.source()?.openProjects.find((open) => open.id === projectId)
+    if (project === undefined) throw new Error(`열린 프로젝트가 아닙니다: ${projectId}`)
+    return project
   }
 }

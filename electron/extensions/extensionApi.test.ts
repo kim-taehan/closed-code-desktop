@@ -24,10 +24,11 @@ describe('createExtensionApi — 부모에게 넘기는 모양', () => {
     await code.view.setRows('v1', [{ a: 1 }])
 
     expect(call.mock.calls).toEqual([
-      // 인자 없는 호출은 params 자리를 비운다 — rpc.ts 가 undefined 키를 봉투에 넣지 않는다
-      [METHOD_GET_PROJECT_PATH],
-      [METHOD_LIST_FILES, { glob: '**/*.ts' }],
-      [METHOD_READ_FILE, { path: 'src/a.ts' }],
+      // 파일 읽기 셋은 **확장 이름을 싣는다** (G-1) — 부모가 그 프로젝트에서 켜졌는지 판정한다.
+      // 이름은 여기(API 층)가 채운다 — 확장이 실으면 남의 켜짐으로 읽는다 (`storage` 와 같은 규칙)
+      [METHOD_GET_PROJECT_PATH, { extension: '샘플확장' }],
+      [METHOD_LIST_FILES, { extension: '샘플확장', glob: '**/*.ts' }],
+      [METHOD_READ_FILE, { extension: '샘플확장', path: 'src/a.ts' }],
       [METHOD_SET_ROWS, { viewId: 'v1', rows: [{ a: 1 }] }],
     ])
   })

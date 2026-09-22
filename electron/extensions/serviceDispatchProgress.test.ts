@@ -1,5 +1,6 @@
 import { REFUSE_UI } from './uiDispatch'
 import { REFUSE_AI } from './aiDispatch'
+import { REFUSE_SECRETS } from './secretStore'
 import { describe, expect, it } from 'vitest'
 import { createExtensionApi, METHOD_PROGRESS } from './extensionApi'
 import { dispatchExtensionApi, REFUSE_STORAGE, refuseAsk, refuseAskText, refuseExport } from './serviceDispatch'
@@ -29,6 +30,8 @@ function bedFor(projectId: string | null) {
     storage: REFUSE_STORAGE,
     ui: REFUSE_UI,
     ai: REFUSE_AI,
+    secrets: REFUSE_SECRETS,
+    manifestOf: async () => undefined,
     activeFile: () => null,
     projectId: () => projectId,
     allowedIn: async () => undefined,

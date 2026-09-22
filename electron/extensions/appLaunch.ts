@@ -1,4 +1,4 @@
-import { app, utilityProcess } from 'electron'
+import { app, safeStorage, utilityProcess } from 'electron'
 import * as path from 'node:path'
 import { startExtensionHost } from './appHost'
 import type { ExtensionService } from './service'
@@ -11,6 +11,7 @@ import type { UiPorts } from './uiRouter'
 import type { OpencodeServerPool } from '../opencode/serverPool'
 import { ExtensionAiRuns } from '../opencode/extensionRun'
 import { ExtensionSessionStore, useExtensionSessionStore } from '../opencode/extensionSessions'
+import { createSecretStore, useExtensionSecretStore } from './secretStore'
 
 // 확장 호스트 기동. 판단은 전부 `appHost.ts` 에 있고 여기서는 앱 상태만 잇는다.
 // `main.ts` 가 300줄 상한에 닿아 그대로 옮겨 왔다 — **판단은 하나도 오지 않았다.**
@@ -39,6 +40,9 @@ export function launchExtensionHost(deps: ExtensionHostDeps): ExtensionService |
   // 확장 AI 세션 장부. 이력 숨김·지우기 정리도 같은 장부를 본다 — 그래서 앱에 하나를 건다
   const sessions = new ExtensionSessionStore(path.join(app.getPath('userData'), 'extension-ai-sessions.json'))
   useExtensionSessionStore(sessions)
+  // 확장의 비밀. 지우기 정리가 같은 것을 봐야 해서 AI 세션 장부처럼 앱에 하나를 건다
+  const secrets = createSecretStore(path.join(app.getPath('userData'), 'extension-secrets'), safeStorage)
+  useExtensionSecretStore(secrets)
   const started = startExtensionHost({
     userDataDir: app.getPath('userData'),
     entryPath: path.join(__dirname, 'hostEntry.js'),
@@ -69,6 +73,7 @@ export function launchExtensionHost(deps: ExtensionHostDeps): ExtensionService |
       },
       log: (line) => console.log(line),
     }),
+    secrets,
     log: (line) => console.log(line),
   })
   return started.service

@@ -256,6 +256,7 @@ export class ExtensionService {
             portsOf(this.options, {
               ...this.ownership.guard(this.views.bindings(() => this.envelope.current())),
               allowedIn: (projectId) => this.loader.allowedIn(projectId),
+              manifestOf: (extension) => this.loader.manifest(extension),
               // 응답으로 못 보내는 것들의 통로.
               // 자식이 죽었으면 `notify` 가 false 를 돌려주는데, 곁가지라 그냥 흘린다.
               notifyChild: (method, params) => {

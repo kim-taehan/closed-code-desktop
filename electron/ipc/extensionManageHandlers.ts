@@ -1,5 +1,6 @@
 import { uninstallExtension } from '../extensions/uninstall'
 import { forgetExtensionSessions } from '../opencode/extensionSessions'
+import { forgetExtensionSecrets } from '../extensions/secretStore'
 import type { ProjectExtensionsPort } from '../extensions/projectExtensions'
 import type {
   ExtensionSetEnabledPayload,
@@ -61,6 +62,8 @@ export async function uninstallInstalled(
   if (name !== null) await deps.projects.forget(name)
   // 그 확장의 AI 세션 줄도 뺀다 — 다시 깔면 새 세션으로 시작한다. 이력 숨김은 남는다 (`extensionSessions.ts`)
   if (name !== null) forgetExtensionSessions(name)
+  // 그 확장의 비밀도 지운다 — 다시 깐 같은 이름이(남이 올린 것일 수도 있다) 앞 토큰을 읽으면 안 된다 (`secretStore.ts`)
+  if (name !== null) await forgetExtensionSecrets(name)
 
   await reloadHost(deps)
   return { ok: true }

@@ -18,6 +18,7 @@ export interface ManifestLike {
   version: string
   description?: string
   contributes?: ExtensionListPayload['extensions'][number]['contributes']
+  network?: string[]
 }
 
 export interface ServiceListing {
@@ -35,6 +36,8 @@ export function toListPayload(listing: ServiceListing): ExtensionListPayload {
       version: manifest.version,
       ...(manifest.description ? { description: manifest.description } : {}),
       ...(manifest.contributes ? { contributes: manifest.contributes } : {}),
+      // 닿는 출처는 **켜기 전에** 보여야 한다 — 켜고 나서야 알면 이미 믿은 뒤다
+      ...(manifest.network && manifest.network.length > 0 ? { network: manifest.network } : {}),
       dir,
       enabled,
     })),

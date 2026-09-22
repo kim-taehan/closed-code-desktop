@@ -6,7 +6,13 @@
 // 이름 목록은 같은 속도로 자라지 않는다. `extensionApi.ts` 가 그대로 다시 내보내므로
 // 부르는 쪽은 어느 파일에서 오는지 몰라도 된다.
 
-/** 현재 프로젝트의 절대경로. 열린 프로젝트가 없으면 거부된다. */
+/**
+ * 프로젝트의 절대경로. 열린 프로젝트가 없으면 거부된다.
+ *
+ * **셋(`getProjectPath`·`listFiles`·`readFile`) 다 「어느 프로젝트」는 `METHOD_UI_POST` 와 같은 규칙이다** (G-1,
+ * 2026-09-22) — 적은 `projectId` → 겉봉, 둘 다 없으면 거부, 그 프로젝트에서 켜진 확장만. 예전에는 화면에
+ * 떠 있는 프로젝트를 읽어, 핸들러 도중 사용자가 탭을 옮기면 남의 프로젝트 파일을 읽었다.
+ */
 export const METHOD_GET_PROJECT_PATH = 'workspace.getProjectPath'
 /** glob 에 맞는 파일들의 **프로젝트 상대경로**. 지원 문법은 globFilter.ts 머리말 참조. */
 export const METHOD_LIST_FILES = 'workspace.listFiles'
@@ -115,8 +121,29 @@ export const METHOD_UI_ASK_TEXT = 'ui.askText'
  * 대신 채운다 (`createExtensionApi` 의 두 번째 인자). 확장이 이름을 실어 보내면 남의 칸을
  * 읽는 것을 막을 방법이 없다.
  */
+/*
+ * **3판은 프로젝트 규칙이 `METHOD_UI_POST` 와 같다** (G-2, 2026-09-22) — 적은 `projectId` → 겉봉, 둘 다 없으면
+ * 거부. 2판은 예전대로 겉봉 → 활성 프로젝트 → 공용 「프로젝트 없음」 칸이다 (`workspaceDispatch.ts`).
+ */
 export const METHOD_STORAGE_GET = 'storage.get'
 export const METHOD_STORAGE_SET = 'storage.set'
+/**
+ * **확장 뒷단이 호스트를 거쳐 HTTP 를 부른다** (하이닉스 요구사항 확장 §5-1). 부르는 것은 main 이다.
+ *
+ * 매니페스트 3판 `network` 에 적은 **출처**(scheme+host+port 정확히)만 허용한다. 넘겨주기는 행선지도
+ * 목록에 있을 때만 따라가고, 쿠키는 담아 두지 않는다. 응답 10MB · 시간 기본 30초 최대 120초.
+ * 바이트는 양쪽 다 base64 (`bodyBase64`). 프로젝트 규칙·켜짐은 `METHOD_UI_POST` 와 같다.
+ * 규칙의 근거는 `httpFetch.ts` 머리말.
+ */
+export const METHOD_HTTP_FETCH = 'http.fetch'
+/**
+ * **비밀** (토큰 같은 것). OS 보안 저장소(`safeStorage`)로 암호화해 둔다. **확장마다**다 — 프로젝트를 안 본다.
+ * 암호화를 못 쓰는 환경이면 거부된다 (평문으로 떨어지지 않는다). 웹뷰에는 길이 없다 — 뒷단만 부른다.
+ * 확장 이름은 `storage` 와 같이 호스트가 채운다. 근거는 `secretStore.ts` 머리말.
+ */
+export const METHOD_SECRETS_GET = 'secrets.get'
+export const METHOD_SECRETS_SET = 'secrets.set'
+export const METHOD_SECRETS_DELETE = 'secrets.delete'
 /**
  * **웹뷰 앞단에 메시지를 민다** (매니페스트 3판, 확장 재설계 §2-1). 앞단은 `message` 이벤트로 받는다.
  *

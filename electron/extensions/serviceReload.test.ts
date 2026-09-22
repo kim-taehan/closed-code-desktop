@@ -99,7 +99,8 @@ describe('설치 뒤 재훑기', () => {
 
     await service.reload()
 
-    await service.runCommand('todoCollector.scan', null)
+    // 명령은 프로젝트를 걸고 부른다 — 파일 읽기가 겉봉의 프로젝트를 읽는다 (G-1, 앱은 늘 건다)
+    await service.runCommand('todoCollector.scan', 'p1')
     expect(rows.get('todoCollector.results')).toEqual([
       { kind: 'TODO', file: 'a.ts', line: 1, text: '정리하기' },
     ])

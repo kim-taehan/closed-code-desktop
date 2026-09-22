@@ -30,7 +30,6 @@ afterEach(async () => {
 function workspace(active: { id: string; root: string } | null = { id: 'p1', root: '' }): ExtensionWorkspace {
   const project = active === null ? null : { id: active.id, root: active.root === '' ? root : active.root }
   const source: ActiveProjectSource = {
-    active: project,
     openProjects: project === null ? [] : [project],
   }
   return new ExtensionWorkspace(() => source)
@@ -43,28 +42,29 @@ async function write(relativePath: string, text: string): Promise<void> {
 }
 
 describe('getProjectPath', () => {
-  it('활성 프로젝트의 루트를 준다', () => {
-    expect(workspace().getProjectPath()).toBe(root)
+  it('그 프로젝트의 루트를 준다', () => {
+    expect(workspace().getProjectPath('p1')).toBe(root)
   })
 
   it('열린 프로젝트가 없으면 던진다 — 빈 문자열을 주면 확장이 루트로 오해한다', () => {
-    expect(() => workspace(null).getProjectPath()).toThrow(/열린 프로젝트가 없습니다/)
+    expect(() => workspace(null).getProjectPath('p1')).toThrow(/열린 프로젝트가 아닙니다/)
   })
 
-  it('프로젝트를 바꾸면 다음 호출이 바뀐 값을 본다 (조회 함수라 사본이 없다)', () => {
-    let active: { id: string; root: string } | null = { id: 'p1', root }
+  // G-1 (2026-09-22): 예전에는 화면에 떠 있는 프로젝트(`active`)를 읽었다 — 핸들러가 P 를 위해 도는 중에
+  // 사용자가 Q 로 옮기면 Q 를 읽었다. 이제 부르는 쪽이 정한 프로젝트를 읽고, 화면은 보지 않는다.
+  it('부른 프로젝트를 읽는다 — 둘이 열려 있으면 각자의 루트다 (조회 함수라 사본이 없다)', () => {
+    let open = [{ id: 'p1', root }]
     const api = new ExtensionWorkspace(() => ({
-      get active() {
-        return active
-      },
       get openProjects() {
-        return active === null ? [] : [active]
+        return open
       },
     }))
 
-    expect(api.getProjectPath()).toBe(root)
-    active = { id: 'p2', root: outside }
-    expect(api.getProjectPath()).toBe(outside)
+    expect(api.getProjectPath('p1')).toBe(root)
+    expect(() => api.getProjectPath('p2')).toThrow(/열린 프로젝트가 아닙니다/)
+    open = [...open, { id: 'p2', root: outside }]
+    expect(api.getProjectPath('p1')).toBe(root)
+    expect(api.getProjectPath('p2')).toBe(outside)
   })
 })
 
@@ -75,14 +75,14 @@ describe('listFiles', () => {
     await write('src/deep/c.ts', '')
     await write('src/d.md', '')
 
-    expect(await workspace().listFiles('**/*.ts')).toEqual({ files: ['a.ts', 'src/b.ts', 'src/deep/c.ts'], truncated: false })
+    expect(await workspace().listFiles('p1', '**/*.ts')).toEqual({ files: ['a.ts', 'src/b.ts', 'src/deep/c.ts'], truncated: false })
   })
 
   it('`**/` 가 없으면 한 겹만 본다', async () => {
     await write('a.ts', '')
     await write('src/b.ts', '')
 
-    expect(await workspace().listFiles('*.ts')).toEqual({ files: ['a.ts'], truncated: false })
+    expect(await workspace().listFiles('p1', '*.ts')).toEqual({ files: ['a.ts'], truncated: false })
   })
 
   it('.git·node_modules 를 훑지 않는다 (ProjectFs 의 숨김 목록을 그대로 쓴다)', async () => {
@@ -90,7 +90,7 @@ describe('listFiles', () => {
     await write('node_modules/pkg/index.ts', '')
     await write('.git/hooks/x.ts', '')
 
-    expect(await workspace().listFiles('**/*.ts')).toEqual({ files: ['a.ts'], truncated: false })
+    expect(await workspace().listFiles('p1', '**/*.ts')).toEqual({ files: ['a.ts'], truncated: false })
   })
 
   it.skipIf(process.platform === 'win32')('밖을 가리키는 심링크를 따라가지 않는다', async () => {
@@ -99,15 +99,15 @@ describe('listFiles', () => {
     await symlink(outside, join(root, 'link'), 'dir')
 
     // 링크는 디렉토리로 보이지만 그 안을 읽으려면 경계를 넘어야 하고, ProjectFs 가 거기서 막는다
-    expect(await workspace().listFiles('**/*.ts')).toEqual({ files: ['a.ts'], truncated: false })
+    expect(await workspace().listFiles('p1', '**/*.ts')).toEqual({ files: ['a.ts'], truncated: false })
   })
 
   it('모르는 glob 은 던진다', async () => {
-    await expect(workspace().listFiles('src/**/*.ts')).rejects.toThrow(/지원하지 않는 glob/)
+    await expect(workspace().listFiles('p1', 'src/**/*.ts')).rejects.toThrow(/지원하지 않는 glob/)
   })
 
   it('열린 프로젝트가 없으면 던진다', async () => {
-    await expect(workspace(null).listFiles('**/*.ts')).rejects.toThrow(/열린 프로젝트가 없습니다/)
+    await expect(workspace(null).listFiles('p1', '**/*.ts')).rejects.toThrow(/열린 프로젝트가 아닙니다/)
   })
 
   it('상한이 실제로 걸린다 — 목록 길이가 그대로 RPC 왕복 수다', async () => {
@@ -130,7 +130,7 @@ describe('listFiles', () => {
     )
     await write('a.ts', '')
 
-    const result = await workspace().listFiles('**/*.ts')
+    const result = await workspace().listFiles('p1', '**/*.ts')
 
     expect(result.truncated, '큐가 남았는데 조용히 끝내면 화면이 절반을 전부라고 말한다').toBe(true)
   })
@@ -138,7 +138,7 @@ describe('listFiles', () => {
   it('다 훑었으면 안 잘렸다고 말한다', async () => {
     await write('src/a.ts', '')
 
-    expect((await workspace().listFiles('**/*.ts')).truncated).toBe(false)
+    expect((await workspace().listFiles('p1', '**/*.ts')).truncated).toBe(false)
   })
 })
 
@@ -146,7 +146,7 @@ describe('readFile', () => {
   it('내용을 준다', async () => {
     await write('src/a.ts', '// TODO: 정리')
 
-    expect(await workspace().readFile('src/a.ts')).toBe('// TODO: 정리')
+    expect(await workspace().readFile('p1', 'src/a.ts')).toBe('// TODO: 정리')
   })
 
   it.each([
@@ -155,31 +155,31 @@ describe('readFile', () => {
   ])('%s (%s) 는 거부한다', async (relativePath) => {
     await writeFile(join(outside, 'secret.ts'), 'password', 'utf8')
 
-    await expect(workspace().readFile(relativePath)).rejects.toThrow(/not_allowed/)
+    await expect(workspace().readFile('p1', relativePath)).rejects.toThrow(/not_allowed/)
   })
 
   it('절대경로도 거부한다', async () => {
     await writeFile(join(outside, 'secret.ts'), 'password', 'utf8')
 
-    await expect(workspace().readFile(join(outside, 'secret.ts'))).rejects.toThrow(/not_allowed/)
+    await expect(workspace().readFile('p1', join(outside, 'secret.ts'))).rejects.toThrow(/not_allowed/)
   })
 
   it.skipIf(process.platform === 'win32')('심링크로 밖을 가리켜도 거부한다', async () => {
     await writeFile(join(outside, 'secret.ts'), 'password', 'utf8')
     await symlink(join(outside, 'secret.ts'), join(root, 'link.ts'), 'file')
 
-    await expect(workspace().readFile('link.ts')).rejects.toThrow(/not_allowed/)
+    await expect(workspace().readFile('p1', 'link.ts')).rejects.toThrow(/not_allowed/)
   })
 
   it('없는 파일도 던진다 — 확장이 건너뛸 수 있어야 한다', async () => {
     // 사유가 not_allowed 다. resolveInside 의 null 이 "밖" 과 "없음" 을 합치기 때문이고
     // (`_workspace/45` §QA-3), ProjectFs 가 예전부터 그렇게 읽는다. 확장 API 도 같은 값을 그대로 전한다.
-    await expect(workspace().readFile('없다.ts')).rejects.toThrow(/not_allowed/)
+    await expect(workspace().readFile('p1', '없다.ts')).rejects.toThrow(/not_allowed/)
   })
 
   it('바이너리는 거부한다', async () => {
     await writeFile(join(root, 'bin.ts'), Buffer.from([0x00, 0x01, 0x02]))
 
-    await expect(workspace().readFile('bin.ts')).rejects.toThrow(/binary/)
+    await expect(workspace().readFile('p1', 'bin.ts')).rejects.toThrow(/binary/)
   })
 })

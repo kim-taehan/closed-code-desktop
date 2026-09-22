@@ -44,12 +44,16 @@ function startService(): {
 } {
   const rows = new Map<string, unknown[]>()
   const envelopes = new Map<string, string | null>()
-  const project = { id: 'p1', root: projectRoot }
+  // 둘 다 같은 폴더다 — 겉봉 시험이 다른 id(`프로젝트-1`)로 명령을 걸어도 그 프로젝트를 읽을 수 있게 둘을 연다
+  const opened = [
+    { id: 'p1', root: projectRoot },
+    { id: '프로젝트-1', root: projectRoot },
+  ]
   const service = new ExtensionService({
     entryPath: 'ignored',
     fork: () => new LiveChild(),
     extensionsDir: FIXTURES,
-    workspace: new ExtensionWorkspace(() => ({ active: project, openProjects: [project] })),
+    workspace: new ExtensionWorkspace(() => ({ openProjects: opened })),
   })
   service.onViewRows((viewId, viewRows, projectId) => {
     rows.set(viewId, viewRows)
@@ -75,7 +79,8 @@ describe('TODO 수집기 확장 — 무수정으로 도는가', () => {
     await write('src/b.py', '# FIXME: 여기 깨짐\n')
     const { service, rows } = startService()
 
-    await service.runCommand('todoCollector.scan', null)
+    // 명령은 프로젝트를 걸고 부른다 — 파일 읽기가 겉봉의 프로젝트를 읽는다 (G-1, 앱은 늘 건다)
+    await service.runCommand('todoCollector.scan', 'p1')
 
     expect(rows.get('todoCollector.results')).toEqual([
       // FIXME 가 TODO 보다 먼저다 — 확장이 급한 순으로 정렬한다
@@ -105,7 +110,8 @@ describe('TODO 수집기 확장 — 무수정으로 도는가', () => {
     await write('node_modules/pkg/index.ts', '// TODO: 안 걸린다\n')
     const { service, rows } = startService()
 
-    await service.runCommand('todoCollector.scan', null)
+    // 명령은 프로젝트를 걸고 부른다 — 파일 읽기가 겉봉의 프로젝트를 읽는다 (G-1, 앱은 늘 건다)
+    await service.runCommand('todoCollector.scan', 'p1')
 
     expect(rows.get('todoCollector.results')).toEqual([
       { kind: 'TODO', file: 'a.ts', line: 1, text: '걸린다' },
@@ -117,7 +123,8 @@ describe('TODO 수집기 확장 — 무수정으로 도는가', () => {
     await write('a.ts', 'const x = 1\n')
     const { service, rows } = startService()
 
-    await service.runCommand('todoCollector.scan', null)
+    // 명령은 프로젝트를 걸고 부른다 — 파일 읽기가 겉봉의 프로젝트를 읽는다 (G-1, 앱은 늘 건다)
+    await service.runCommand('todoCollector.scan', 'p1')
 
     expect(rows.get('todoCollector.results')).toEqual([])
     service.dispose()
@@ -139,7 +146,7 @@ describe('TODO 수집기 확장 — 무수정으로 도는가', () => {
     })
     service.start()
 
-    await expect(service.runCommand('todoCollector.scan', null)).rejects.toThrow(/열린 프로젝트가 없습니다/)
+    await expect(service.runCommand('todoCollector.scan', 'p1')).rejects.toThrow(/열린 프로젝트가 아닙니다/)
     service.dispose()
   })
 })

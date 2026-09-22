@@ -7,6 +7,7 @@ import { createProjectExtensions } from '../extensions/projectExtensions'
 import { ProjectRegistry } from '../projects/projectRegistry'
 import { ProjectStore } from '../projects/projectStore'
 import { ExtensionSessionStore, isExtensionSession, useExtensionSessionStore } from '../opencode/extensionSessions'
+import { createSecretStore, useExtensionSecretStore } from '../extensions/secretStore'
 
 // 켜고 끄기·지우기 핸들러. 켜기는 **프로젝트마다**, 지우기는 **앱 전체**다 (확장 재설계 §3).
 // 레지스트리는 진짜를 쓴다 — 무엇이 `projects.json` 에 남는지가 이 핸들러의 결과다.
@@ -22,6 +23,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   useExtensionSessionStore(null)
+  useExtensionSecretStore(null)
   await rm(workDir, { recursive: true, force: true })
 })
 
@@ -104,5 +106,26 @@ describe('지우기 — AI 세션 장부', () => {
     expect(sessions.get('todo', 'p1'), '다시 깔면 새 세션으로 시작해야 한다').toBeUndefined()
     expect(sessions.get('code-map', 'p1')).toBe('ses_map')
     expect(isExtensionSession('ses_todo'), '지운 확장의 세션이 사용자 이력에 튀어나온다').toBe(true)
+  })
+})
+
+describe('지우기 — 비밀', () => {
+  // 다시 깐 같은 이름(남이 올린 것일 수도 있다)이 앞 토큰을 읽으면 안 된다 (`secretStore.ts`)
+  it('지운 확장의 비밀을 지우고 남의 확장 비밀은 그대로 둔다', async () => {
+    const manage = deps(await oldProjects())
+    const xor = (bytes: Buffer) => Buffer.from([...bytes].map((byte) => byte ^ 0x5a))
+    const secrets = createSecretStore(join(workDir, 'extension-secrets'), {
+      isEncryptionAvailable: () => true,
+      encryptString: (plain) => xor(Buffer.from(plain)),
+      decryptString: (encrypted) => xor(encrypted).toString(),
+    })
+    useExtensionSecretStore(secrets)
+    await secrets.set('todo', 'token', 'todo-secret')
+    await secrets.set('code-map', 'token', 'map-secret')
+
+    await uninstallInstalled(manage, { dir: join(extensionsDir, 'todo') })
+
+    expect(await secrets.get('todo', 'token')).toBeUndefined()
+    expect(await secrets.get('code-map', 'token')).toBe('map-secret')
   })
 })

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { toTreeNodes } from './extensionListPayload'
+import { toListPayload, toTreeNodes } from './extensionListPayload'
 
 // 확장이 올린 트리 마디를 화면이 받을 모양으로 좁히는 자리.
 //
@@ -58,5 +58,21 @@ describe('접히지 않는 구획 (section)', () => {
         children: [{ id: 'a', label: 'A', detail: 'x.html' }],
       },
     ])
+  })
+})
+
+describe('닿는 출처 (network)', () => {
+  // 설정의 확장 목록이 켜기 스위치 옆에 그린다 (`ExtensionInstalledRow`) — 켜기 전에 보여야 한다
+  it('매니페스트의 network 를 싣고, 없거나 비면 칸을 두지 않는다', () => {
+    const listed = toListPayload({
+      extensions: [
+        { dir: '/a', enabled: false, manifest: { name: 'a', displayName: 'A', version: '1', network: ['https://jira'] } },
+        { dir: '/b', enabled: false, manifest: { name: 'b', displayName: 'B', version: '1', network: [] } },
+        { dir: '/c', enabled: false, manifest: { name: 'c', displayName: 'C', version: '1' } },
+      ],
+      skipped: [],
+    }).extensions
+    expect(listed.map((one) => one.network)).toEqual([['https://jira'], undefined, undefined])
+    expect('network' in (listed[1] ?? {})).toBe(false)
   })
 })

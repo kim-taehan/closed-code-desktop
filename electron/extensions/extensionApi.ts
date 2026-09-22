@@ -10,14 +10,7 @@ import type { AskResult } from './chatAsk'
 // ⚠️ runtime 의 **플러그인**(`src/app/plugins/`)과 다른 체계다 (계획서 §0).
 
 import type { ExtensionProgressKind, ExtensionProgressLane } from '../../shared/ipc/extensionPayloads'
-import {
-  asActiveFile,
-  asPathOrNull,
-  asString,
-  asStrings,
-  asTextOrNull,
-  type ActiveFile,
-} from './extensionApiParse'
+import { asPathOrNull, asTextOrNull, type ActiveFile } from './extensionApiParse'
 
 
 // 메서드 이름은 `extensionApiMethods.ts` 에 산다 — 여기로 **그대로 다시 내보낸다.**
@@ -25,13 +18,9 @@ import {
 // import 를 고쳐 다닐 이유도 없다.
 export * from './extensionApiMethods'
 import {
-  METHOD_ACTIVE_FILE,
   METHOD_CHAT_ASK,
   METHOD_EXPORT_SAVE,
-  METHOD_GET_PROJECT_PATH,
-  METHOD_LIST_FILES,
   METHOD_PROGRESS,
-  METHOD_READ_FILE,
   METHOD_SET_HTML,
   METHOD_SET_ROWS,
   METHOD_SET_TREE,
@@ -44,6 +33,8 @@ import {
 import { APP_MESSAGE_PREFIX, checkUiMessage, impersonatesApp } from '../../shared/extensions/uiMessage'
 import type { UiHandlers, UiMessageHandler } from './uiHandlers'
 import { createAiApi, type AiStreams, type ExtensionAiApi } from './aiRunClient'
+import { createWorkspaceApi, projectOf, type ExtensionWorkspaceApi, type ProjectTarget } from './workspaceClient'
+import { createHttpApi, createSecretsApi, type ExtensionHttpApi, type ExtensionSecretsApi } from './httpSecretsClient'
 
 
 /** 확장이 만드는 트리의 마디. 화면 쪽 `ExtensionTreeNodePayload` 와 같은 모양이다. */
@@ -72,13 +63,8 @@ export interface AskTextOptions {
 }
 
 export interface ExtensionApi {
-  workspace: {
-    getProjectPath(): Promise<string>
-    listFiles(glob: string): Promise<string[]>
-    readFile(relativePath: string): Promise<string>
-    /** 지금 보고 있는 파일. 없으면 `null` — **빈 객체를 만들지 않는다.** */
-    activeFile(): Promise<ActiveFile | null>
-  }
+  /** 파일 읽기. 「어느 프로젝트」는 `ui.post` 와 같은 규칙이다 (G-1) — 계약은 `workspaceClient.ts` */
+  workspace: ExtensionWorkspaceApi
   view: {
     setRows(viewId: string, rows: unknown[]): Promise<void>
     setHtml(viewId: string, html: string): Promise<void>
@@ -141,11 +127,15 @@ export interface ExtensionApi {
   }
   /** 확장 전용 AI 세션 (`METHOD_AI_RUN`) — 사용자 대화에 안 섞인다. 계약은 `aiRunClient.ts` */
   ai: ExtensionAiApi
+  /** 호스트를 거친 바깥 HTTP (`METHOD_HTTP_FETCH`)와 암호화된 비밀 — 계약은 `httpSecretsClient.ts` */
+  http: ExtensionHttpApi
+  secrets: ExtensionSecretsApi
+  /** `target` 은 3판만 받는다 (G-2 — 겉봉이 없으면 적어야 한다). 2판은 버린다 */
   storage: {
     /** 넣은 적 없는 키는 `undefined`. `null` 은 일부러 넣은 값이라 구분된다. */
-    get(key: string): Promise<unknown>
+    get(key: string, target?: ProjectTarget): Promise<unknown>
     /** `undefined` 를 주면 그 키를 지운다. */
-    set(key: string, value: unknown): Promise<void>
+    set(key: string, value: unknown, target?: ProjectTarget): Promise<void>
   }
 }
 
@@ -175,33 +165,7 @@ export function createExtensionApi(
   aiStreams?: AiStreams,
 ): ExtensionApi {
   return {
-    workspace: {
-      getProjectPath: async () => asString(await call(METHOD_GET_PROJECT_PATH), METHOD_GET_PROJECT_PATH),
-      /**
-       * **확장에게는 예전과 똑같이 `string[]` 만 준다.** 달라진 것은 잘렸을 때
-       * 진행 줄이 한 줄 나간다는 것뿐이라 확장 코드는 안 고쳐도 된다.
-       *
-       * 알리는 자리가 여기인 이유는 **이름** 때문이다 — 진행 줄에는 낸 확장 이름이
-       * 있어야 하는데(`emitProgress`), 호스트는 `listFiles` 를 누가 불렀는지 모른다.
-       */
-      listFiles: async (glob) => {
-        const answer = await call(METHOD_LIST_FILES, { glob })
-        const listing = (answer ?? {}) as Record<string, unknown>
-        const files = asStrings(listing['files'], METHOD_LIST_FILES)
-        if (listing['truncated'] === true) {
-          // 진행 줄과 같은 길로 나간다. **기다리지 않는다** — 알림이 실패해도 훑기는 끝났다
-          void call(METHOD_PROGRESS, {
-            extension: extensionName,
-            text: `프로젝트가 커서 ${files.length}개까지만 훑었습니다 — 목록이 전부가 아닙니다`,
-            kind: 'note',
-          }).catch(() => {})
-        }
-        return files
-      },
-      readFile: async (relativePath) =>
-        asString(await call(METHOD_READ_FILE, { path: relativePath }), METHOD_READ_FILE),
-      activeFile: async () => asActiveFile(await call(METHOD_ACTIVE_FILE)),
-    },
+    workspace: createWorkspaceApi(call, extensionName),
     view: {
       setRows: async (viewId, rows) => {
         await call(METHOD_SET_ROWS, { viewId, rows })
@@ -270,20 +234,19 @@ export function createExtensionApi(
       },
     },
     ai: createAiApi(call, extensionName, aiStreams),
+    http: createHttpApi(call, extensionName),
+    secrets: createSecretsApi(call, extensionName),
     storage: {
       // `extension` 을 여기서 채운다 — 확장이 실어 보내면 남의 칸을 읽을 수 있다
-      get: (key) => call(METHOD_STORAGE_GET, { extension: extensionName, key }),
-      set: async (key, value) => {
-        await call(METHOD_STORAGE_SET, { extension: extensionName, key, value })
+      get: (key, target) => call(METHOD_STORAGE_GET, { ...projectOf(target), extension: extensionName, key }),
+      set: async (key, value, target) => {
+        await call(METHOD_STORAGE_SET, { ...projectOf(target), extension: extensionName, key, value })
       },
     },
   }
 }
 
-/** `target` 에서 **`projectId` 만** 꺼낸다. 나머지 키는 버린다 — 위 `post` 의 주석 */
-function projectOf(target: { projectId: string } | undefined): { projectId?: unknown } {
-  return target === undefined ? {} : { projectId: target.projectId }
-}
+// `target` 에서 `projectId` 만 꺼내는 `projectOf` 는 `workspaceClient.ts` 로 옮겼다 — 저쪽 세 메서드도 쓴다.
 
 export type { ActiveFile }
 

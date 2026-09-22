@@ -17,11 +17,19 @@ import {
   METHOD_UI_POST,
   METHOD_AI_RUN,
   METHOD_AI_CANCEL,
+  METHOD_HTTP_FETCH,
+  METHOD_SECRETS_GET,
+  METHOD_SECRETS_SET,
+  METHOD_SECRETS_DELETE,
 } from './extensionApi'
+import { dispatchWorkspace } from './workspaceDispatch'
+import { dispatchHttpSecrets } from './httpSecretsDispatch'
+import { REFUSE_SECRETS, type ExtensionSecrets } from './secretStore'
+import type { ExtensionManifest } from '../../shared/extensions/manifest'
 import { dispatchUi, REFUSE_UI, requireEnabled } from './uiDispatch'
 import { dispatchAi, REFUSE_AI, type ExtensionAiPort } from './aiDispatch'
 import type { UiPorts } from './uiRouter'
-import { asProgressKind, asProgressLanes, asRecord, requireString } from './serviceParse'
+import { asCount, asProgressKind, asProgressLanes, asRecord, requireString } from './serviceParse'
 import type { ExtensionProgressPayload } from '../../shared/ipc/extensionPayloads'
 import {
   REFUSE_STORAGE,
@@ -37,8 +45,10 @@ import type { ExtensionStorage } from './storageStore'
 
 // 자식이 부른 `code.*` 를 대신 수행한다. `service.ts` 가 300줄 상한에 붙어 갈라냈다.
 //
-// **여기가 확장이 앱에 닿는 유일한 문이다.** 새 API 를 여는 자리이자, 열지 않기로 한 것
-// (`net.fetch`·`secrets.*`)이 막히는 자리다 (표준 §4.2). 파일 접근 경계는 `workspace` 가 쥔다.
+// **여기가 확장이 앱에 닿는 유일한 문이다.** 새 API 를 여는 자리이자, 열지 않기로 한 것이
+// 막히는 자리다 (표준 §4.2). 파일 접근 경계는 `workspace` 가 쥔다.
+// (`net.fetch`·`secrets.*` 는 여기서 막혀 있었다. 2026-09-22 에 **둘 다 열었다** — `http.fetch` 는
+// 매니페스트 허용 목록의 출처만, `secrets.*` 는 OS 암호화로만 (`httpSecretsDispatch.ts`, 하이닉스 §5-1).)
 //
 // 서비스가 아니라 이 함수가 던지면 `serve` 가 오류 응답으로 감싼다 —
 // **답을 빠뜨리면 확장의 await 가 영원히 걸린다.**
@@ -64,6 +74,10 @@ export interface DispatchDeps {
   ui: UiPorts
   /** 확장 전용 AI 세션 (`aiDispatch.ts`) */
   ai: ExtensionAiPort
+  /** 확장마다의 비밀 (`secretStore.ts`) */
+  secrets: ExtensionSecrets
+  /** 그 이름의 매니페스트 — 판(저장소 규칙, G-2)과 `network`(http 허용 목록). 모르는 이름이면 undefined */
+  manifestOf: (extension: string) => Promise<Pick<ExtensionManifest, 'manifestVersion' | 'network'> | undefined>
   /** 행·화면이 어느 프로젝트 것인지. 도는 명령이 없거나 겹치면 null(모름) */
   projectId: () => string | null
   /** 그 프로젝트에 켜진 확장 이름. `undefined` 면 정책 없음(= 안 본다) — `uiDispatch.ts` 의 `requireEnabled` */
@@ -117,6 +131,8 @@ export interface DispatchPorts {
   ui?: UiPorts
   /** 확장 전용 AI 세션 (`code.ai.run`). 없으면 사유와 함께 거절된다 */
   ai?: ExtensionAiPort
+  /** 비밀 저장소 (`code.secrets`). 없으면 사유와 함께 거절된다 — `http.fetch` 는 포트가 없다 (main 이 직접 부른다) */
+  secrets?: ExtensionSecrets
   /**
    * 지금 보고 있는 파일. **배선을 안 하면 늘 null 이다.**
    *
@@ -138,7 +154,8 @@ export function portsOf(
   envelope: Pick<
     DispatchDeps,
     'projectId' | 'allowedIn' | 'emitRows' | 'emitHtml' | 'emitTree' | 'emitProgress' | 'notifyChild'
-  >,
+  > &
+    Partial<Pick<DispatchDeps, 'manifestOf'>>, // 없으면 모르는 이름 — 저장소는 옛 규칙, http 는 전부 거절
 ): DispatchDeps {
   return {
     workspace: ports.workspace,
@@ -149,23 +166,29 @@ export function portsOf(
     storage: ports.storage ?? REFUSE_STORAGE,
     ui: ports.ui ?? REFUSE_UI,
     ai: ports.ai ?? REFUSE_AI,
+    secrets: ports.secrets ?? REFUSE_SECRETS,
+    manifestOf: async () => undefined,
     ...envelope,
   }
 }
 
 export async function dispatchExtensionApi(deps: DispatchDeps, request: RpcRequest): Promise<unknown> {
   const params = asRecord(request.params)
-  const { workspace } = deps
 
   switch (request.method) {
+    // 파일 읽기·저장소는 **어느 프로젝트인가**가 규칙의 전부라 한곳에 뒀다 — `workspaceDispatch.ts` (G-1·G-2)
     case METHOD_GET_PROJECT_PATH:
-      return workspace.getProjectPath()
-    // `{files, truncated}` 를 그대로 보낸다. 확장에게 목록만 주면 **잘렸다는 사실이
-    // 여기서 사라진다** — 자기 이름을 아는 자식 쪽(`extensionApi`)이 그걸 받아 알린다
     case METHOD_LIST_FILES:
-      return workspace.listFiles(requireString(params['glob'], 'glob'))
     case METHOD_READ_FILE:
-      return workspace.readFile(requireString(params['path'], 'path'))
+    case METHOD_STORAGE_GET:
+    case METHOD_STORAGE_SET:
+      return dispatchWorkspace(deps, request.method, params)
+    // 바깥 HTTP·비밀 — `httpSecretsDispatch.ts`
+    case METHOD_HTTP_FETCH:
+    case METHOD_SECRETS_GET:
+    case METHOD_SECRETS_SET:
+    case METHOD_SECRETS_DELETE:
+      return dispatchHttpSecrets(deps, request.method, params)
     // **null 을 그대로 낸다.** 「아무것도 안 보고 있다」는 사실이라 빈 객체로 채우지 않는다.
     case METHOD_ACTIVE_FILE:
       return deps.activeFile()
@@ -247,21 +270,6 @@ export async function dispatchExtensionApi(deps: DispatchDeps, request: RpcReque
         multiline: params['multiline'] === true,
       })
     }
-    case METHOD_STORAGE_GET:
-      return deps.storage.get(
-        requireString(params['extension'], 'extension'),
-        deps.projectId(),
-        requireString(params['key'], 'key'),
-      )
-    case METHOD_STORAGE_SET:
-      // `value` 는 검사하지 않는다 — 확장이 무엇을 넣든 그대로 돌려주는 것이 계약이다.
-      // 넣을 수 없는 값(함수 등)은 구조화 복제가 RPC 경계에서 이미 거른다.
-      return deps.storage.set(
-        requireString(params['extension'], 'extension'),
-        deps.projectId(),
-        requireString(params['key'], 'key'),
-        params['value'],
-      )
     // 웹뷰 두 갈래는 프로젝트 규칙을 나눠 쓴다 — `uiDispatch.ts`
     case METHOD_UI_POST:
     case METHOD_UI_OPEN:
@@ -276,11 +284,6 @@ export async function dispatchExtensionApi(deps: DispatchDeps, request: RpcReque
     default:
       throw new Error(`알 수 없는 메서드: ${request.method}`)
   }
-}
-
-/** 진행 분수의 한쪽. 수가 아니면 **없는 것으로** 본다 — 억지로 0 으로 만들면 0/0 이 그려진다. */
-function asCount(value: unknown): number | undefined {
-  return typeof value === 'number' && Number.isFinite(value) ? value : undefined
 }
 
 // 배선 없는 자리의 거절 함수들은 `serviceRefuse.ts` 로 옮겼다. **여기서 다시 내보낸다** —

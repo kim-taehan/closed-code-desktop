@@ -66,3 +66,11 @@ export function asProgressLanes(value: unknown): ExtensionProgressLane[] | undef
     return [{ name, startedAt, ...(typeof doing === 'string' ? { doing } : {}) }]
   })
 }
+
+/**
+ * 진행 분수의 한쪽. 수가 아니면 **없는 것으로** 본다 — 억지로 0 으로 만들면 0/0 이 그려진다.
+ * (`serviceDispatch.ts` 에서 옮겨 왔다 — 저쪽이 300줄 상한에 붙었고, 진행 줄의 다른 모양 확인이 여기 산다.)
+ */
+export function asCount(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined
+}

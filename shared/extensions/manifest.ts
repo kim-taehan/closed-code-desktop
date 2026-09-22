@@ -22,6 +22,7 @@
 // 알 길이 없다.** 사유를 같이 돌려준다. 이 모양의 선례는 `electron/projects/projectFs.ts` 다.
 
 import { toView, type ExtensionView } from './manifestViews'
+import { toNetwork } from './manifestNetwork'
 
 /**
  * 이 앱이 읽을 수 있는 매니페스트 판. 여기 없는 판은 거부한다.
@@ -114,6 +115,11 @@ export interface ExtensionManifest {
    */
   engines?: { code: string }
   contributes?: ExtensionContributes
+  /**
+   * 뒷단이 `code.http.fetch` 로 닿아도 되는 **출처** (3판만, `manifestNetwork.ts`). 없으면 어디에도 못 닿는다.
+   * 설정의 확장 목록에 켜기 스위치 옆으로 보인다 — 켜는 사람이 어디로 나가는지 알고 켠다.
+   */
+  network?: string[]
 }
 
 /**
@@ -195,6 +201,7 @@ export function parseManifest(data: unknown): ManifestParseResult {
   const description = source['description']
   const engines = toEngines(source['engines'])
   const contributes = toContributes(source['contributes'], manifestVersion)
+  const network = toNetwork(source['network'], manifestVersion)
 
   return {
     ok: true,
@@ -207,6 +214,7 @@ export function parseManifest(data: unknown): ManifestParseResult {
       ...(typeof description === 'string' && description !== '' ? { description } : {}),
       ...(engines !== null ? { engines } : {}),
       ...(contributes !== null ? { contributes } : {}),
+      ...(network !== null && network.length > 0 ? { network } : {}),
     },
   }
 }

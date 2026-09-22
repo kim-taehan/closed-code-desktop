@@ -11,6 +11,9 @@ import type { ExtensionEntryPayload } from '../../shared/ipc/extensionPayloads'
 //
 // 켜기·끄기는 **그 프로젝트에서**다 (`toggleLabel`). 지우기는 앱 전체다 — 설치가 앱 전체라서.
 //
+// **바깥에 닿는 확장은 그 출처를 이름 밑에 한 줄로 보인다** (매니페스트 `network`) — 켜기가 곧
+// 「이 확장이 여기로 나가도 된다」는 결정이라, 스위치를 누르기 전에 보여야 한다 (하이닉스 §5-1).
+//
 // **「열기」는 웹뷰 뷰(3판)마다 하나다** (확장 재설계 §2-2 진입점 1). 켜진 확장에만 뜬다 —
 // 꺼진 프로젝트에서 열면 탭이 사유만 보여 주는 빈 칸이 된다.
 
@@ -45,6 +48,12 @@ export function ExtensionInstalledRow({
           {extension.description ?? extension.name} · {extension.version}
           {extension.enabled ? '' : ` · ${t('꺼짐')}`}
         </span>
+        {extension.network ? (
+          // 한 줄로 잘리므로(`.dc-ext__meta`) 전부는 툴팁에 둔다
+          <span className="dc-ext__meta" title={extension.network.join('\n')}>
+            {t('연결하는 곳')}: {extension.network.join(', ')}
+          </span>
+        ) : null}
       </span>
 
       {asking ? (

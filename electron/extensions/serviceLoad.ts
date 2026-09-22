@@ -5,6 +5,7 @@ import { defaultExtensionsDir, scanExtensions, type ExtensionScan, type SkippedE
 import { installedNames, onlyEnabled, withEnabled, type ListedExtension } from './serviceEnabled'
 import type { ProjectExtensionsPort } from './projectExtensions'
 import type { ExtensionLoadFailed } from './extensionLoader'
+import type { ExtensionManifest } from '../../shared/extensions/manifest'
 
 // `ExtensionService` 가 하는 셋 중 **첫 둘** — 훑기(registry) → 자식에 실으라고 넘기기 —
 // 만 떼어 왔다. 셋째(자식이 부르는 code.* 를 대신 수행)는 저쪽에 남는다.
@@ -121,6 +122,14 @@ export class ExtensionLoader {
       return { ok: false, reason: `${extension} 확장에 웹뷰 화면 ${viewId} 가 없습니다` }
     }
     return { ok: true, dir: found.dir, entry: view.entry, title: view.title }
+  }
+
+  /**
+   * 그 이름의 매니페스트 (훑기 결과). 판(저장소 규칙, G-2)과 `network`(http 허용 목록)를 main 이 여기서 읽는다 —
+   * 자식이 실어 보낸 값을 믿으면 확장이 자기 허용 목록을 부풀린다. 모르는 이름이면 `undefined`.
+   */
+  async manifest(extension: string): Promise<ExtensionManifest | undefined> {
+    return (await this.scan()).extensions.find((one) => one.manifest.name === extension)?.manifest
   }
 
   async loadAll(): Promise<void> {
