@@ -3,7 +3,7 @@
 # 신원 서명(Developer ID)은 아직 없다. 대신 mac 은 build/afterPack.cjs 가 **ad-hoc 서명**을
 # 건다 — 없으면 브라우저로 받은 앱이 「손상됨」으로 아예 안 열린다 (그 파일의 머리말 참조).
 appId: com.closedcode.desktop
-productName: Closed Code Desktop
+productName: Closed Desktop
 copyright: SKCC
 
 directories:

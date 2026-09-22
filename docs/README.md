@@ -1,4 +1,4 @@
-# Closed Code Desktop 문서
+# Closed Desktop 문서
 
 davis-code-desktop 문서 색인.
 

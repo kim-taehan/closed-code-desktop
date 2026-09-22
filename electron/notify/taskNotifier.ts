@@ -30,7 +30,7 @@ export function showTaskDone(window: BrowserWindow, notice: TaskNotice = {}): vo
 
   current?.close()
   const notification = new Notification({
-    title: 'Closed Code',
+    title: 'Closed Desktop',
     body: bodyOf(notice),
     icon: ICON_PATH,
   })

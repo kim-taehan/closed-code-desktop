@@ -1,4 +1,4 @@
-# Closed Code Desktop
+# Closed Desktop
 
 AI 코딩 데스크톱 앱. 설치 파일 안에 실행에 필요한 것(opencode 포함)이 모두 들어 있어
 **설치 파일 하나면 끝난다** — 폐쇄망에는 이 파일 하나만 반입한다.
@@ -16,11 +16,11 @@ AI 코딩 데스크톱 앱. 설치 파일 안에 실행에 필요한 것(opencod
 ## macOS 설치
 
 1. 위 표에서 내 Mac 에 맞는 zip 을 받는다.
-2. 압축을 풀어 `Closed Code Desktop.app` 을 **응용 프로그램** 폴더로 옮긴다.
+2. 압축을 풀어 `Closed Desktop.app` 을 **응용 프로그램** 폴더로 옮긴다.
 3. 서명이 없는 앱이라 격리 딱지를 떼야 첫 실행이 된다 — 터미널에서:
 
    ```bash
-   xattr -dr com.apple.quarantine "/Applications/Closed Code Desktop.app"
+   xattr -dr com.apple.quarantine "/Applications/Closed Desktop.app"
    ```
 
 4. 실행한다.
@@ -28,7 +28,7 @@ AI 코딩 데스크톱 앱. 설치 파일 안에 실행에 필요한 것(opencod
 ## Windows 설치
 
 1. `closed-code-desktop-x64.exe` 를 받는다.
-2. 실행하면 설치기가 진행된다. 끝나면 시작 메뉴의 **Closed Code Desktop** 으로 실행한다.
+2. 실행하면 설치기가 진행된다. 끝나면 시작 메뉴의 **Closed Desktop** 으로 실행한다.
 
 ## 실행 전 준비 — 모델 연결
 
