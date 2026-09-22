@@ -1,5 +1,6 @@
 import { app, BrowserWindow, ipcMain, powerMonitor, protocol } from 'electron'
 import { installAppMenu } from './appMenu'
+import { claimSingleInstance } from './singleInstance'
 import * as path from 'node:path'
 import { Channel, type TaskNoticePayload } from '../shared/ipc/channels'
 import { showTaskDone } from './notify/taskNotifier'
@@ -23,6 +24,9 @@ import { ExtensionViewHost, VIEW_SCHEME } from './extensions/viewHost'
 import type { DesktopMcp } from './mcp/desktopMcp'
 import { createDesktopMcp } from './mcp/appWiring'
 import { PtyDrawerBridge } from './pty/drawerBridge'
+
+// 무조건 하나만 뜬다 — 두 번째 실행은 먼저 뜬 창을 앞으로 가져오고 끝난다 (singleInstance.ts)
+const primaryInstance = claimSingleInstance()
 
 // 확장 화면을 서빙할 스킴. **app ready 전에** 등록해야 한다 (Electron 규칙) —
 // 그래서 이 한 줄만 모듈 최상위에 있다. 이유는 `viewHost.ts` 머리말.
@@ -224,6 +228,7 @@ async function createWindow(): Promise<void> {
 }
 
 void app.whenReady().then(async () => {
+  if (!primaryInstance) return // exit(0) 이 끝나기 전에 ready 가 와도 아무것도 띄우지 않는다 — 첫 앱의 서버를 거두지도 않는다
   // 창을 만들기 전에 건다 — 기동 중에 찍히는 것이 로그의 앞부분이라 놓치면 안 된다
   captureConsole()
   // 지난 실행이 곱게 못 끝났으면(강제 종료·크래시) 그때 띄운 서버가 남아 있다.
