@@ -1,3 +1,4 @@
+import { inertProjects } from '../../tests/extensions/inertProjects'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -84,6 +85,7 @@ function makeBridge(options: { projectId?: string | null; destroyed?: boolean } 
     activeProjectId: () => active,
     // 배포처 핸들러도 같은 브리지에 산다. 이 시험은 거기 닿지 않지만 생성에는 필요하다
     settings: new SettingsStore(join(tmpdir(), `code-extbridge-${process.pid}.json`)),
+    projects: inertProjects(),
   })
 
   return {
@@ -120,6 +122,8 @@ describe('확장 브리지', () => {
         { dir: '/확장/할일', name: 'todo', displayName: '할 일 모음', version: '0.1.0', enabled: true },
       ],
       skipped: [{ dir: '/확장/깨진것', reason: 'missing_main' }],
+      // 서비스가 켜짐의 기준 프로젝트를 안 실어 보내면 없음으로 간다 — 화면이 스위치를 막는다
+      activeProject: null,
     })
   })
 

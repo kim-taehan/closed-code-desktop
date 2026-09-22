@@ -1,3 +1,4 @@
+import { inertProjects } from '../../tests/extensions/inertProjects'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -97,6 +98,7 @@ describe('배포처를 믿지 않는다', () => {
       activeProjectId: () => null,
       extensionsDir,
       settings: new SettingsStore(join(dir, 'settings.json')),
+      projects: inertProjects(),
       fetchImpl: fetchImpl as unknown as typeof fetch,
     })
     bridge.register()

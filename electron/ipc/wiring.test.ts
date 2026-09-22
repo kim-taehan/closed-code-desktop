@@ -1,3 +1,4 @@
+import { inertProjects } from '../../tests/extensions/inertProjects'
 import { readFileSync, readdirSync } from 'node:fs'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -128,6 +129,7 @@ describe('IPC 배선', () => {
       activeProjectId: () => null,
       extensionsDir: join(dir, 'desktop-extensions'),
       settings,
+      projects: inertProjects(),
     })
 
     // 셸 드로어. 서버에 닿지 않는다 — 이 시험이 보는 것은 채널 등록/해제뿐이다.

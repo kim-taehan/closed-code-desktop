@@ -19,8 +19,8 @@ import { applyProgressLine, type ExtensionProgressLog } from './extensionProgres
 // 설정 창의 `useExtensionList` 와 이름이 겹쳐 이쪽을 패널 이름으로 갈랐다. 보는 것이 다르다 —
 // 저쪽은 **설치본 관리**(디스크 설치·배포처), 이쪽은 **실행**(명령·결과 행)이다.
 //
-// 목록은 **앱 단위**다 — 확장 호스트가 앱 수명이라 프로젝트마다 다르지 않다.
-// 결과 행만 프로젝트 겉봉을 타고 오고, 겉봉 검사·전환 시 비우기는 `useExtensionRows` 가 한다.
+// 설치 목록은 앱 단위지만 **켜짐은 프로젝트마다**다 (확장 재설계 §3) — 그래서 프로젝트를 옮기면
+// 목록을 다시 받는다. 결과 행은 프로젝트 겉봉을 타고 오고, 겉봉 검사·전환 시 비우기는 `useExtensionRows` 가 한다.
 
 export interface ExtensionPanelHandle {
   extensions: ExtensionEntry[]
@@ -83,7 +83,7 @@ export interface ExtensionPanelOptions {
    * 목록을 받아올 것인가. 마운트되면 한 번 받아온다.
    *
    * 확장 패널을 보고 있지 않아도 켠다 — **선택기에 항목을 그리려면** 목록이 먼저 있어야
-   * 하기 때문이다. 목록은 앱 단위라 프로젝트를 옮겨도 다시 받을 것이 없다.
+   * 하기 때문이다. 켜짐이 프로젝트마다라 **프로젝트를 옮기면 다시 받는다.**
    */
   active: boolean
   /** 명령 실패를 알린다. 결과가 화면에 안 남는 행동이라 토스트가 그 자리다. */
@@ -196,8 +196,9 @@ export function useExtensionPanel(options: ExtensionPanelOptions): ExtensionPane
       .listExtensions()
       .then((payload) => {
         if (!alive.current) return
-        // **켜진 것만 본다.** 꺼진 확장은 호스트에 실리지 않아 명령이 거부되고 결과 행도
-        // 오지 않는다 — 그런 것을 사이드바에 남기면 눌러도 아무 일이 없는 칸이 된다.
+        // **켜진 것만 본다**(`enabled` 는 이 프로젝트 기준). 이 프로젝트에서 꺼진 확장은 다른
+        // 프로젝트에서 켜져 호스트에 실려 있을 수 있지만, 이 프로젝트로 거는 명령은 거절된다
+        // (`childHandlers.ts` 의 `allowed`) — 그런 것을 사이드바에 남기면 눌러도 거절만 뜨는 칸이 된다.
         // 꺼진 것을 목록에 남기는 자리는 **설정 창**(`useExtensionList`)이다. 거기가
         // 관리하는 자리고 여기는 실행하는 자리다.
         setExtensions(payload.extensions.filter((extension) => extension.enabled))
@@ -208,11 +209,12 @@ export function useExtensionPanel(options: ExtensionPanelOptions): ExtensionPane
       })
   }, [])
 
-  // 목록은 훑기 결과라 main 이 계산해 쥐고 있다(`ExtensionService.scan`). 한 번 받아오면 되고,
-  // 설치로 바뀌는 자리는 `refresh` 가 맡는다.
+  // 목록은 훑기 결과라 main 이 계산해 쥐고 있다(`ExtensionService.scan`). 설치로 바뀌는 자리는
+  // `refresh` 가 맡는다. **프로젝트를 옮기면 다시 받는다** — 켜짐이 프로젝트마다라, 안 받으면
+  // 앞 프로젝트에서 켠 확장이 이 프로젝트 사이드바·파일 우클릭에 남는다(부르면 거절된다).
   useEffect(() => {
     if (active) refresh()
-  }, [active, refresh])
+  }, [active, refresh, projectId])
 
   const [running, setRunning] = useState<string[]>([])
 

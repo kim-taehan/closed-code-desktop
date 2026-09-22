@@ -90,6 +90,8 @@ function toRecord(value: unknown): ProjectRecord | null {
     name: typeof source['name'] === 'string' ? source['name'] : root,
     favorite: source['favorite'] === true,
     lastOpenedAt: typeof source['lastOpenedAt'] === 'number' ? source['lastOpenedAt'] : 0,
+    // **없으면 비워 두지 않고 빼 둔다** — 없음이 「아직 이전 안 함」의 표식이다 (`ProjectRecord.extensions`)
+    ...(Array.isArray(source['extensions']) ? { extensions: toStringArray(source['extensions']) } : {}),
   }
 }
 

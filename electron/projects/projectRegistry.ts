@@ -28,6 +28,11 @@ export class ProjectRegistry {
   private projects: ProjectRecord[] = []
   private openIds: string[] = []
   private activeId: string | null = null
+  /** `restore()` 가 끝나면 풀린다. 확장 호스트가 이걸 기다린다 — `whenRestored` 머리말 */
+  private markRestored: () => void = () => {}
+  private readonly restored = new Promise<void>((resolve) => {
+    this.markRestored = resolve
+  })
 
   private readonly now: () => number
   private readonly maxOpen: number
@@ -61,10 +66,29 @@ export class ProjectRegistry {
   }
 
   /**
+   * 복원이 끝났을 때 풀린다. **복원이 던져도 풀린다.**
+   *
+   * 확장 호스트는 앱 수명이라 창(=이 레지스트리)보다 먼저 떠서, 복원 전에 「어느 확장을
+   * 실을까」를 물을 수 있다. 그때 빈 목록으로 답하면 아무것도 안 실린 채 남는다 —
+   * 켜진 확장이 프로젝트 기록에 살기 때문이다 (`ProjectRecord.extensions`).
+   */
+  whenRestored(): Promise<void> {
+    return this.restored
+  }
+
+  /**
    * 저장된 상태를 읽고, 사라진 경로를 정리한다.
    * 폴더가 없어진 프로젝트를 목록에 남기면 열 때마다 실패한다.
    */
   async restore(): Promise<void> {
+    try {
+      await this.restoreState()
+    } finally {
+      this.markRestored()
+    }
+  }
+
+  private async restoreState(): Promise<void> {
     const state = await this.deps.store.load()
     const alive: ProjectRecord[] = []
     for (const project of state.projects) {
@@ -109,6 +133,8 @@ export class ProjectRegistry {
       name: basename(resolved) || resolved,
       favorite: false,
       lastOpenedAt: this.now(),
+      // 새 프로젝트는 아무것도 안 켜진 채 시작한다 (확장 재설계 §3)
+      extensions: [],
     }
     this.projects.push(project)
     this.openIds.push(project.id)
@@ -151,6 +177,37 @@ export class ProjectRegistry {
     return true
   }
 
+  /**
+   * **확장 기록이 없는 프로젝트에만** `names` 를 채운다 — 이 기능 전에 만든 기록의 이전이다.
+   *
+   * 바뀐 것이 없으면 **저장하지 않는다.** 복원 전에 불려 빈 목록을 저장하면 `projects.json`
+   * 이 통째로 지워진다.
+   */
+  async fillExtensions(names: readonly string[]): Promise<void> {
+    const missing = this.projects.filter((project) => project.extensions === undefined)
+    if (missing.length === 0) return
+    for (const project of missing) project.extensions = [...names]
+    await this.persist()
+  }
+
+  /** 한 프로젝트에서 확장 하나를 켜고 끈다. 없는 프로젝트면 false */
+  async setExtension(id: string, name: string, enabled: boolean): Promise<boolean> {
+    const project = this.projects.find((candidate) => candidate.id === id)
+    if (!project) return false
+    const without = (project.extensions ?? []).filter((item) => item !== name)
+    project.extensions = enabled ? [...without, name] : without
+    await this.persist()
+    return true
+  }
+
+  /** 모든 프로젝트에서 그 이름을 뺀다 — 지운 확장을 같은 이름으로 다시 깔았을 때 조용히 켜져 들어오지 않게 */
+  async dropExtension(name: string): Promise<void> {
+    const holding = this.projects.filter((project) => project.extensions?.includes(name))
+    if (holding.length === 0) return
+    for (const project of holding) project.extensions = project.extensions?.filter((item) => item !== name) ?? []
+    await this.persist()
+  }
+
   private tooMany(): OpenResult {
     return {
       ok: false,
@@ -175,7 +232,8 @@ export class ProjectRegistry {
 }
 
 function copy(project: ProjectRecord): ProjectRecord {
-  return { ...project }
+  // 배열도 떠 준다 — 얕게 복사하면 호출부가 `extensions` 를 고쳐 저장 없이 상태가 바뀐다
+  return project.extensions ? { ...project, extensions: [...project.extensions] } : { ...project }
 }
 
 async function resolveRoot(root: string): Promise<string | null> {

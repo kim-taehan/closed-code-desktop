@@ -1,3 +1,4 @@
+import { inertProjects } from '../../tests/extensions/inertProjects'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -59,6 +60,7 @@ describe('못 받은 사유가 그대로 올라온다', () => {
       activeProjectId: () => null,
       extensionsDir: join(dir, 'desktop-extensions'),
       settings: new SettingsStore(join(dir, 'settings.json')),
+      projects: inertProjects(),
       fetchImpl: fetchImpl as unknown as typeof fetch,
     })
     bridge.register()

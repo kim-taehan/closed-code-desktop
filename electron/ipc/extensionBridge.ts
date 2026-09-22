@@ -15,6 +15,7 @@ import type {
 } from '../../shared/ipc/extensionPayloads'
 import { exportExtensionCsv } from './extensionExportCsv'
 import type { SettingsStore } from '../settings/settingsStore'
+import type { ProjectExtensionsPort } from '../extensions/projectExtensions'
 import { defaultExtensionsDir } from '../extensions/registry'
 import { installFromDisk } from './extensionInstallFromDisk'
 import { readExtensionReadme } from '../extensions/readme'
@@ -33,8 +34,9 @@ import {
 // ⚠️ runtime 의 **플러그인(Plugin)** 과 다른 체계다 (계획서 §0). 문구를 섞지 않는다.
 //
 // **`projectBridge` 에 넣지 않았다.** 거기 들어가면 프로젝트 겉봉(`ProjectScoped`)이
-// 씌워지는데, 확장은 앱에 설치되는 것이지 프로젝트에 매이지 않는다. `gitBridge` 가
-// 같은 이유로 갈라져 있다.
+// 씌워지는데, 확장은 앱에 **설치**되는 것이지 프로젝트에 매이지 않는다. `gitBridge` 가
+// 같은 이유로 갈라져 있다. (켜기는 프로젝트마다지만 그 프로젝트는 payload 가 직접 가리킨다 —
+// `ExtensionSetEnabledPayload.projectId`.)
 //
 // 이 파일이 잇는 것이 둘이다:
 //  - **설치본 관리** — 목록·디스크 설치·배포처(조회/내려받아 설치)
@@ -52,9 +54,11 @@ import {
  */
 export interface ExtensionSource {
   listExtensions(): Promise<{
-    /** `enabled` 는 서비스가 판정한다 — 꺼 둔 것도 목록에는 남는다 */
+    /** `enabled` 는 서비스가 판정한다(활성 프로젝트 기준) — 꺼 둔 것도 목록에는 남는다 */
     extensions: { dir: string; manifest: ManifestLike; enabled: boolean }[]
     skipped: { dir: string; reason: string; detail?: string }[]
+    /** 켜짐의 기준 프로젝트 (`ExtensionListing.activeProject`) */
+    activeProject?: { id: string; name: string } | null
   }>
   /** 두 번째 인자는 **명령을 건 프로젝트**다 — 그 실행에서 나온 행의 겉봉이 된다. */
   runCommand(
@@ -116,6 +120,8 @@ export interface ExtensionBridgeOptions {
    * 저장한 값과 이쪽이 보는 값이 어긋난다.
    */
   settings: SettingsStore
+  /** 프로젝트마다 켠 확장 — 켜고 끄기·지우기가 쓴다 (`projectExtensions.ts`) */
+  projects: ProjectExtensionsPort
   /**
    * 도는 확장 질의를 끊는다 (`hostPorts` 의 `cancel`).
    *
@@ -259,7 +265,7 @@ export class ExtensionBridge {
   /** 켜고 끄고 지우는 쪽이 쓰는 것 (extensionManageHandlers.ts) */
   private get manageDeps(): ManageDeps {
     return {
-      settings: this.options.settings,
+      projects: this.options.projects,
       extensionsDir: this.extensionsDir,
       service: this.options.service,
     }

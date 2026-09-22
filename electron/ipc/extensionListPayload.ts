@@ -23,6 +23,8 @@ export interface ManifestLike {
 export interface ServiceListing {
   extensions: { dir: string; manifest: ManifestLike; enabled: boolean }[]
   skipped: { dir: string; reason: string; detail?: string }[]
+  /** 켜짐의 기준 프로젝트. 안 실려 오면(프로젝트별 켜기를 모르는 가짜 서비스) 없음으로 친다 */
+  activeProject?: { id: string; name: string } | null
 }
 
 export function toListPayload(listing: ServiceListing): ExtensionListPayload {
@@ -41,6 +43,7 @@ export function toListPayload(listing: ServiceListing): ExtensionListPayload {
       reason,
       ...(detail ? { detail } : {}),
     })),
+    activeProject: listing.activeProject ?? null,
   }
 }
 

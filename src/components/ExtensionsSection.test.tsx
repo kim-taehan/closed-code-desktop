@@ -14,7 +14,7 @@ import type { RegistryListPayload } from '../../shared/ipc/extensionRegistryPayl
 // 여기서는 **설치됨 탭**만 본다. 배포처 탭은 `ExtensionRegistryTab.test.tsx` 몫이라
 // 여기서는 배포처가 하나도 없는 상태(빈 목록)로만 둔다.
 
-const EMPTY: ExtensionListPayload = { extensions: [], skipped: [] }
+const EMPTY: ExtensionListPayload = { extensions: [], skipped: [], activeProject: null }
 
 const davisStub = {
   listExtensions: vi.fn<() => Promise<ExtensionListPayload>>(),
@@ -50,6 +50,7 @@ describe('설치됨 탭', () => {
 
   it('설치된 확장을 이름·설명·버전으로 보여준다', async () => {
     davisStub.listExtensions.mockResolvedValue({
+      activeProject: null,
       extensions: [
         {
           name: 'sample-ext',
@@ -72,6 +73,7 @@ describe('설치됨 탭', () => {
   // 감추면 "설치했는데 목록에 안 뜬다" 로 끝난다. 이 화면의 존재 이유 중 하나다.
   it('건너뛴 것을 사유와 함께 보여준다', async () => {
     davisStub.listExtensions.mockResolvedValue({
+      activeProject: null,
       extensions: [],
       skipped: [{ dir: '/x/broken-ext', reason: 'missing_manifest_version' }],
     })
@@ -84,6 +86,7 @@ describe('설치됨 탭', () => {
 
   it('모르는 사유는 코드를 그대로 보여준다 — 감추면 고칠 수 없다', async () => {
     davisStub.listExtensions.mockResolvedValue({
+      activeProject: null,
       extensions: [],
       skipped: [{ dir: '/x/odd', reason: 'wat_is_this' }],
     })
@@ -167,6 +170,7 @@ describe('배포처 탭으로 가는 길', () => {
 describe('상세로 넘어가기', () => {
   beforeEach(() => {
     davisStub.listExtensions.mockResolvedValue({
+      activeProject: null,
       extensions: [
         { name: 'sample-ext', displayName: '샘플 확장', version: '0.1.0', dir: '/x', enabled: true },
       ],

@@ -65,6 +65,14 @@ export function createChildHandler(apiFor: ExtensionApiFor, deps: LoadDeps): (re
         throw new Error(`남의 확장 명령입니다: ${commandId} (${registered.extension})`)
       }
 
+      // **이 프로젝트에 켜졌나.** 명령표는 모든 프로젝트에서 켜진 확장의 합집합이라, 표에 있다는
+      // 것만으로는 부른 프로젝트에서 켜졌는지 모른다. 부모가 **명령을 건 프로젝트**(겉봉)에 켜진
+      // 이름을 실어 보낸다 (`serviceInvoke.ts`). 안 실려 오면 확인하지 않는다 — 위 주인 확인과 같은 규칙.
+      const allowed = asRecord(request.params)['allowed']
+      if (Array.isArray(allowed) && !allowed.includes(registered.extension)) {
+        throw new Error(`이 프로젝트에서 켜지 않은 확장입니다: ${registered.extension} — 설정의 확장에서 켜세요`)
+      }
+
       // 확장이 async 로 써도 끝까지 기다린다 — 안 기다리면 부모가 완료를 오해한다.
       // `selection` 은 사용자가 화면에서 고른 것이고, 없으면 undefined 다.
       return await registered.handler(asRecord(request.params)['selection'])

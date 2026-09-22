@@ -19,7 +19,7 @@ import { installQuitGuard } from './app/quitGuard'
 import { disposeWindowScoped } from './app/windowTeardown'
 import { applyDockIcon } from './app/dockIcon'
 import type { ExtensionService } from './extensions/service'
-import { launchExtensionHost } from './extensions/appLaunch'
+import { appProjectExtensions, launchExtensionHost } from './extensions/appLaunch'
 import { ExtensionViewHost, VIEW_SCHEME } from './extensions/viewHost'
 import type { DesktopMcp } from './mcp/desktopMcp'
 import { createDesktopMcp } from './mcp/appWiring'
@@ -72,7 +72,7 @@ let extensions: ExtensionService | null = null
 let extensionIpc: ExtensionBridge | null = null
 // 확장은 앱 수명(창보다 먼저 뜬다)이라 레지스트리 인스턴스를 들고 있을 수 없다. 여기로 조회한다.
 let projectRegistry: ProjectRegistry | null = null
-/** 확장 호스트가 "꺼 둔 확장" 을 물어보는 곳. 호스트는 창보다 오래 살아 여기 둔다. */
+/** 확장 호스트가 옛 "꺼 둔 확장" 을 (이전에만) 물어보는 곳. 호스트는 창보다 오래 살아 여기 둔다. */
 let appSettings: SettingsStore | null = null
 /** 에이전트가 이 앱을 조작하는 문 (`electron/mcp/`). 창이 다시 만들어져도 포트는 하나다. */
 let desktopMcp: DesktopMcp | null = null
@@ -205,6 +205,7 @@ async function createWindow(): Promise<void> {
       // 곁길 소켓이 없어져 끊을 다른 것이 없다.
       cancel: (projectId: string | null) => bridge?.cancelTurn(projectId),
       settings,
+      projects: appProjectExtensions(() => registry, () => settings), // 켜기는 프로젝트마다 — 상태는 이 레지스트리에 산다
     })
     extensionIpc.register()
   }

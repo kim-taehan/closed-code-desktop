@@ -8,14 +8,19 @@ import type { ExtensionEntryPayload } from '../../shared/ipc/extensionPayloads'
 // 모달을 띄우면 어느 확장을 지우는지 다시 읽어야 하고, 이 창은 이미 좁다.
 //
 // 꺼진 확장은 목록에서 지우지 않고 **흐리게** 남긴다. 사라지면 다시 켤 자리가 없다.
+//
+// 켜기·끄기는 **그 프로젝트에서**다 (`toggleLabel`). 지우기는 앱 전체다 — 설치가 앱 전체라서.
 
 export function ExtensionInstalledRow({
   extension,
+  toggleLabel,
   onOpenDetail,
   onSetEnabled,
   onUninstall,
 }: {
   extension: ExtensionEntryPayload
+  /** 「이 프로젝트에서 켜기 — 이름」. null 이면 열린 프로젝트가 없어 스위치를 막는다 */
+  toggleLabel: string | null
   onOpenDetail: () => void
   onSetEnabled: (enabled: boolean) => void
   onUninstall: () => void
@@ -51,6 +56,8 @@ export function ExtensionInstalledRow({
             type="checkbox"
             className="dc-ext__switch"
             checked={extension.enabled}
+            disabled={toggleLabel === null}
+            {...(toggleLabel === null ? {} : { title: toggleLabel })}
             aria-label={`${extension.displayName} ${t('켜기')}`}
             onChange={(event) => onSetEnabled(event.target.checked)}
           />

@@ -101,6 +101,10 @@ function InstalledTab({
   onOpenDetail: (extension: ExtensionEntryPayload) => void
 }) {
   const empty = list.extensions.length === 0 && list.skipped.length === 0
+  // 켜기는 **프로젝트마다**다 (확장 재설계 §3). 어느 프로젝트의 스위치인지 적어 둔다 —
+  // 안 적으면 앱 전체를 끄는 줄 안다. 프로젝트가 없으면 켤 자리가 없어 스위치를 막는다.
+  const project = list.activeProject
+  const toggleLabel = project === null ? null : `${t('이 프로젝트에서 켜기')} — ${project.name}`
 
   return (
     <div className="dc-ext__tabpanel" role="tabpanel">
@@ -114,11 +118,15 @@ function InstalledTab({
         </p>
       ) : (
         <>
+          <p className="dc-ext__skiphead">
+            {toggleLabel ?? t('열린 프로젝트가 없어 켜고 끌 수 없습니다')}
+          </p>
           <ul className="dc-ext__list">
             {list.extensions.map((extension) => (
               <ExtensionInstalledRow
                 key={extension.dir}
                 extension={extension}
+                toggleLabel={toggleLabel}
                 onOpenDetail={() => onOpenDetail(extension)}
                 onSetEnabled={(enabled) => list.setEnabled(extension.name, enabled)}
                 onUninstall={() => list.uninstall(extension.dir)}

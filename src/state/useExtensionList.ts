@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type {
   ExtensionEntryPayload,
   ExtensionInstallPayload,
+  ExtensionListPayload,
   SkippedExtensionPayload,
 } from '../../shared/ipc/channels'
 
@@ -16,13 +17,15 @@ import type {
 export interface ExtensionListHandle {
   extensions: ExtensionEntryPayload[]
   skipped: SkippedExtensionPayload[]
+  /** 켜짐의 기준 프로젝트 (main 이 정한 활성). 없으면 켜고 끌 수 없다 */
+  activeProject: ExtensionListPayload['activeProject']
   loading: boolean
   /** 설치 중에는 버튼을 막아 같은 파일이 두 번 들어가지 않게 한다 */
   installing: boolean
   /** 마지막 행동의 결과. 화면이 한 줄로 알린다 */
   notice: string | null
   installFromDisk: () => void
-  /** 켜고 끈다. 목록에는 그대로 남고 명령·뷰만 사라진다 */
+  /** `activeProject` 에서 켜고 끈다. 목록에는 그대로 남고 그 프로젝트의 명령·뷰만 사라진다 */
   setEnabled: (name: string, enabled: boolean) => void
   /** 폴더째 지운다. 되돌릴 수 없어 확인은 **화면이 먼저** 받는다 */
   uninstall: (dir: string) => void
@@ -32,6 +35,7 @@ export interface ExtensionListHandle {
 export function useExtensionList(active: boolean): ExtensionListHandle {
   const [extensions, setExtensions] = useState<ExtensionEntryPayload[]>([])
   const [skipped, setSkipped] = useState<SkippedExtensionPayload[]>([])
+  const [activeProject, setActiveProject] = useState<ExtensionListPayload['activeProject']>(null)
   const [loading, setLoading] = useState(false)
   const [installing, setInstalling] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
@@ -53,6 +57,7 @@ export function useExtensionList(active: boolean): ExtensionListHandle {
         if (!alive.current) return
         setExtensions(list.extensions)
         setSkipped(list.skipped)
+        setActiveProject(list.activeProject)
       })
       .finally(() => {
         if (alive.current) setLoading(false)
@@ -82,14 +87,18 @@ export function useExtensionList(active: boolean): ExtensionListHandle {
   }, [refresh])
 
   /**
-   * 켜고 끄기. **끝난 뒤 목록을 다시 읽는다** — main 이 설정에 남기고 호스트를 다시 싣는데,
-   * 화면이 제 상태만 뒤집으면 그 둘이 실패했을 때 어긋난 채로 남는다.
+   * 켜고 끄기. **끝난 뒤 목록을 다시 읽는다** — main 이 프로젝트 기록에 남기고 호스트를 다시
+   * 싣는데, 화면이 제 상태만 뒤집으면 그 둘이 실패했을 때 어긋난 채로 남는다.
+   *
+   * 프로젝트는 **목록이 준 것**을 보낸다 — 화면에 적힌 이름과 실제로 바뀌는 프로젝트가 같아야 한다.
    */
+  const projectId = activeProject?.id ?? null
   const setEnabled = useCallback(
     (name: string, enabled: boolean) => {
+      if (projectId === null) return
       setNotice(null)
       void window.davis
-        .setExtensionEnabled({ name, enabled })
+        .setExtensionEnabled({ name, enabled, projectId })
         .catch(() => {
           if (alive.current) setNotice('확장을 켜고 끄지 못했습니다.')
         })
@@ -97,7 +106,7 @@ export function useExtensionList(active: boolean): ExtensionListHandle {
           if (alive.current) refresh()
         })
     },
-    [refresh],
+    [refresh, projectId],
   )
 
   const uninstall = useCallback(
@@ -129,6 +138,7 @@ export function useExtensionList(active: boolean): ExtensionListHandle {
   return {
     extensions,
     skipped,
+    activeProject,
     loading,
     installing,
     notice,

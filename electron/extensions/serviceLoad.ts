@@ -2,7 +2,8 @@ import { describeError } from '../../shared/errors/describeError'
 import { METHOD_LOAD_EXTENSIONS } from './rpc'
 import { toSkips } from './serviceParse'
 import { defaultExtensionsDir, scanExtensions, type ExtensionScan, type SkippedExtension } from './registry'
-import { disabledNames, onlyEnabled, withEnabled, type ListedExtension } from './serviceEnabled'
+import { installedNames, onlyEnabled, withEnabled, type ListedExtension } from './serviceEnabled'
+import type { ProjectExtensionsPort } from './projectExtensions'
 import type { ExtensionLoadFailed } from './extensionLoader'
 
 // `ExtensionService` 가 하는 셋 중 **첫 둘** — 훑기(registry) → 자식에 실으라고 넘기기 —
@@ -24,18 +25,24 @@ export interface ExtensionSkip {
 }
 
 export interface ExtensionListing {
+  /** `enabled` 는 **`activeProject` 에서** 켜졌는가다 */
   extensions: ListedExtension[]
   skipped: ExtensionSkip[]
+  /** 켜짐의 기준 프로젝트 (지금 활성). 없으면 null 이고 그때는 전부 꺼진 것으로 온다 */
+  activeProject: { id: string; name: string } | null
 }
 
 export interface ExtensionLoaderDeps {
   /** 기본값은 `~/.open-code/desktop-extensions` */
   extensionsDir?: string
   /**
-   * 꺼 둔 확장 이름. 부를 때마다 읽는다 — 설정은 앱이 도는 중에 바뀐다.
-   * 값이 아니라 함수인 이유는 `ExtensionServiceOptions` 쪽 머리말에 있다.
+   * 프로젝트마다 켠 확장 (`projectExtensions.ts`). 부를 때마다 묻는다 — 켜고 끄는 것도
+   * 활성 프로젝트도 앱이 도는 중에 바뀐다.
+   *
+   * **안 주면 어디서나 전부 켜진 것으로 친다** (확장 레포의 시험이 이렇게 띄운다).
+   * 앱은 늘 준다 (`appHost.ts`).
    */
-  disabledNames?: () => Promise<readonly string[]>
+  projects?: ProjectExtensionsPort
   /** 자식에 거는 요청. `ExtensionHost.request` 를 그대로 받는다. */
   request(method: string, params?: unknown): Promise<unknown>
   /** 앱 로그창으로 흘리는 통로 */
@@ -65,13 +72,31 @@ export class ExtensionLoader {
    * 훑기 결과 + 싣기 실패를 합친 목록. 화면·IPC 가 이걸 그대로 쓴다.
    *
    * **꺼 둔 확장도 여기 남는다.** 목록에서까지 사라지면 다시 켤 방법이 없다.
+   * 켜짐은 **활성 프로젝트** 기준이다 — 목록을 보는 사람은 그 프로젝트를 보고 있다.
    */
   async listing(): Promise<ExtensionListing> {
     const scan = await this.scan()
+    const projects = this.deps.projects
+    const activeProject = projects?.active() ?? null
+    const installed = installedNames(scan.extensions)
     return {
-      extensions: withEnabled(scan.extensions, await this.disabled()),
+      extensions: withEnabled(
+        scan.extensions,
+        projects ? await projects.enabledIn(activeProject?.id ?? null, installed) : new Set(installed),
+      ),
       skipped: [...scan.skipped, ...this.loadFailures],
+      activeProject,
     }
+  }
+
+  /**
+   * 그 프로젝트에 켜진 이름 — 명령을 거는 쪽이 자식에 실어 보내 거절을 받는다 (`serviceInvoke.ts`).
+   * 정책이 배선되지 않았으면 `undefined`(= 확인하지 않는다).
+   */
+  async allowedIn(projectId: string | null): Promise<string[] | undefined> {
+    if (!this.deps.projects) return undefined
+    const installed = installedNames((await this.scan()).extensions)
+    return [...(await this.deps.projects.enabledIn(projectId, installed))]
   }
 
   async loadAll(): Promise<void> {
@@ -84,7 +109,14 @@ export class ExtensionLoader {
     // ponytail: 꺼도 **이미 실린 코드는 여기서 멈추지 않는다** — 자식의 require 캐시에 남은
     // 모듈이 걸어 둔 타이머·리스너는 앱을 껐다 켤 때까지 돈다. 확실히 멈추려면 자식을
     // 다시 띄워야 하는데 그러면 다른 확장이 쥔 상태까지 날아간다 (`reload` 와 같은 판단).
-    const enabled = onlyEnabled(scan.extensions, await this.disabled())
+    //
+    // 호스트는 앱에 하나라 **어느 프로젝트에서든 켜진 것을** 싣는다(합집합). 켜지 않은
+    // 프로젝트에서 부르는 것은 명령을 걸 때 막는다 (`allowedIn`).
+    const installed = installedNames(scan.extensions)
+    const enabled = onlyEnabled(
+      scan.extensions,
+      this.deps.projects ? await this.deps.projects.enabledAnywhere(installed) : new Set(installed),
+    )
 
     try {
       const result = await this.deps.request(METHOD_LOAD_EXTENSIONS, { extensions: enabled })
@@ -100,10 +132,6 @@ export class ExtensionLoader {
   private scan(): Promise<ExtensionScan> {
     this.scanning ??= scanExtensions(this.extensionsDir)
     return this.scanning
-  }
-
-  private disabled(): Promise<ReadonlySet<string>> {
-    return disabledNames(this.deps.disabledNames, (message) => this.deps.log(`[확장] ${message}`))
   }
 
   /** 못 실은 확장을 사유와 함께 로그로 남긴다. 빈 목록이면 아무것도 찍지 않는다. */

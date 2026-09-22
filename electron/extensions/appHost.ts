@@ -5,6 +5,7 @@ import type { ForkFn } from './host'
 import type { ProjectRegistry } from '../projects/projectRegistry'
 import type { AskResult } from './chatAsk'
 import type { ExtensionAskText } from './serviceDispatch'
+import type { ProjectExtensionsPort } from './projectExtensions'
 
 // 확장 호스트를 **띄우는** 자리. `main.ts` 에서 갈라냈다 — `appPorts.ts` 와 같은 이유로,
 // 저쪽은 배선만 하는 자리인데 300줄 상한에 닿았다.
@@ -32,8 +33,8 @@ export interface AppHostDeps {
   activeFile: () => unknown
   /** 사람에게 묻는 통로. 같은 이유로 함수다 — 창과 함께 생긴다 */
   askText?: ExtensionAskText
-  /** 꺼 둔 확장. 부를 때마다 읽는다 — 설정은 앱이 도는 중에 바뀐다 */
-  disabledNames: () => Promise<readonly string[]>
+  /** 프로젝트마다 켠 확장. 부를 때마다 묻는다 — 켜고 끄는 것은 앱이 도는 중에 바뀐다 */
+  projects: ProjectExtensionsPort
   log: (line: string) => void
 }
 
@@ -57,7 +58,7 @@ export function startExtensionHost(deps: AppHostDeps): {
     entryPath: deps.entryPath,
     fork: deps.fork,
     ...ports,
-    disabledNames: deps.disabledNames,
+    projects: deps.projects,
   })
   service.onLog((line) => deps.log(`[확장 호스트] ${line.trim()}`))
   service.onExit((code) => deps.log(`[확장 호스트] 종료 code=${code}`))

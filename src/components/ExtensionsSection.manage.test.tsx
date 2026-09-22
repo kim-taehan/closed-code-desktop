@@ -17,6 +17,7 @@ import type { RegistryListPayload } from '../../shared/ipc/extensionRegistryPayl
 // - 끈 확장도 **목록에 남는다.** 사라지면 다시 켤 자리가 없다
 // - 지우기는 되돌릴 수 없어 **한 번 묻는다.** 바로 지우지 않는다
 // - 어느 쪽이든 끝나면 목록을 **다시 읽는다** — main 이 실패했을 때 화면만 앞서가면 안 된다
+// - 켜기는 **프로젝트마다**다 — 목록이 준 프로젝트로 보내고, 프로젝트가 없으면 막는다
 
 function extension(overrides: Partial<ExtensionEntryPayload> = {}): ExtensionEntryPayload {
   return {
@@ -39,12 +40,14 @@ const davisStub = {
 }
 ;(window as unknown as { davis: unknown }).davis = davisStub
 
+const PROJECT = { id: 'p-web', name: 'web-app' }
+
 function showing(...extensions: ExtensionEntryPayload[]) {
-  davisStub.listExtensions.mockResolvedValue({ extensions, skipped: [] })
+  davisStub.listExtensions.mockResolvedValue({ extensions, skipped: [], activeProject: PROJECT })
 }
 
 beforeEach(() => {
-  davisStub.listExtensions.mockReset().mockResolvedValue({ extensions: [], skipped: [] })
+  davisStub.listExtensions.mockReset().mockResolvedValue({ extensions: [], skipped: [], activeProject: null })
   davisStub.installExtensionFromDisk.mockReset()
   davisStub.listExtensionRegistries.mockReset().mockResolvedValue({ urls: [] })
   davisStub.readExtensionReadme.mockReset().mockResolvedValue({ ok: false, reason: 'missing' })
@@ -65,8 +68,29 @@ describe('켜기/끄기', () => {
       expect(davisStub.setExtensionEnabled).toHaveBeenCalledWith({
         name: 'line-checker',
         enabled: false,
+        projectId: 'p-web',
       }),
     )
+  })
+
+  // 앱 전체를 끄는 줄 알면 안 된다 — 어느 프로젝트의 스위치인지 적혀 있어야 한다
+  it('스위치에 이 프로젝트 이름이 붙는다', async () => {
+    showing(extension())
+    render(<ExtensionsSection />)
+
+    expect(await screen.findByText('이 프로젝트에서 켜기 — web-app')).toBeTruthy()
+    expect(screen.getByLabelText('라인 체커 켜기').getAttribute('title')).toBe('이 프로젝트에서 켜기 — web-app')
+  })
+
+  it('열린 프로젝트가 없으면 스위치를 막고 보내지 않는다', async () => {
+    davisStub.listExtensions.mockResolvedValue({ extensions: [extension({ enabled: false })], skipped: [], activeProject: null })
+    render(<ExtensionsSection />)
+
+    const toggle = (await screen.findByLabelText('라인 체커 켜기')) as HTMLInputElement
+    expect(toggle.disabled).toBe(true)
+    expect(screen.getByText('열린 프로젝트가 없어 켜고 끌 수 없습니다')).toBeTruthy()
+    fireEvent.click(toggle)
+    expect(davisStub.setExtensionEnabled).not.toHaveBeenCalled()
   })
 
   it('끝나면 목록을 다시 읽는다 — 화면만 앞서가면 main 이 실패해도 켜진 것처럼 보인다', async () => {

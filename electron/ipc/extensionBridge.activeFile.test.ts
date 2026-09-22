@@ -1,3 +1,4 @@
+import { inertProjects } from '../../tests/extensions/inertProjects'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -49,6 +50,7 @@ function makeBridge() {
     views: { register: () => 'code-ext://view/1' },
     activeProjectId: () => '프로젝트-1',
     settings: new SettingsStore(join(tmpdir(), `code-extactive-${process.pid}.json`)),
+    projects: inertProjects(),
   })
 
   return { bridge, activeFiles }

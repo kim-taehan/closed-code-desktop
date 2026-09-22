@@ -1,3 +1,4 @@
+import { inertProjects } from '../../tests/extensions/inertProjects'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -82,6 +83,7 @@ describe('배포처 채널', () => {
       activeProjectId: () => null,
       extensionsDir: join(dir, 'desktop-extensions'),
       settings: new SettingsStore(join(dir, 'settings.json')),
+      projects: inertProjects(),
       fetchImpl: fetchImpl as unknown as typeof fetch,
     })
     bridge.register()

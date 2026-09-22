@@ -22,6 +22,7 @@ export interface Invoker {
     projectId: string | null,
     selection?: unknown,
     extension?: string,
+    allowed?: readonly string[],
   ): Promise<void>
   redraw(projectId: string | null): Promise<void>
   activeFileChanged(file: unknown, projectId: string | null): Promise<void>
@@ -40,10 +41,20 @@ export function createInvoker(deps: InvokeDeps): Invoker {
      * `selection` 은 **사용자가 화면에서 고른 것**이다 (트리 체크박스·목록 선택).
      * `extension` 은 **확장 화면에서 온 명령의 주인**이고, 있으면 자식이 명령표의 주인과
      * 대조해 남의 명령을 거부한다 (없으면 종전대로 확인 없이 돈다).
+     *
+     * `allowed` 는 **`projectId` 에 켜진 확장 이름**이다. 호스트는 모든 프로젝트의 합집합을
+     * 싣고 있어서, 명령표에 있다는 것만으로는 이 프로젝트에서 불러도 되는지 모른다. 자식이
+     * 명령의 주인을 이 목록과 대조해 거부한다 — 주인을 아는 것이 자식뿐이라서다(확장이
+     * `activate` 에서 매니페스트에 없는 명령도 등록한다). 없으면 확인하지 않는다.
      */
-    async runCommand(commandId, projectId, selection, extension) {
+    async runCommand(commandId, projectId, selection, extension, allowed) {
       await deps.during(projectId, () =>
-        deps.request(METHOD_RUN_COMMAND, { commandId, selection, extension }),
+        deps.request(METHOD_RUN_COMMAND, {
+          commandId,
+          selection,
+          extension,
+          ...(allowed !== undefined ? { allowed } : {}),
+        }),
       )
     },
 

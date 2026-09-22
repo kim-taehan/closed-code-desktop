@@ -15,6 +15,15 @@ export interface ProjectRecord {
   /** 프로젝트별 라이선스. 없으면 상위로 위임한다 (설계 §4.1). */
   /** epoch ms */
   lastOpenedAt: number
+  /**
+   * 이 프로젝트에서 켠 확장의 이름(매니페스트 `name`). 설치는 앱 전체, 켜기는 프로젝트마다다
+   * (확장 재설계 §3). 새 프로젝트는 `[]` 로 시작한다.
+   *
+   * **없음(undefined)과 빈 배열은 다른 뜻이다.** 없으면 이 기능 전에 만든 기록이라 아직
+   * 이전하지 않은 것이고, 처음 필요할 때 옛 앱 전체 기준(설치 − `disabledExtensions`)으로
+   * 채워 저장한다 (`electron/extensions/projectExtensions.ts`).
+   */
+  extensions?: string[]
 }
 
 /** 최근 목록 상한. 즐겨찾기는 여기 세지 않는다. */

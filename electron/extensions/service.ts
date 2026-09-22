@@ -8,6 +8,7 @@ import { ViewOwnership } from './viewOwnership'
 import { createInvoker, type Invoker } from './serviceInvoke'
 import { dispatchExtensionApi, portsOf, type DispatchPorts } from './serviceDispatch'
 import { ExtensionLoader, type ExtensionListing } from './serviceLoad'
+import type { ProjectExtensionsPort } from './projectExtensions'
 import type { ExtensionProgressPayload } from '../../shared/ipc/extensionPayloads'
 
 // 훑기·싣기의 정본은 `serviceLoad.ts` 다. 목록 타입도 그쪽에 산다 —
@@ -33,12 +34,12 @@ export interface ExtensionServiceOptions extends DispatchPorts {
   /** 기본값은 `~/.open-code/desktop-extensions` */
   extensionsDir?: string
   /**
-   * 꺼 둔 확장 이름. 부를 때마다 읽는다 — 설정은 앱이 도는 중에 바뀐다.
+   * 프로젝트마다 켠 확장 (`projectExtensions.ts`). 부를 때마다 묻는다 — 설정은 앱이 도는 중에 바뀐다.
    *
-   * 함수로 받는 이유는 `activeProjectId` 와 같다. 값으로 받으면 끄고 켠 것이
-   * 다음 앱 실행에나 반영된다.
+   * 값(이름 목록)이 아니라 묻는 창구로 받는 이유는 `activeProjectId` 와 같다. 값으로 받으면
+   * 끄고 켠 것이 다음 앱 실행에나 반영된다. 안 주면 전부 켜진 것으로 친다 (`serviceLoad.ts`).
    */
-  disabledNames?: () => Promise<readonly string[]>
+  projects?: ProjectExtensionsPort
 }
 
 export class ExtensionService {
@@ -61,7 +62,7 @@ export class ExtensionService {
     this.host = new ExtensionHost({ entryPath: options.entryPath, fork: options.fork })
     this.loader = new ExtensionLoader({
       ...(options.extensionsDir !== undefined ? { extensionsDir: options.extensionsDir } : {}),
-      ...(options.disabledNames !== undefined ? { disabledNames: options.disabledNames } : {}),
+      ...(options.projects !== undefined ? { projects: options.projects } : {}),
       request: (method, params) => this.host.request(method, params),
       log: (line) => this.logHandlers.emit(line),
     })
@@ -150,6 +151,8 @@ export class ExtensionService {
 
   // 아래 셋은 `serviceInvoke.ts` 에 위임한다. **여기서 하는 일은 `settled()` 하나** —
   // 싣기가 끝나기 전에 걸면 자식에 명령표가 없어 빈손으로 거부된다.
+  // `runCommand` 만 하나 더 한다: 그 프로젝트에 켜진 이름을 실어 보낸다 (`allowedIn`).
+  // 판정 프로젝트는 **겉봉과 같은 `projectId`** 다 — 다시 조회하면 탭을 옮긴 사이 어긋난다.
 
   async runCommand(
     commandId: string,
@@ -158,7 +161,8 @@ export class ExtensionService {
     extension?: string,
   ): Promise<void> {
     await this.settled()
-    await this.invoke.runCommand(commandId, projectId, selection, extension)
+    const allowed = await this.loader.allowedIn(projectId)
+    await this.invoke.runCommand(commandId, projectId, selection, extension, allowed)
   }
 
   async redraw(projectId: string | null): Promise<void> {

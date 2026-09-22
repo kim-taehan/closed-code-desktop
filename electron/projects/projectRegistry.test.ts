@@ -260,3 +260,18 @@ describe('복원', () => {
   })
 })
 
+
+describe('확장 기록 채우기 (이전)', () => {
+  // 확장 호스트가 복원 전에 이전을 부르면 레지스트리가 비어 있다. 그때 저장하면 projects.json 이 지워진다
+  it('채울 기록이 없으면 저장하지 않는다 — 복원 전에 불려도 파일이 안 지워진다', async () => {
+    const root = await makeDir('kept')
+    const first = registry()
+    await first.open(root)
+
+    await registry().fillExtensions(['todo'])
+
+    const reread = registry()
+    await reread.restore()
+    expect(reread.all.map((project) => project.root)).toEqual([root])
+  })
+})

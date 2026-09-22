@@ -22,7 +22,8 @@ export interface ExtensionEntryPayload {
   /** 설치 위치. 상세에 보이고, **삭제할 때 가리키는 것**도 이 값이다 */
   dir: string
   /**
-   * 켜져 있는지. 꺼진 확장은 목록에 남되 실리지 않아 명령·뷰가 사라진다.
+   * **활성 프로젝트에서**(`ExtensionListPayload.activeProject`) 켜져 있는지. 꺼진 확장은 목록에
+   * 남되 그 프로젝트에서는 명령·뷰가 사라진다. 켜기는 프로젝트마다다 (확장 재설계 §3).
    *
    * 목록에서까지 지우지 않는 이유는 단순하다 — 사라지면 다시 켤 자리가 없다.
    */
@@ -57,6 +58,12 @@ export interface SkippedExtensionPayload {
 export interface ExtensionListPayload {
   extensions: ExtensionEntryPayload[]
   skipped: SkippedExtensionPayload[]
+  /**
+   * `enabled` 의 기준 프로젝트 (지금 활성). 켜고 끌 때 **이 id 를 그대로 돌려보낸다** —
+   * 누르는 순간 활성 프로젝트를 다시 조회하면, 목록을 받은 뒤 탭을 옮긴 사이 남의 프로젝트가 바뀐다.
+   * 열린 프로젝트가 없으면 null 이고, 전부 꺼진 것으로 오며 켜고 끌 수 없다.
+   */
+  activeProject: { id: string; name: string } | null
 }
 
 /**
@@ -159,6 +166,8 @@ export interface ExtensionReadmePayload {
 export interface ExtensionSetEnabledPayload {
   name: string
   enabled: boolean
+  /** 어느 프로젝트에서. 목록이 준 `activeProject.id` 다 */
+  projectId: string
 }
 
 /**
