@@ -7,12 +7,14 @@ import type { ExtensionAskText } from './serviceDispatch'
 import type { SettingsStore } from '../settings/settingsStore'
 import type { ProjectRegistry } from '../projects/projectRegistry'
 import { createProjectExtensions, type ProjectExtensionsPort } from './projectExtensions'
+import type { UiPorts } from './uiRouter'
 
 // 확장 호스트 기동. 판단은 전부 `appHost.ts` 에 있고 여기서는 앱 상태만 잇는다.
 // `main.ts` 가 300줄 상한에 닿아 그대로 옮겨 왔다 — **판단은 하나도 오지 않았다.**
 //
 // ⚠️ **여기 오는 것은 전부 함수다.** 확장 호스트는 앱 수명이고 창·브리지는 창 수명이라,
 // 값으로 받아 굳히면 창을 되살린 뒤 죽은 세대를 바라본다 (`mcp/appWiring.ts` 와 같은 함정).
+// **예외는 `ui` 하나다** — 그 객체 자체가 앱 수명이고, 창 쪽은 그 안에 붙었다 떨어진다 (`uiRouter.ts`).
 
 /** 창 수명 물건들을 그때그때 읽는 창구. 창이 없으면 `null` 이고, 그 처리는 아래에서 한다. */
 export interface ExtensionHostDeps {
@@ -24,6 +26,8 @@ export interface ExtensionHostDeps {
   /** 물음창. 창이 없으면 null */
   askText: (options: Parameters<ExtensionAskText>[0]) => ReturnType<ExtensionAskText> | null
   settings: () => SettingsStore | null
+  /** 웹뷰 탭의 행선지. **앱 수명이라 값으로 받는다** — 창 쪽은 붙었다 떨어진다 (`uiRouter.ts`) */
+  ui: UiPorts
 }
 
 export function launchExtensionHost(deps: ExtensionHostDeps): ExtensionService | null {
@@ -46,6 +50,7 @@ export function launchExtensionHost(deps: ExtensionHostDeps): ExtensionService |
     // 조용히 취소로 눙치면 확장은 사람이 닫은 줄 알고 아무 말도 하지 않는다.
     askText: (options) => deps.askText(options) ?? Promise.reject(new Error('물어볼 창이 없습니다')),
     projects: appProjectExtensions(deps.registry, deps.settings),
+    ui: deps.ui,
     log: (line) => console.log(line),
   })
   return started.service

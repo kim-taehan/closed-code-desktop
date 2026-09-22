@@ -1,6 +1,7 @@
 import { useRecentSaves } from './recentSaves'
 import { useOpenDiffTab } from './useOpenDiffTab'
 import { useOpenHtmlTab } from './useOpenHtmlTab'
+import { useOpenWebviewTab } from './useOpenWebviewTab'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { activeEditorOf, chatContextOf, useEditorSelections } from './editorContext'
 import { openTargetOf } from './externalOpen'
@@ -196,6 +197,7 @@ export function useOpenFiles(
 
   const openDiff = useOpenDiffTab(projectId, setFiles, setActive)
   const openHtml = useOpenHtmlTab(setFiles, setActive)
+  const openWebview = useOpenWebviewTab(setFiles, setActive)
 
   // 채팅에 실을 편집기 컨텍스트. git diff 탭은 실제 파일이 아니라 양쪽에서 거른다.
   const editor = activeEditorOf(files, active, selection.selections)
@@ -208,6 +210,7 @@ export function useOpenFiles(
     openRouted,
     openDiff,
     openHtml,
+    openWebview,
     close,
     closeMany,
     select: setActive,

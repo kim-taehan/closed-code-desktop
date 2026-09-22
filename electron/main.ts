@@ -20,7 +20,11 @@ import { disposeWindowScoped } from './app/windowTeardown'
 import { applyDockIcon } from './app/dockIcon'
 import type { ExtensionService } from './extensions/service'
 import { appProjectExtensions, launchExtensionHost } from './extensions/appLaunch'
-import { ExtensionViewHost, VIEW_SCHEME } from './extensions/viewHost'
+import { ExtensionViewHost } from './extensions/viewHost'
+import { ExtensionUiServer } from './extensions/uiServer'
+import { handleViewProtocol, registerViewScheme } from './extensions/viewProtocol'
+import { ExtensionUiRouter } from './extensions/uiRouter'
+import { ExtensionUiBridge } from './ipc/extensionUiBridge'
 import type { DesktopMcp } from './mcp/desktopMcp'
 import { createDesktopMcp } from './mcp/appWiring'
 import { PtyDrawerBridge } from './pty/drawerBridge'
@@ -29,13 +33,12 @@ import { PtyDrawerBridge } from './pty/drawerBridge'
 const primaryInstance = claimSingleInstance()
 
 // 확장 화면을 서빙할 스킴. **app ready 전에** 등록해야 한다 (Electron 규칙) —
-// 그래서 이 한 줄만 모듈 최상위에 있다. 이유는 `viewHost.ts` 머리말.
-// standard: URL 에 host(`view`)를 두려면 필요하다. secure: 안 주면 프레임이 비보안으로 막힌다.
-protocol.registerSchemesAsPrivileged([
-  { scheme: VIEW_SCHEME, privileges: { standard: true, secure: true } },
-])
+// 그래서 이 한 줄만 모듈 최상위에 있다. 이유는 `viewHost.ts` 머리말, 권한은 `viewProtocol.ts`.
+registerViewScheme(protocol)
 
 const extensionViews = new ExtensionViewHost()
+/** 웹뷰 탭(3판)의 `ui/` 서빙과 메시지 행선지 (`uiRouter.ts`). 스킴 처리기·호스트와 같이 앱 수명이다 */
+const extensionUi = new ExtensionUiRouter(new ExtensionUiServer())
 
 /**
  * 우리가 띄운 서버의 흔적. **훅이 안 도는 종료(SIGKILL·크래시·전원 차단)의 그물이다** —
@@ -70,6 +73,7 @@ let git: GitBridge | null = null
 let extensions: ExtensionService | null = null
 // 브리지는 창에 매인다(webContents.send). 호스트(앱 수명)와 수명이 달라 정리 시점도 다르다.
 let extensionIpc: ExtensionBridge | null = null
+let extensionUiIpc: ExtensionUiBridge | null = null // 웹뷰 탭 — 창이 붙는 자리 (`uiRouter.ts`)
 // 확장은 앱 수명(창보다 먼저 뜬다)이라 레지스트리 인스턴스를 들고 있을 수 없다. 여기로 조회한다.
 let projectRegistry: ProjectRegistry | null = null
 /** 확장 호스트가 옛 "꺼 둔 확장" 을 (이전에만) 물어보는 곳. 호스트는 창보다 오래 살아 여기 둔다. */
@@ -208,6 +212,8 @@ async function createWindow(): Promise<void> {
       projects: appProjectExtensions(() => registry, () => settings), // 켜기는 프로젝트마다 — 상태는 이 레지스트리에 산다
     })
     extensionIpc.register()
+    extensionUiIpc = new ExtensionUiBridge({ window, service: extensions, router: extensionUi })
+    extensionUiIpc.register()
   }
 
   // 화면은 IPC 핸들러가 다 붙은 뒤에 로드한다 —
@@ -238,14 +244,8 @@ void app.whenReady().then(async () => {
   // 기본 메뉴의 Close Window(⌘W)가 renderer 의 탭 닫기를 가로채지 않게 커스텀 메뉴를 세운다
   installAppMenu()
   applyDockIcon()
-  // 확장 화면 서빙. 창보다 먼저 걸어야 한다 — 창이 뜨자마자 확장 탭이 복원될 수 있다.
-  protocol.handle(VIEW_SCHEME, (request) => {
-    const served = extensionViews.handle(request.url)
-    return new Response(served.body, {
-      status: served.status,
-      headers: { 'content-type': 'text/html; charset=utf-8' },
-    })
-  })
+  // 확장 화면 서빙 (`view`·`ui` 두 갈래는 `viewProtocol.ts`). 창보다 먼저 건다.
+  handleViewProtocol(protocol, extensionViews, extensionUi.server)
   // 창 수명 물건들은 **함수로** 넘긴다 — 호스트는 앱 수명이라 굳히면 죽은 세대를 본다
   extensions = launchExtensionHost({
     registry: () => projectRegistry,
@@ -253,6 +253,7 @@ void app.whenReady().then(async () => {
     activeFile: () => extensionIpc?.currentActiveFile() ?? null,
     askText: (options) => extensionIpc?.askText(options) ?? null,
     settings: () => appSettings,
+    ui: extensionUi,
   })
   await createWindow()
 
@@ -269,7 +270,7 @@ app.on('window-all-closed', () => {
   // 거두는 순서와 그 사유는 `app/windowTeardown.ts` 가 정본이다.
   // 여기 남는 것은 **모듈 변수를 비우는 일**뿐이다 — 저쪽이 대신 못 한다.
   ipcMain.removeAllListeners(Channel.NOTIFY_TASK_DONE)
-  disposeWindowScoped({ projects, logs, drawer, git, extensionIpc, bridge, mcp: desktopMcp }, () => {
+  disposeWindowScoped({ projects, logs, drawer, git, extensionIpc, extensionUi: extensionUiIpc, bridge, mcp: desktopMcp }, () => {
     bridge = null
   })
   projects = null
@@ -278,6 +279,7 @@ app.on('window-all-closed', () => {
   mainWindow = null
   git = null
   extensionIpc = null
+  extensionUiIpc = null
 })
 
 // 앱이 완전히 종료되기 전에 정리한다 (⌘Q 등). **끝날 때까지 붙잡는다** —

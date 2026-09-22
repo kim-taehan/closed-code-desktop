@@ -21,6 +21,8 @@
 // "왜 버렸는지"를 돌려주지 않는다. 확장은 사람이 직접 설치하므로 **조용히 삼키면 왜 안 뜨는지
 // 알 길이 없다.** 사유를 같이 돌려준다. 이 모양의 선례는 `electron/projects/projectFs.ts` 다.
 
+import { toView, type ExtensionView } from './manifestViews'
+
 /**
  * 이 앱이 읽을 수 있는 매니페스트 판. 여기 없는 판은 거부한다.
  *
@@ -28,20 +30,16 @@
  * `agent.ask` 가 사용자 대화의 턴(`chat.ask`)으로 바뀌었고 이름도 옛 접두사에서 `code.*` 다.
  * 1판 확장을 그대로 실으면 없는 것을 부르다 죽는다. 호환 겹을 안 만든 이유는
  * **설치된 1판 확장이 없어서다** (사용자 확인 2026-08-13).
+ *
+ * **3 을 더했다 (2026-09-22, 확장 재설계 3단계).** 달라진 것은 뷰뿐이다 — 3판의 뷰는
+ * `kind: 'webview'` 하나이고 패키지의 `ui/` 를 본문 탭에 띄운다 (`manifestViews.ts`).
+ * 2판은 **오늘과 똑같이** 읽고 돈다 — 우리 확장 둘이 5단계에서 옮겨 가기 전까지 2판이다.
+ * 2판을 빼는 것은 6단계(옛 API 삭제)다.
  */
-export const SUPPORTED_MANIFEST_VERSIONS = [2] as const
+export const SUPPORTED_MANIFEST_VERSIONS = [2, 3] as const
 
-/**
- * 앱이 그릴 수 있는 뷰 종류.
- *
- * **`html` 은 원래 없던 것이고, "확장이 HTML 을 들고 오지 않는다" 던 결정을 뒤집은 것이다.**
- * 뒤집은 이유: 목록 → 상세 → 관계로 링크를 타고 다니는 화면은 행 배열로 표현되지 않는다.
- *
- * 뒤집으면서도 지킨 선은 이것이다 — **호스트는 그릴 뿐 내용을 모른다.** 호스트가 특정 확장의
- * 화면 모양("프로그램목록은 이렇게 생겼다")을 알기 시작하면 그것이 결합이다. 격리해 감싸는
- * 일은 `src/state/extensionHtmlDoc.ts` 가 하고, 거기서도 내용은 손대지 않는다.
- */
-export type ExtensionViewKind = 'table' | 'tree' | 'list' | 'html'
+// 뷰의 타입과 파서는 `manifestViews.ts` 에 있다 (판마다 모양이 달라 갈라냈다). 여기서 다시 낸다.
+export type { ExtensionView, ExtensionViewKind } from './manifestViews'
 
 /**
  * 명령이 앉을 자리.
@@ -87,12 +85,6 @@ export interface ExtensionCommand {
    * **`title` 은 사라지지 않는다**: 툴팁과 화면낭독기 이름으로 남는다.
    */
   icon?: string
-}
-
-export interface ExtensionView {
-  id: string
-  title: string
-  kind: ExtensionViewKind
 }
 
 /** 확장이 앱에 얹겠다고 선언한 것들. 이 단계는 담아두기만 하고 모양만 검증한다. */
@@ -164,8 +156,6 @@ export type ManifestParseResult =
   | { ok: true; manifest: ExtensionManifest }
   | { ok: false; reason: ManifestParseFailure }
 
-const VIEW_KINDS: ExtensionViewKind[] = ['table', 'tree', 'list', 'html']
-
 /**
  * 파싱된 JSON 을 매니페스트로 되돌린다.
  *
@@ -203,7 +193,7 @@ export function parseManifest(data: unknown): ManifestParseResult {
   const displayName = source['displayName']
   const description = source['description']
   const engines = toEngines(source['engines'])
-  const contributes = toContributes(source['contributes'])
+  const contributes = toContributes(source['contributes'], manifestVersion)
 
   return {
     ok: true,
@@ -230,7 +220,7 @@ function toEngines(value: unknown): { code: string } | null {
  * `contributes` 는 통째로 없어도 된다 — 화면에 아무것도 얹지 않는 확장이 있을 수 있다.
  * 있는데 모양이 아니면 `null` 로 떨궈 "선언 없음" 과 같게 본다.
  */
-function toContributes(value: unknown): ExtensionContributes | null {
+function toContributes(value: unknown, manifestVersion: number): ExtensionContributes | null {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return null
   const source = asRecord(value)
 
@@ -242,7 +232,7 @@ function toContributes(value: unknown): ExtensionContributes | null {
       ? { commands: commands.map(toCommand).filter((c): c is ExtensionCommand => c !== null) }
       : {}),
     ...(Array.isArray(views)
-      ? { views: views.map(toView).filter((v): v is ExtensionView => v !== null) }
+      ? { views: views.map((view) => toView(view, manifestVersion)).filter((v): v is ExtensionView => v !== null) }
       : {}),
   }
 }
@@ -272,22 +262,6 @@ function toCommand(value: unknown): ExtensionCommand | null {
     ...(placement === 'header' && typeof view === 'string' && view !== '' ? { view } : {}),
     ...(inPanelHeader && typeof icon === 'string' && icon !== '' ? { icon: [...icon][0] } : {}),
   }
-}
-
-function toView(value: unknown): ExtensionView | null {
-  const source = asRecord(value)
-  const id = source['id']
-  const title = source['title']
-  const kind = source['kind']
-  if (typeof id !== 'string' || id === '') return null
-  if (typeof title !== 'string' || title === '') return null
-  // 앱이 못 그리는 kind 는 담아둬도 쓸 데가 없다
-  if (!isViewKind(kind)) return null
-  return { id, title, kind }
-}
-
-function isViewKind(value: unknown): value is ExtensionViewKind {
-  return VIEW_KINDS.some((kind) => kind === value)
 }
 
 function asRecord(value: unknown): Record<string, unknown> {

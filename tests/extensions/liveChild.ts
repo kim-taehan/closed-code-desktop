@@ -2,6 +2,7 @@ import { createRequire } from 'node:module'
 import { join } from 'node:path'
 import { createChildHandler } from '../../electron/extensions/childHandlers'
 import { createExtensionApi } from '../../electron/extensions/extensionApi'
+import { UiHandlers } from '../../electron/extensions/uiHandlers'
 import {
   createNotice,
   createRequest,
@@ -49,11 +50,17 @@ export class LiveChild implements HostChild {
       this.toParent?.(message)
       return waiting
     }
-    // 실제 자식과 같게 **확장마다** 만든다 — storage 가 확장별로 갈리는 근거다
-    this.handle = createChildHandler((name) => createExtensionApi(call, name), {
-      requireModule: (absolutePath) => nodeRequire(absolutePath),
-      log: (line) => this.logs.push(line),
-    })
+    // 실제 자식과 같게 **확장마다** 만든다 — storage 가 확장별로 갈리는 근거다.
+    // 웹뷰 처리기 표도 실제 자식처럼 한 장을 둘에 준다 (`hostEntry.ts`)
+    const ui = new UiHandlers()
+    this.handle = createChildHandler(
+      (name) => createExtensionApi(call, name, undefined, ui),
+      {
+        requireModule: (absolutePath) => nodeRequire(absolutePath),
+        log: (line) => this.logs.push(line),
+      },
+      ui,
+    )
     // 부모가 리스너를 붙인 뒤에 "떴다" 를 알린다 (실제 자식도 fork 직후가 아니다)
     queueMicrotask(() => this.toParent?.(createNotice(NOTICE_READY, { pid: 0 })))
   }

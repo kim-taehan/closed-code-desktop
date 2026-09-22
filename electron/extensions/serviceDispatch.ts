@@ -13,7 +13,11 @@ import {
   METHOD_PROGRESS,
   METHOD_SET_TREE,
   METHOD_UI_ASK_TEXT,
+  METHOD_UI_OPEN,
+  METHOD_UI_POST,
 } from './extensionApi'
+import { dispatchUi, REFUSE_UI } from './uiDispatch'
+import type { UiPorts } from './uiRouter'
 import { asProgressKind, asProgressLanes, asRecord, requireString } from './serviceParse'
 import type { ExtensionProgressPayload } from '../../shared/ipc/extensionPayloads'
 import {
@@ -53,6 +57,8 @@ export interface DispatchDeps {
   ask: ExtensionAsk
   askText: ExtensionAskText
   storage: ExtensionStorage
+  /** 웹뷰 탭 — 메시지 밀기·탭 열기 (`uiRouter.ts`) */
+  ui: UiPorts
   /** 행·화면이 어느 프로젝트 것인지. 도는 명령이 없거나 겹치면 null(모름) */
   projectId: () => string | null
   /**
@@ -99,6 +105,8 @@ export interface DispatchPorts {
   askText?: ExtensionAskText
   /** 확장별·프로젝트별 저장소. */
   storage?: ExtensionStorage
+  /** 웹뷰 탭(3판). 창 쪽 배선이 붙기 전에는 탭이 없다고 답한다 (`uiRouter.ts`) */
+  ui?: UiPorts
   /**
    * 지금 보고 있는 파일. **배선을 안 하면 늘 null 이다.**
    *
@@ -129,6 +137,7 @@ export function portsOf(
     ask: ports.ask ?? refuseAsk,
     askText: ports.askText ?? refuseAskText,
     storage: ports.storage ?? REFUSE_STORAGE,
+    ui: ports.ui ?? REFUSE_UI,
     ...envelope,
   }
 }
@@ -242,6 +251,10 @@ export async function dispatchExtensionApi(deps: DispatchDeps, request: RpcReque
         requireString(params['key'], 'key'),
         params['value'],
       )
+    // 웹뷰 두 갈래는 프로젝트 규칙을 나눠 쓴다 — `uiDispatch.ts`
+    case METHOD_UI_POST:
+    case METHOD_UI_OPEN:
+      return dispatchUi(deps.ui, request.method, params, deps.projectId())
     default:
       throw new Error(`알 수 없는 메서드: ${request.method}`)
   }

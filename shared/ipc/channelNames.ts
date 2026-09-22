@@ -1,12 +1,31 @@
 // IPC 채널 이름 등록부. `channels.ts` 가 배럴로 re-export 하므로
 // 소비자는 여전히 `shared/ipc/channels` 에서 `Channel` 을 가져온다.
 //
-// **한 덩어리로 둔다 — 도메인별로 쪼개 spread 로 합치지 않는다.**
-// 지금은 객체 리터럴 하나라 키가 겹치면 컴파일이 막는다. 여러 파일로 갈라
+// **도메인별로 쪼개 spread 로 합치지 않는다.**
+// 객체 리터럴 하나일 때는 키가 겹치면 컴파일이 막는다. 여러 파일로 갈라
 // `{ ...SESSION, ...GIT }` 로 합치면 파일이 다른 중복 키가 조용히 덮어써진다 —
 // 채널 등록부에서 그건 추적이 거의 불가능한 버그가 된다.
+//
+// **그래서 갈랐을 때는 `disjoint` 로만 합친다 (2026-09-22).** 300줄 상한에 닿아 확장 채널을
+// `extensionChannelNames.ts` 로 옮겼다. `disjoint` 는 두 번째 묶음에 첫 묶음의 키가 있으면
+// **타입 오류**를 낸다 — 한 덩어리일 때 컴파일러가 막아 주던 것을 그대로 지킨다.
+// 값(문자열)이 겹치는 것은 컴파일러가 원래 못 보고, 그건 `channelNames.test.ts` 가 본다.
+import { EXTENSION_CHANNELS } from './extensionChannelNames'
 
-export const Channel = {
+/**
+ * 키가 겹치지 않는 두 묶음을 하나로. 겹치면 `B` 의 그 키가 `never` 를 요구해 컴파일이 멈춘다.
+ * 런타임에도 한 번 더 본다 — 타입을 `as` 로 누른 호출이 있어도 조용히 덮이지 않게.
+ */
+export function disjoint<A extends Record<string, string>, B extends Record<string, string> & { [K in keyof A]?: never }>(
+  a: A,
+  b: B,
+): A & B {
+  const shared = Object.keys(b).filter((key) => key in a)
+  if (shared.length > 0) throw new Error(`채널 키가 겹칩니다: ${shared.join(', ')}`)
+  return { ...a, ...b }
+}
+
+const CORE_CHANNELS = {
   /** renderer → main: 세션 시작 요청 */
   SESSION_START: 'session:start',
   /** renderer → main: 채팅 전송 */
@@ -53,13 +72,6 @@ export const Channel = {
    * 사람만 하고(설계 §3), 사람이 쓰는 문이 탭의 ✕ 다.
    */
   DESKTOP_MCP_RUN_PROJECT: 'desktopMcp:runProject',
-  /**
-   * main → renderer: **확장이 채팅으로 물었다** (`code.chat.ask`).
-   *
-   * 확장 질의는 사용자 입력과 **같은 큐**를 타야 한다 — 그 큐는 렌더러에 있다
-   * (`useSendQueue`). 그래서 main 이 대신 보내지 않고 화면에 밀어 넣는다.
-   */
-  EXTENSION_CHAT_ASK: 'extension:chatAsk',
   MODEL_OPTIONS_REQUEST: 'llm:modelOptions', // renderer → main: 모델 스위처 상태 재조회 (DC-1322)
   MODEL_STATE: 'llm:modelState', // main → renderer: 모델 스위처 상태 (llm_config status/models 결과)
   NOTIFICATION: 'notification:push',
@@ -237,63 +249,8 @@ export const Channel = {
   GIT_DROP_STASH: 'git:dropStash',
   /** main → renderer: 바뀐 git 상태 */
   GIT_STATE_PUSH: 'git:statePush',
-  /** renderer → main: 설치된 확장 목록 (건너뛴 것도 사유와 함께 온다) */
-  EXTENSION_LIST: 'extension:list',
-  /** renderer → main: 확장이 선언한 명령 실행 */
-  EXTENSION_RUN_COMMAND: 'extension:runCommand',
-  /** 저장된 것을 지금 프로젝트 기준으로 다시 그리라고 시킨다 (`ExtensionService.redraw`) */
-  EXTENSION_REDRAW: 'extension:redraw',
-  /**
-   * renderer → main: **편집기에서 보고 있는 파일이 바뀌었다.**
-   *
-   * 값의 주인은 렌더러다 (`src/state/editorContext.ts` 가 채팅에 싣는 그 값). main 은
-   * 마지막 값을 들고 있다가 확장에 넘긴다 — 확장이 당겨 갈 수도(`workspace.activeFile()`),
-   * 밀어 줄 수도(`onActiveFile`) 있어야 해서 둘 다 이 채널 하나에서 갈린다.
-   */
-  EXTENSION_ACTIVE_FILE: 'extension:activeFile',
-  /** 확장 화면의 「중단」 — **사용자 대화의 도는 턴**을 끊는다 (설계 2026-08-13) */
-  EXTENSION_CANCEL: 'extension:cancel',
-  /** 확장이 알린 진행 상황 한 줄 (`code.progress`) */
-  EXTENSION_PROGRESS: 'extension:progress',
-  /** main → renderer: 확장이 code.view.setRows 로 넘긴 행 */
-  EXTENSION_ROWS: 'extension:rows',
-  /** main → renderer: 확장이 code.view.setHtml 로 넘긴 HTML (격리는 renderer 가 씌운다) */
-  EXTENSION_HTML: 'extension:html',
-  /** 확장이 `view.setTree` 로 올린 트리. 앱이 그리고 **선택 상태도 앱이 쥔다.** */
-  EXTENSION_TREE: 'extension:tree',
-  /**
-   * 확장이 **사람에게 글을 묻는다** (`code.ui.askText`). main → renderer 밀어주기.
-   * 답은 `EXTENSION_ASK_TEXT_RESPOND` 로 되돌아온다.
-   */
-  EXTENSION_ASK_TEXT: 'extension:askText',
-  /** 위 물음의 답. `requestId` 로 잇는다 — 물음이 겹쳐도 서로의 답을 먹지 않는다. */
-  EXTENSION_ASK_TEXT_RESPOND: 'extension:askTextRespond',
-  /**
-   * renderer → main: 격리 문서를 등록하고 `code-ext://` URL 을 받는다.
-   *
-   * srcdoc 을 쓰지 않는 이유는 `electron/extensions/viewHost.ts` 머리말 —
-   * srcdoc 은 앱 CSP 를 물려받아 확장 화면의 스크립트가 통째로 죽는다.
-   */
-  EXTENSION_VIEW_REGISTER: 'extension:viewRegister',
-  /** renderer → main: 디스크에서 패키지를 골라 설치 */
-  EXTENSION_INSTALL_FROM_DISK: 'extension:installFromDisk',
-  /** renderer → main: 확장 폴더의 README.md (설정 창 「상세」) */
-  EXTENSION_README: 'extension:readme',
-  /** renderer → main: 확장 하나를 켜고 끈다 (목록에는 남고 실리지만 않는다) */
-  EXTENSION_SET_ENABLED: 'extension:setEnabled',
-  /** renderer → main: 설치된 확장을 폴더째 지운다 */
-  EXTENSION_UNINSTALL: 'extension:uninstall',
-  /** renderer → main: 확장 결과 표를 CSV 파일로 저장 (내용은 화면이 만들고 main 은 쓰기만) */
-  EXTENSION_EXPORT_CSV: 'extension:exportCsv',
-  /** renderer → main: 확장 배포처 주소 — 기억한 목록·추가·삭제 (표준 §4.4: 전체 주소를 그대로 쓴다) */
-  EXTENSION_REGISTRY_LIST: 'extension:registryList',
-  EXTENSION_REGISTRY_ADD: 'extension:registryAdd',
-  EXTENSION_REGISTRY_REMOVE: 'extension:registryRemove',
-  /** renderer → main: 배포처 하나를 조회한다 (목록 문서 = 사용자가 넣은 주소 그대로) */
-  EXTENSION_REGISTRY_FETCH: 'extension:registryFetch',
-  /** renderer → main: 배포처가 내놓은 설명(README) — **받기 전에** 보는 글이다 */
-  EXTENSION_REGISTRY_README: 'extension:registryReadme',
-  /** renderer → main: 배포처에서 패키지를 내려받아 설치한다 (디스크 설치와 같은 검사를 탄다) */
-  EXTENSION_REGISTRY_INSTALL: 'extension:registryInstall',
 } as const
+
+// 확장 채널은 `extensionChannelNames.ts` 에 산다. 합치는 것은 `disjoint` 하나뿐이다 (머리말).
+export const Channel = disjoint(CORE_CHANNELS, EXTENSION_CHANNELS)
 export type Channel = (typeof Channel)[keyof typeof Channel]

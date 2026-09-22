@@ -6,6 +6,7 @@ import { SKIP_REASON_LABEL } from '../state/extensionSkipReason'
 import { ExtensionRegistryTab } from './ExtensionRegistryTab'
 import { ExtensionDetail } from './ExtensionDetail'
 import { ExtensionInstalledRow } from './ExtensionInstalledRow'
+import { requestExtensionView } from '../state/useExtensionViewOpen'
 import '../styles/extensions.css'
 
 // 설정 창의 "확장" 분류 — 확장 프로그램을 받고 켜고 끄는 자리.
@@ -28,7 +29,8 @@ const TABS: { id: ExtensionTab; label: string }[] = [
   { id: 'installed', label: '설치됨' },
 ]
 
-export function ExtensionsSection() {
+/** `onOpened` — 웹뷰 탭을 연 뒤 부른다. 설정 창이 닫혀야 연 탭이 보인다 */
+export function ExtensionsSection({ onOpened }: { onOpened?: () => void } = {}) {
   // 설치됨이 기본이다 — 대개 가진 것을 확인하러 온다
   const [tab, setTab] = useState<ExtensionTab>('installed')
   // 탭과 무관하게 훑는다 — 배포처 탭도 행마다 설치 상태(설치/업데이트/설치됨)를 판정하려면
@@ -86,7 +88,7 @@ export function ExtensionsSection() {
       {tab === 'registry' ? (
         <ExtensionRegistryTab installed={list.extensions} onInstalled={list.refresh} />
       ) : (
-        <InstalledTab list={list} onOpenDetail={setDetail} />
+        <InstalledTab list={list} onOpenDetail={setDetail} {...(onOpened ? { onOpened } : {})} />
       )}
     </section>
   )
@@ -96,9 +98,11 @@ export function ExtensionsSection() {
 function InstalledTab({
   list,
   onOpenDetail,
+  onOpened,
 }: {
   list: ReturnType<typeof useExtensionList>
   onOpenDetail: (extension: ExtensionEntryPayload) => void
+  onOpened?: () => void
 }) {
   const empty = list.extensions.length === 0 && list.skipped.length === 0
   // 켜기는 **프로젝트마다**다 (확장 재설계 §3). 어느 프로젝트의 스위치인지 적어 둔다 —
@@ -130,6 +134,15 @@ function InstalledTab({
                 onOpenDetail={() => onOpenDetail(extension)}
                 onSetEnabled={(enabled) => list.setEnabled(extension.name, enabled)}
                 onUninstall={() => list.uninstall(extension.dir)}
+                // 목록이 기준으로 삼은 프로젝트(`activeProject`)에서 연다 — 누르는 순간 다시 조회하지 않는다
+                {...(project === null
+                  ? {}
+                  : {
+                      onOpenView: (viewId: string, title: string) => {
+                        requestExtensionView({ extension: extension.name, viewId, projectId: project.id }, title)
+                        onOpened?.()
+                      },
+                    })}
               />
             ))}
           </ul>

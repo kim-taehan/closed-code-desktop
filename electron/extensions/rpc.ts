@@ -63,6 +63,16 @@ export const METHOD_REDRAW = 'host.redraw'
  */
 export const METHOD_ACTIVE_FILE = 'host.activeFile'
 
+/**
+ * 부모 → 자식. **웹뷰 앞단이 보낸 메시지 한 통** (`code.ui.onMessage` 로 간다).
+ *
+ * `{ extension, viewId, projectId, message }`. 확장·뷰·프로젝트는 앞단이 말한 것이 아니라
+ * **그 탭의 토큰이 묶고 있던 것**이다 (`uiServer.ts`) — iframe 은 자기가 누구라고 주장할 수 없다.
+ * 부모는 이 요청을 그 프로젝트의 겉봉 아래서 건다. 그래서 처리기가 도는 동안 부른
+ * `code.ui.post` 는 같은 프로젝트의 탭으로 돌아간다.
+ */
+export const METHOD_UI_MESSAGE = 'host.uiMessage'
+
 
 /** 응답을 기다리는 호출. 양방향으로 흐른다 (부모→자식: 명령 / 자식→부모: 확장 API). */
 export interface RpcRequest {

@@ -12,7 +12,7 @@ import type { ExtensionEntry } from './extensionRows'
 // 그대로다. 한 칸에 모이는 것은 **한 확장의 뷰들**이지 여러 확장이 아니다.
 //
 // 명령을 선언했지만 **뷰가 없는 확장은 여기 나오지 않는다.** 그려 줄 화면이 없어서다.
-// 그런 확장은 설정 창의 설치 목록에만 산다.
+// 그런 확장은 설정 창의 설치 목록에만 산다. 웹뷰 뷰만 가진 3판 확장도 같다 — 설치 목록의 「열기」로 연다.
 
 /** 사이드바 패널 id 중 확장이 등록한 것. 내장 셋(`files`·`git`·`history`)과 섞이지 않는다. */
 export type ExtensionPanelId = `ext:${string}`
@@ -49,7 +49,9 @@ export interface ExtensionPanelTarget {
  */
 export function extensionPanelTargets(extensions: ExtensionEntry[]): ExtensionPanelTarget[] {
   return extensions.flatMap((extension) => {
-    const views = extension.contributes?.views ?? []
+    // **웹뷰(3판)는 사이드바에 오지 않는다** — 본문 탭으로 열린다 (확장 재설계 §2-2). 사이드바 칸 자체가
+    // 6단계에서 사라지고, 그 전까지 여기 두면 빈 탭 껍데기만 선택기 한 줄을 차지한다
+    const views = (extension.contributes?.views ?? []).filter((view) => view.kind !== 'webview')
     if (views.length === 0) return []
     // 표시 이름이 비어 있으면 디렉터리 이름으로 버틴다 — 이름 없는 칸은 고를 수가 없다
     return [{ id: extensionPanelId(extension.name), title: extension.displayName || extension.name, extension, views }]

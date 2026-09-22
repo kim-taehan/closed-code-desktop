@@ -57,6 +57,7 @@ function makeOpenFiles(active: string): OpenFilesApi & { close: ReturnType<typeo
     openRouted: vi.fn(),
     openDiff: vi.fn(),
   openHtml: vi.fn(),
+  openWebview: vi.fn(),
     close: vi.fn(),
     closeMany: vi.fn(),
     select: vi.fn(),

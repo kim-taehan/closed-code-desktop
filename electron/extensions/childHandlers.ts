@@ -4,8 +4,10 @@ import {
   METHOD_PING,
   METHOD_REDRAW,
   METHOD_RUN_COMMAND,
+  METHOD_UI_MESSAGE,
   type RpcRequest,
 } from './rpc'
+import { UiHandlers } from './uiHandlers'
 import { describeError } from '../../shared/errors/describeError'
 import {
   loadExtensions,
@@ -31,7 +33,15 @@ import type { ActiveFileRef } from './extensionLoader'
  * 모르는 메서드는 **던진다.** 부르는 쪽(hostEntry)이 그것을 오류 응답으로 바꾼다 —
  * 삼키면 부모의 await 가 영원히 걸린다.
  */
-export function createChildHandler(apiFor: ExtensionApiFor, deps: LoadDeps): (request: RpcRequest) => Promise<unknown> {
+/**
+ * `ui` 는 웹뷰 앞단 메시지를 받을 처리기 표다. **`apiFor` 가 만드는 `code` 와 같은 것**을 넘겨야
+ * 한다 — 확장이 `code.ui.onMessage` 로 건 것을 여기서 배달한다 (`hostEntry.ts` 가 한 장 만들어 둘에 준다).
+ */
+export function createChildHandler(
+  apiFor: ExtensionApiFor,
+  deps: LoadDeps,
+  ui: UiHandlers = new UiHandlers(),
+): (request: RpcRequest) => Promise<unknown> {
   let commands = new Map<string, RegisteredCommand>()
   let redraws: RedrawHandler[] = []
   let activeFiles: ActiveFileHandler[] = []
@@ -40,6 +50,8 @@ export function createChildHandler(apiFor: ExtensionApiFor, deps: LoadDeps): (re
     if (request.method === METHOD_PING) return { pid: process.pid }
 
     if (request.method === METHOD_LOAD_EXTENSIONS) {
+      // 다시 실으면 `activate` 가 다시 돌며 처리기를 새로 건다 — 옛것을 먼저 비운다 (`uiHandlers.ts`)
+      ui.clear()
       const result = await loadExtensions(toSources(request.params), apiFor, deps)
       commands = result.commands
       redraws = result.redraws
@@ -105,6 +117,20 @@ export function createChildHandler(apiFor: ExtensionApiFor, deps: LoadDeps): (re
         }
       }
       return { notified: activeFiles.length - failed.length, failed }
+    }
+
+    if (request.method === METHOD_UI_MESSAGE) {
+      // 확장·뷰·프로젝트는 부모가 **토큰으로** 풀어 보낸 것이다 (`rpc.ts` 의 이 메서드 머리말).
+      // 받을 처리기가 없으면 `deliver` 가 던지고, 그 사유가 앞단까지 돌아간다.
+      const params = asRecord(request.params)
+      const extension = params['extension']
+      const viewId = params['viewId']
+      const projectId = params['projectId']
+      if (typeof extension !== 'string' || typeof viewId !== 'string' || typeof projectId !== 'string') {
+        throw new Error('웹뷰 메시지의 확장·뷰·프로젝트가 문자열이 아닙니다')
+      }
+      await ui.deliver(extension, viewId, params['message'], projectId)
+      return undefined
     }
 
     throw new Error(`알 수 없는 메서드: ${request.method}`)

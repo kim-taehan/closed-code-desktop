@@ -1591,3 +1591,22 @@ textarea.ext-ask__field {
   border-radius: var(--dc-radius-sm, 6px);
   cursor: pointer;
 }
+
+/* 웹뷰 탭(매니페스트 3판). 본문(`.app-main`, flex 열)의 한 칸을 통째로 쓴다.
+   감춘 탭은 **내리지 않고** `display: none` 으로만 숨긴다 — 내리면 앞단이 다시 뜬다
+   (`ExtensionWebviewStack.tsx` 머리말). */
+.ext-webview {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+.ext-webview--hidden {
+  display: none;
+}
+
+.ext-webview__frame {
+  flex: 1;
+  width: 100%;
+  border: 0;
+}

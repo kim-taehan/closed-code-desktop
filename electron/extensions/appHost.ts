@@ -6,6 +6,7 @@ import type { ProjectRegistry } from '../projects/projectRegistry'
 import type { AskResult } from './chatAsk'
 import type { ExtensionAskText } from './serviceDispatch'
 import type { ProjectExtensionsPort } from './projectExtensions'
+import type { UiPorts } from './uiRouter'
 
 // 확장 호스트를 **띄우는** 자리. `main.ts` 에서 갈라냈다 — `appPorts.ts` 와 같은 이유로,
 // 저쪽은 배선만 하는 자리인데 300줄 상한에 닿았다.
@@ -35,6 +36,8 @@ export interface AppHostDeps {
   askText?: ExtensionAskText
   /** 프로젝트마다 켠 확장. 부를 때마다 묻는다 — 켜고 끄는 것은 앱이 도는 중에 바뀐다 */
   projects: ProjectExtensionsPort
+  /** 웹뷰 탭(3판)의 행선지. 앱 수명이고 창은 붙었다 떨어진다 (`uiRouter.ts`) */
+  ui?: UiPorts
   log: (line: string) => void
 }
 
@@ -59,6 +62,7 @@ export function startExtensionHost(deps: AppHostDeps): {
     fork: deps.fork,
     ...ports,
     projects: deps.projects,
+    ...(deps.ui === undefined ? {} : { ui: deps.ui }),
   })
   service.onLog((line) => deps.log(`[확장 호스트] ${line.trim()}`))
   service.onExit((code) => deps.log(`[확장 호스트] 종료 code=${code}`))

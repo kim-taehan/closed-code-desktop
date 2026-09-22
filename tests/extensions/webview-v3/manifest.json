@@ -1,0 +1,12 @@
+{
+  "manifestVersion": 3,
+  "name": "webview-fixture",
+  "displayName": "웹뷰 시험 확장",
+  "version": "0.0.1",
+  "main": "main.js",
+  "engines": { "code": "^0.1.0" },
+  "contributes": {
+    "commands": [{ "id": "webviewFixture.open", "title": "보드 열기" }],
+    "views": [{ "id": "board", "title": "보드", "kind": "webview", "entry": "ui/index.html" }]
+  }
+}

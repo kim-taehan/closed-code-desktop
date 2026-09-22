@@ -19,6 +19,8 @@ export interface WindowScoped {
   drawer: { dispose(): Promise<void> } | null
   git: { dispose(): void } | null
   extensionIpc: { dispose(): void } | null
+  /** 웹뷰 탭 배선 (`ipc/extensionUiBridge.ts`). 떼면 토큰도 전부 놓는다 */
+  extensionUi?: { dispose(): void } | null
   bridge: { dispose(): Promise<void> } | null
   mcp: { forgetRegistrations(): void } | null
 }
@@ -42,6 +44,7 @@ export function disposeWindowScoped(scoped: WindowScoped, onBridgeDisposed: () =
   scoped.git?.dispose()
   // 창이 다시 만들어지면 register() 가 다시 불린다 — 안 풀면 두 번째 등록에서 던진다
   scoped.extensionIpc?.dispose()
+  scoped.extensionUi?.dispose()
   // 우리가 띄운 서버를 정리하고 나서 종료한다 (`bridge.dispose` 가 풀까지 거둔다).
   // macOS 는 여기서 앱이 안 죽는다 — 독에서 되살리면 서버도 다시 뜬다.
   void scoped.bridge?.dispose().finally(() => {

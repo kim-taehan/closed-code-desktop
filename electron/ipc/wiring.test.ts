@@ -132,6 +132,16 @@ describe('IPC 배선', () => {
       projects: inertProjects(),
     })
 
+    // 웹뷰 탭(3판). 창 수명 배선이라 따로 붙는다 — 빠지면 preload 의 세 invoke 가 핸들러 없이 남는다
+    const { ExtensionUiBridge } = await import('./extensionUiBridge')
+    const { ExtensionUiRouter } = await import('../extensions/uiRouter')
+    const { ExtensionUiServer } = await import('../extensions/uiServer')
+    const extensionUi = new ExtensionUiBridge({
+      window,
+      service: { webview: async () => ({ ok: false, reason: '없음' }), uiMessage: async () => {} },
+      router: new ExtensionUiRouter(new ExtensionUiServer()),
+    })
+
     // 셸 드로어. 서버에 닿지 않는다 — 이 시험이 보는 것은 채널 등록/해제뿐이다.
     const drawer = new PtyDrawerBridge({
       window,
@@ -144,6 +154,7 @@ describe('IPC 배선', () => {
     logs.register()
     git.register()
     extensions.register()
+    extensionUi.register()
     drawer.register()
 
     return {
@@ -153,6 +164,7 @@ describe('IPC 배선', () => {
         logs.dispose()
         git.dispose()
         extensions.dispose()
+        extensionUi.dispose()
         await drawer.dispose()
       },
     }

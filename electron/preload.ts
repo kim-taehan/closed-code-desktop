@@ -81,6 +81,7 @@ import type { AppSettings } from '../shared/settings/appSettings'
 import type { LogEntry, LogListResult } from '../shared/ipc/logPayloads'
 import { gitBridge } from './preloadGit'
 import { ptyBridge } from './preloadPty'
+import { extensionUiBridge } from './preloadExtensionUi'
 
 // renderer 에 노출하는 표면. 채널 이름을 renderer 가 알 필요는 없다 (ISP).
 
@@ -230,8 +231,9 @@ const bridge: DesktopBridge = {
     subscribePlain<LogEntry>(Channel.LOG_APPEND, handler),
   // git 배선은 preloadGit.ts — 이름·형태 그대로 여기 합쳐진다
   ...gitBridge(subscribe),
-  // 셸 드로어(⌘↓/⌘↑) 배선도 같은 이유로 preloadPty.ts 에 있다
+  // 셸 드로어(⌘↓/⌘↑) 배선도 같은 이유로 preloadPty.ts 에 있다 — 웹뷰 탭(3판)은 preloadExtensionUi.ts
   ...ptyBridge(subscribe),
+  ...extensionUiBridge(subscribe),
   onNotification: (handler: ProjectHandler<UserNotification>) =>
     subscribe<UserNotification>(Channel.NOTIFICATION, handler),
   listExtensions: () =>

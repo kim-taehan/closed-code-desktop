@@ -10,6 +10,9 @@ import type { ExtensionEntryPayload } from '../../shared/ipc/extensionPayloads'
 // 꺼진 확장은 목록에서 지우지 않고 **흐리게** 남긴다. 사라지면 다시 켤 자리가 없다.
 //
 // 켜기·끄기는 **그 프로젝트에서**다 (`toggleLabel`). 지우기는 앱 전체다 — 설치가 앱 전체라서.
+//
+// **「열기」는 웹뷰 뷰(3판)마다 하나다** (확장 재설계 §2-2 진입점 1). 켜진 확장에만 뜬다 —
+// 꺼진 프로젝트에서 열면 탭이 사유만 보여 주는 빈 칸이 된다.
 
 export function ExtensionInstalledRow({
   extension,
@@ -17,6 +20,7 @@ export function ExtensionInstalledRow({
   onOpenDetail,
   onSetEnabled,
   onUninstall,
+  onOpenView,
 }: {
   extension: ExtensionEntryPayload
   /** 「이 프로젝트에서 켜기 — 이름」. null 이면 열린 프로젝트가 없어 스위치를 막는다 */
@@ -24,7 +28,10 @@ export function ExtensionInstalledRow({
   onOpenDetail: () => void
   onSetEnabled: (enabled: boolean) => void
   onUninstall: () => void
+  /** 웹뷰 뷰를 본문 탭으로 연다. 없으면(열린 프로젝트 없음) 「열기」를 안 그린다 */
+  onOpenView?: (viewId: string, title: string) => void
 }) {
+  const webviews = (extension.contributes?.views ?? []).filter((view) => view.kind === 'webview')
   const [asking, setAsking] = useState(false)
 
   return (
@@ -52,6 +59,19 @@ export function ExtensionInstalledRow({
         </>
       ) : (
         <>
+          {extension.enabled && onOpenView
+            ? webviews.map((view) => (
+                <button
+                  key={view.id}
+                  type="button"
+                  className="dc-ext__btn dc-ext__action"
+                  title={`${t('열기')} — ${view.title}`}
+                  onClick={() => onOpenView(view.id, view.title)}
+                >
+                  {webviews.length > 1 ? `${t('열기')} · ${view.title}` : t('열기')}
+                </button>
+              ))
+            : null}
           <input
             type="checkbox"
             className="dc-ext__switch"

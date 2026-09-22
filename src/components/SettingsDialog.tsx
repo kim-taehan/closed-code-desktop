@@ -102,7 +102,8 @@ export function SettingsDialog(props: SettingsDialogProps) {
             {section === 'shortcuts' && (
               <ShortcutsSection developerMode={props.settings.developerMode} />
             )}
-            {section === 'extensions' && <ExtensionsSection />}
+            {/* 「열기」로 웹뷰 탭을 열면 창을 닫는다 — 안 닫으면 연 탭이 창 뒤에 가려 아무 일도 없어 보인다 */}
+            {section === 'extensions' && <ExtensionsSection onOpened={props.onClose} />}
           </div>
         </div>
       </div>

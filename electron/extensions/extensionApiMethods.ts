@@ -89,7 +89,9 @@ export const METHOD_EXPORT_SAVE = 'export.save'
  */
 export const METHOD_CHAT_ASK = 'chat.ask'
 /**
- * **사람에게 글을 묻는다.** 확장이 사용자에게서 값을 받는 유일한 길이다.
+ * **사람에게 글을 묻는다.** 2판 확장이 사용자에게서 값을 받는 유일한 길이다.
+ * (3판 웹뷰는 이것이 필요 없다 — 자기 화면에 입력칸을 그리고 `ui.onMessage` 로 받는다.
+ * 울타리는 그대로이고, 열린 것은 **자기 뒷단으로 가는 메시지 통로 하나**다. 이 API 는 6단계에서 사라진다.)
  *
  * 확장 화면(`setHtml`)으로는 못 받는다 — 그 화면은 `iframe sandbox` + CSP 안에 있고,
  * 밖으로 나가는 메시지는 파일 열기 하나뿐이다 (`extensionHtmlDoc.ts` 의 `isOpenRequest`).
@@ -115,3 +117,24 @@ export const METHOD_UI_ASK_TEXT = 'ui.askText'
  */
 export const METHOD_STORAGE_GET = 'storage.get'
 export const METHOD_STORAGE_SET = 'storage.set'
+/**
+ * **웹뷰 앞단에 메시지를 민다** (매니페스트 3판, 확장 재설계 §2-1). 앞단은 `message` 이벤트로 받는다.
+ *
+ * `view.setHtml` 을 대신하는 자리다. 저쪽은 문서를 통째로 갈아끼워 갱신마다 화면이 다시 떴고
+ * 스크롤·입력이 날아갔다. 이쪽은 앞단이 **한 번** 뜬 채로 살아 있고 데이터만 간다.
+ *
+ * 행선지는 (이 확장 · `viewId` · 프로젝트)가 **셋 다** 맞는 열린 탭이다. 프로젝트는 겉봉
+ * (`ProjectEnvelope` — 명령·앞단 메시지를 건 프로젝트)이고, 겉봉이 없거나 겹쳐 모를 때는
+ * 확장이 `projectId` 를 직접 적어야 한다. **지금 활성 프로젝트로 되돌아가지 않는다** — 그러면
+ * 사용자가 탭을 옮긴 사이 P 의 결과가 Q 의 탭에 뜬다 (`projectEnvelope.ts` 머리말의 그 결함).
+ *
+ * 메시지는 JSON 만, 1MB 까지다 (`shared/extensions/uiMessage.ts`). 넘으면 사유와 함께 거부된다.
+ */
+export const METHOD_UI_POST = 'ui.post'
+/**
+ * **웹뷰 탭을 연다.** 이미 열려 있으면 그 탭으로 간다. 프로젝트 규칙은 `METHOD_UI_POST` 와 같다.
+ *
+ * 명령 팔레트가 없어 지금 이 앱에서 사람이 확장 명령을 부르는 자리는 사이드바·파일 우클릭이고,
+ * 그 명령이 이것으로 탭을 연다. 다른 하나의 문은 설정 창 확장 목록의 「열기」다 (E5).
+ */
+export const METHOD_UI_OPEN = 'ui.open'

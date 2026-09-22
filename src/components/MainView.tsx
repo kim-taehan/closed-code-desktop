@@ -2,6 +2,7 @@ import type { RefObject } from 'react'
 import { LogView } from '../logs/LogView'
 import { GestureTrail } from './GestureTrail'
 import { OpenTab } from './OpenTab'
+import { ExtensionWebviewStack } from './ExtensionWebviewStack'
 import { ChatPane } from './ChatPane'
 import { ScmTab } from './ScmTab'
 import type { GitPanelActions } from '../state/useGitActions'
@@ -16,6 +17,7 @@ import type { SessionSlice } from '../state/sessionSlice'
 import type { OptimisticBusy } from '../state/useOptimisticBusy'
 
 // 본문 한 갈래를 그린다 — 로그 탭 / 소스 관리 탭 / 파일·diff 탭 / 대화. 동시에 하나만 렌더된다.
+// **웹뷰 탭(3판)만 예외다** — 열린 것 전부를 늘 그려 두고 지금 것만 보인다 (`ExtensionWebviewStack`).
 //
 // 제스처 래핑도 여기 함께 있다. 세 갈래가 같은 인스턴스를 나눠 쓰므로(App 이 하나만 만든다)
 // 래핑을 App 에 남기고 분기만 떼면 갈래마다 래퍼가 흩어진다.
@@ -43,11 +45,24 @@ export interface MainViewProps {
 }
 
 export function MainView(props: MainViewProps) {
+  // 웹뷰 탭(3판)은 갈래와 **나란히** 늘 그린다 — 갈래는 바뀌어도 이 묶음의 자리는 그대로여야
+  // iframe 이 다시 싣지 않는다 (`ExtensionWebviewStack` 머리말). 지금 탭이 웹뷰면 갈래는 비어 있다.
+  return (
+    <>
+      <MainBranch {...props} />
+      <ExtensionWebviewStack files={props.openFiles.files} active={props.openFiles.active} />
+    </>
+  )
+}
+
+function MainBranch(props: MainViewProps) {
   const { logs, openFiles, gesture, slice, scrollRef } = props
 
   // **분기보다 먼저 부른다.** 아래는 이른 반환이 여럿이라, 훅을 그 뒤에 두면
   // 어느 갈래를 그리느냐에 따라 훅 순서가 달라진다.
   const runExtensionCommand = useExtensionViewCommand(props.toasts.show)
+
+  if (openFiles.files.some((file) => file.path === openFiles.active && file.webview !== undefined)) return null
 
   if (logs && openFiles.active === 'logs') {
     return (

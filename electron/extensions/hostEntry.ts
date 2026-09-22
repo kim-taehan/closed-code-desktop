@@ -23,6 +23,7 @@ import { describeError } from '../../shared/errors/describeError'
 import type { RpcRequest } from './rpc'
 import { createExtensionApi } from './extensionApi'
 import { createChildHandler } from './childHandlers'
+import { UiHandlers } from './uiHandlers'
 
 const port = process.parentPort
 const pending = new PendingRequests()
@@ -35,12 +36,19 @@ function call(method: string, params?: unknown): Promise<unknown> {
   return waiting
 }
 
+// 웹뷰 앞단 메시지의 처리기 표. **한 장을 둘에 준다** — 확장이 거는 쪽(`code`)과 배달하는 쪽.
+const ui = new UiHandlers()
+
 // **확장마다 따로 만든다** — 하나를 돌려 쓰면 storage 가 어느 확장 것인지 알 수 없다.
-const handle = createChildHandler((name, label) => createExtensionApi(call, name, label), {
-  // 확장은 앱 번들 밖(~/.open-code)에 있어 번들러가 손대지 않는다. 런타임 require 그대로다.
-  requireModule: (absolutePath) => require(absolutePath),
-  log: (line) => console.log(line),
-})
+const handle = createChildHandler(
+  (name, label) => createExtensionApi(call, name, label, ui),
+  {
+    // 확장은 앱 번들 밖(~/.open-code)에 있어 번들러가 손대지 않는다. 런타임 require 그대로다.
+    requireModule: (absolutePath) => require(absolutePath),
+    log: (line) => console.log(line),
+  },
+  ui,
+)
 
 port.on('message', (event) => {
   // 자식은 페이로드를 event.data 에 싸서 받는다. 껍질을 벗기는 곳은 rpc.ts 하나다.

@@ -1,6 +1,6 @@
-import { METHOD_ACTIVE_FILE, METHOD_REDRAW, METHOD_RUN_COMMAND } from './rpc'
+import { METHOD_ACTIVE_FILE, METHOD_REDRAW, METHOD_RUN_COMMAND, METHOD_UI_MESSAGE } from './rpc'
 
-// **부모 → 자식으로 거는 세 가지.** `service.ts` 에서 뽑아 왔다 — 저쪽이 300줄 상한에 닿았고,
+// **부모 → 자식으로 거는 세 가지** (웹뷰가 넷째를 더했다 — `uiMessage`). `service.ts` 에서 뽑아 왔다 — 저쪽이 300줄 상한에 닿았고,
 // 이 셋은 하나의 관심사다: 확장에 **일을 시키고**, 도는 동안 **프로젝트 겉봉을 씌운다**.
 //
 // 나머지(훑기·싣기·자식이 부른 code.* 응대)와 흐름이 반대라 갈라 두면 읽기도 쉽다.
@@ -26,6 +26,7 @@ export interface Invoker {
   ): Promise<void>
   redraw(projectId: string | null): Promise<void>
   activeFileChanged(file: unknown, projectId: string | null): Promise<void>
+  uiMessage(extension: string, viewId: string, projectId: string, message: unknown): Promise<void>
 }
 
 /**
@@ -83,6 +84,17 @@ export function createInvoker(deps: InvokeDeps): Invoker {
      */
     async activeFileChanged(file, projectId) {
       await deps.during(projectId, () => deps.request(METHOD_ACTIVE_FILE, { file }))
+    },
+
+    /**
+     * **웹뷰 앞단이 보낸 한 통**을 그 확장의 `code.ui.onMessage` 로 (넷째 갈래, `rpc.ts` 의
+     * `METHOD_UI_MESSAGE`). 셋과 같은 규칙으로 **그 탭의 프로젝트** 겉봉을 세운다 — 처리기가
+     * 도는 동안 확장이 부른 `code.ui.post` 가 같은 프로젝트의 탭으로 돌아가는 근거가 이것이다.
+     */
+    async uiMessage(extension, viewId, projectId, message) {
+      await deps.during(projectId, () =>
+        deps.request(METHOD_UI_MESSAGE, { extension, viewId, projectId, message }),
+      )
     },
   }
 }

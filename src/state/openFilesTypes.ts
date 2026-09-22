@@ -1,5 +1,6 @@
 import type { DiffRow } from './diffRows'
 import type { ChatEditorContext, EditorSelection } from './editorContext'
+import type { ExtensionUiTarget } from '../../shared/ipc/extensionUiBridge'
 
 // 본문 탭 하나의 **모양과 식별자 규칙**, 그리고 탭들을 다루는 표면.
 //
@@ -57,6 +58,14 @@ export interface OpenFile {
   extension?: string
   /** 못 읽은 이유. 있으면 내용 대신 이걸 보여준다. */
   error?: string
+  /**
+   * **웹뷰 탭** (매니페스트 3판). 있으면 이 탭은 파일이 아니라 확장 패키지의 `ui/` 다.
+   *
+   * 다른 탭과 그리는 자리가 다르다 — 지금 탭만 그리는 `OpenTab` 이 아니라, 열린 동안 늘 그려 두는
+   * `ExtensionWebviewStack` 이 그린다 (탭을 옮길 때 앞단이 다시 뜨지 않게, E4).
+   * 프로젝트까지 드는 이유: 메시지가 (확장·뷰·**프로젝트**)로 갈린다 (`uiServer.tokensOf`).
+   */
+  webview?: ExtensionUiTarget
 }
 
 /** 미저장 편집이 있는가 */
@@ -91,6 +100,8 @@ export interface OpenFilesApi {
    * `focus` 는 「사람이 눌러서 여는 것인가」 — 가르는 이유는 `useOpenHtmlTab` 머리말에.
    */
   openHtml: (key: string, label: string, html: string, focus?: boolean, extension?: string) => void
+  /** 웹뷰 탭을 연다 (`useOpenWebviewTab`). 이미 열려 있으면 그 탭으로 간다 — 다시 싣지 않는다 */
+  openWebview: (target: ExtensionUiTarget, label: string) => void
   close: (path: string) => void
   /** 여러 탭을 한 번에 (탭 우클릭의 「나머지·왼쪽·오른쪽 모두 닫기」) */
   closeMany: (paths: string[]) => void

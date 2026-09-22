@@ -67,6 +67,7 @@ import type {
 } from './gitPayloads'
 import type { ExtensionRegistryBridge } from './extensionRegistryBridge'
 import type { ExtensionBridgeSurface } from './extensionBridgeSurface'
+import type { ExtensionUiBridgeSurface } from './extensionUiBridge'
 import type { GitHistoryBridge } from './gitHistoryBridge'
 import type { PtyBridgeSurface } from './ptyBridgeSurface'
 import type { RunBridgeSurface } from './runBridgeSurface'
@@ -93,6 +94,7 @@ export interface DesktopBridge
   extends GitHistoryBridge,
     ExtensionRegistryBridge,
     ExtensionBridgeSurface,
+    ExtensionUiBridgeSurface,
     PtyBridgeSurface,
     RunBridgeSurface {
   startSession(): Promise<void>

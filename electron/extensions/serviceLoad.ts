@@ -99,6 +99,30 @@ export class ExtensionLoader {
     return [...(await this.deps.projects.enabledIn(projectId, installed))]
   }
 
+  /**
+   * 웹뷰 탭 하나를 띄울 재료 — 설치 폴더·문서 자리·제목. **그 프로젝트에 켜진 3판 웹뷰**만 준다.
+   *
+   * 판정을 여기 두는 이유: 설치 목록(훑기)과 켜짐(`allowedIn`)을 둘 다 아는 곳이 여기뿐이다.
+   * 파일이 실제로 있는지·`ui/` 밖인지는 서빙하는 쪽(`uiServer.open`)이 본다.
+   */
+  async webview(
+    extension: string,
+    viewId: string,
+    projectId: string,
+  ): Promise<{ ok: true; dir: string; entry: string; title: string } | { ok: false; reason: string }> {
+    const found = (await this.scan()).extensions.find((one) => one.manifest.name === extension)
+    if (found === undefined) return { ok: false, reason: `설치되지 않은 확장입니다: ${extension}` }
+    const allowed = await this.allowedIn(projectId)
+    if (allowed !== undefined && !allowed.includes(extension)) {
+      return { ok: false, reason: `이 프로젝트에서 켜지 않은 확장입니다: ${extension} — 설정의 확장에서 켜세요` }
+    }
+    const view = found.manifest.contributes?.views?.find((one) => one.id === viewId)
+    if (view?.kind !== 'webview' || view.entry === undefined) {
+      return { ok: false, reason: `${extension} 확장에 웹뷰 화면 ${viewId} 가 없습니다` }
+    }
+    return { ok: true, dir: found.dir, entry: view.entry, title: view.title }
+  }
+
   async loadAll(): Promise<void> {
     const scan = await this.scan()
     // 훑기 단계 사유를 여기서 **반드시 흘린다.** 안 그러면 사유가 반환값까지만 살고 아무도 안 읽어,

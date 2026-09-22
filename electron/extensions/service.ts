@@ -176,6 +176,29 @@ export class ExtensionService {
   }
 
   /**
+   * 웹뷰 앞단이 보낸 한 통 (`serviceInvoke.uiMessage`). 확장·뷰·프로젝트는 **탭의 토큰이 묶은 것**이다.
+   * 그 프로젝트에 켜지지 않았으면 거절한다 — `runCommand` 와 같은 규칙이고, 판정은 확장 이름을
+   * 이미 아는 여기서 한다 (명령과 달리 주인을 찾으러 자식에 갈 필요가 없다).
+   */
+  async uiMessage(extension: string, viewId: string, projectId: string, message: unknown): Promise<void> {
+    await this.settled()
+    const allowed = await this.loader.allowedIn(projectId)
+    if (allowed !== undefined && !allowed.includes(extension)) {
+      throw new Error(`이 프로젝트에서 켜지 않은 확장입니다: ${extension}`)
+    }
+    await this.invoke.uiMessage(extension, viewId, projectId, message)
+  }
+
+  /**
+   * 웹뷰 탭을 띄울 재료 (`serviceLoad.webview`). **`settled()` 를 기다리지 않는다** — 훑기만 보면
+   * 되고, 기다리면 확장이 `activate` 안에서 `code.ui.open` 을 부를 때 싣기가 끝나기를 싣기가
+   * 기다리는 교착이 된다.
+   */
+  webview(extension: string, viewId: string, projectId: string): ReturnType<ExtensionLoader['webview']> {
+    return this.loader.webview(extension, viewId, projectId)
+  }
+
+  /**
    * 확장이 `code.view.setRows` 로 넘긴 행. 화면 쪽이 여기에 붙는다.
    *
    * 세 번째 인자는 그 행을 낸 명령의 프로젝트다 (`commandProjectId`).

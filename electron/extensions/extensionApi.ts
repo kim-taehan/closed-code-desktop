@@ -38,7 +38,11 @@ import {
   METHOD_STORAGE_GET,
   METHOD_STORAGE_SET,
   METHOD_UI_ASK_TEXT,
+  METHOD_UI_OPEN,
+  METHOD_UI_POST,
 } from './extensionApiMethods'
+import { checkUiMessage } from '../../shared/extensions/uiMessage'
+import type { UiHandlers, UiMessageHandler } from './uiHandlers'
 
 
 /** 확장이 만드는 트리의 마디. 화면 쪽 `ExtensionTreeNodePayload` 와 같은 모양이다. */
@@ -123,6 +127,16 @@ export interface ExtensionApi {
      * (저장된 템플릿을 다시 열어 손보는 식), 빈 상자로만 물으면 매번 처음부터 써야 한다.
      */
     askText(options: AskTextOptions): Promise<string | null>
+    /**
+     * 웹뷰 앞단에 메시지를 민다 (`METHOD_UI_POST`). 열린 탭이 있었으면 `true`.
+     * `target.projectId` 는 겉봉이 없는 자리(타이머·겹친 일)에서 행선지를 직접 적을 때만 쓴다 —
+     * `onMessage` 처리기가 받은 `projectId` 를 그대로 돌려주면 된다.
+     */
+    post(viewId: string, message: unknown, target?: { projectId: string }): Promise<boolean>
+    /** 앞단이 보낸 것을 받는다. 두 번째 인자는 **그 탭의 프로젝트**다. 돌려준 함수로 뗀다 */
+    onMessage(viewId: string, handler: UiMessageHandler): () => void
+    /** 웹뷰 탭을 연다 (`METHOD_UI_OPEN`). 프로젝트 규칙은 `post` 와 같다 */
+    open(viewId: string, target?: { projectId: string }): Promise<void>
   }
   storage: {
     /** 넣은 적 없는 키는 `undefined`. `null` 은 일부러 넣은 값이라 구분된다. */
@@ -146,7 +160,16 @@ export type RpcCall = (method: string, params?: unknown) => Promise<unknown>
  *   표시 이름을 열쇠로 쓰면 확장이 이름을 바꾸는 순간 저장된 것이 통째로 사라진다.
  * @param extensionLabel 사람이 읽는 이름(`displayName`). 물음창에만 쓴다. 생략하면 `name`.
  */
-export function createExtensionApi(call: RpcCall, extensionName: string, extensionLabel?: string): ExtensionApi {
+/**
+ * @param uiHandlers 앞단 메시지를 받을 처리기 표 (`uiHandlers.ts`). 자식 하나에 한 장이고
+ *   `childHandlers` 가 같은 것을 들고 배달한다. 없으면 `onMessage` 가 거는 순간 던진다.
+ */
+export function createExtensionApi(
+  call: RpcCall,
+  extensionName: string,
+  extensionLabel?: string,
+  uiHandlers?: UiHandlers,
+): ExtensionApi {
   return {
     workspace: {
       getProjectPath: async () => asString(await call(METHOD_GET_PROJECT_PATH), METHOD_GET_PROJECT_PATH),
@@ -221,6 +244,22 @@ export function createExtensionApi(call: RpcCall, extensionName: string, extensi
             multiline: options.multiline === true,
           }),
         ),
+      // `extension` 을 여기서 채운다 (`storage` 와 같은 규칙) — 확장이 실어 보내면 남의 탭에 민다.
+      // 크기·모양은 **보내기 전에** 여기서 한 번 본다: 부모도 보지만, 여기서 던져야 확장의
+      // 호출 자리에서 사유가 보인다.
+      post: async (viewId, message, target) => {
+        const checked = checkUiMessage(message)
+        if (!checked.ok) throw new Error(`${METHOD_UI_POST}: ${checked.reason}`)
+        const answer = await call(METHOD_UI_POST, { extension: extensionName, viewId, message, ...target })
+        return answer === true
+      },
+      onMessage: (viewId, handler) => {
+        if (uiHandlers === undefined) throw new Error('ui.onMessage 를 받을 자리가 없습니다 (확장 호스트 배선)')
+        return uiHandlers.add(extensionName, viewId, handler)
+      },
+      open: async (viewId, target) => {
+        await call(METHOD_UI_OPEN, { extension: extensionName, viewId, ...target })
+      },
     },
     storage: {
       // `extension` 을 여기서 채운다 — 확장이 실어 보내면 남의 칸을 읽을 수 있다
