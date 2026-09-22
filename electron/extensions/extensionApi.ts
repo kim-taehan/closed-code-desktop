@@ -41,7 +41,7 @@ import {
   METHOD_UI_OPEN,
   METHOD_UI_POST,
 } from './extensionApiMethods'
-import { checkUiMessage } from '../../shared/extensions/uiMessage'
+import { APP_MESSAGE_PREFIX, checkUiMessage, impersonatesApp } from '../../shared/extensions/uiMessage'
 import type { UiHandlers, UiMessageHandler } from './uiHandlers'
 
 
@@ -245,12 +245,16 @@ export function createExtensionApi(
           }),
         ),
       // `extension` 을 여기서 채운다 (`storage` 와 같은 규칙) — 확장이 실어 보내면 남의 탭에 민다.
+      // **`target` 은 펼치지 않는다 — `projectId` 하나만 꺼낸다.** 펼치면 확장이 `target` 에
+      // `extension`·`message` 를 실어 이 줄이 채운 값을 덮는다 (계약 대조 2026-09-22 실측:
+      // `{ extension: 'extB' }` 가 남의 탭까지 갔다).
       // 크기·모양은 **보내기 전에** 여기서 한 번 본다: 부모도 보지만, 여기서 던져야 확장의
       // 호출 자리에서 사유가 보인다.
       post: async (viewId, message, target) => {
         const checked = checkUiMessage(message)
         if (!checked.ok) throw new Error(`${METHOD_UI_POST}: ${checked.reason}`)
-        const answer = await call(METHOD_UI_POST, { extension: extensionName, viewId, message, ...target })
+        if (impersonatesApp(message)) throw new Error(`${METHOD_UI_POST}: '${APP_MESSAGE_PREFIX}' 로 시작하는 type 은 앱만 보냅니다`)
+        const answer = await call(METHOD_UI_POST, { ...projectOf(target), extension: extensionName, viewId, message })
         return answer === true
       },
       onMessage: (viewId, handler) => {
@@ -258,7 +262,7 @@ export function createExtensionApi(
         return uiHandlers.add(extensionName, viewId, handler)
       },
       open: async (viewId, target) => {
-        await call(METHOD_UI_OPEN, { extension: extensionName, viewId, ...target })
+        await call(METHOD_UI_OPEN, { ...projectOf(target), extension: extensionName, viewId })
       },
     },
     storage: {
@@ -269,6 +273,11 @@ export function createExtensionApi(
       },
     },
   }
+}
+
+/** `target` 에서 **`projectId` 만** 꺼낸다. 나머지 키는 버린다 — 위 `post` 의 주석 */
+function projectOf(target: { projectId: string } | undefined): { projectId?: unknown } {
+  return target === undefined ? {} : { projectId: target.projectId }
 }
 
 export type { ActiveFile }

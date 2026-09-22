@@ -29,6 +29,27 @@ describe('자식 — code.ui.post', () => {
     expect(calls).toEqual([{ method: METHOD_UI_POST, params: { extension: 'mine', viewId: 'board', message: { a: 1 } } }])
   })
 
+  // 계약 대조 2026-09-22 실측: `target` 을 펼치던 시절 이 호출이 extB 의 탭까지 갔다
+  it('target 에 실은 extension·message 는 버린다 — projectId 만 쓴다', async () => {
+    const { calls, call } = recording()
+    const api = createExtensionApi(call, 'mine')
+    const forged = { projectId: 'P', extension: 'extB', message: { swapped: true } } as { projectId: string }
+
+    await api.ui.post('board', { hi: 1 }, forged)
+    await api.ui.open('board', forged)
+
+    expect(calls).toEqual([
+      { method: METHOD_UI_POST, params: { projectId: 'P', extension: 'mine', viewId: 'board', message: { hi: 1 } } },
+      { method: METHOD_UI_OPEN, params: { projectId: 'P', extension: 'mine', viewId: 'board' } },
+    ])
+  })
+
+  it('앱 예약 type(__app:) 은 뒷단이 못 보낸다 — 화면이 「앱이 보냈다」로 읽는다', async () => {
+    const { calls, call } = recording()
+    await expect(createExtensionApi(call, 'mine').ui.post('board', { type: '__app:theme', vars: {} })).rejects.toThrow('앱만 보냅니다')
+    expect(calls).toEqual([])
+  })
+
   it('1MB 를 넘으면 **보내기 전에** 사유와 함께 거부한다', async () => {
     const { calls, call } = recording()
     const api = createExtensionApi(call, 'mine')
@@ -96,6 +117,25 @@ describe('main — 받는 자리 (dispatchUi)', () => {
       ['e', 'v', 1, 'P'],
       ['e', 'v', 2, 'Q'],
     ])
+  })
+
+  // 계약 대조 2026-09-22 실측: 빈 칸 projectId 가 사유 없이 겉봉 프로젝트로 떨어졌다
+  it('적었는데 쓸 수 없는 projectId 는 겉봉으로 떨어지지 않고 던진다', () => {
+    const { posted, value } = ports()
+    for (const bad of ['', 42, null]) {
+      expect(() => dispatchUi(value, METHOD_UI_POST, { extension: 'e', viewId: 'v', message: 1, projectId: bad }, 'ENV')).toThrow(
+        'projectId 는',
+      )
+    }
+    expect(posted).toEqual([])
+  })
+
+  it('프로세스 경계라 앱 예약 type 도 다시 본다', () => {
+    const { posted, value } = ports()
+    expect(() =>
+      dispatchUi(value, METHOD_UI_POST, { extension: 'e', viewId: 'v', message: { type: '__app:rejected' } }, 'P'),
+    ).toThrow('앱만 보냅니다')
+    expect(posted).toEqual([])
   })
 
   it('프로세스 경계라 크기를 다시 본다 — 자식이 거르지 않았어도 여기서 막힌다', () => {

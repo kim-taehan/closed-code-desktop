@@ -17,6 +17,18 @@ export const UI_MESSAGE_MAX_BYTES = 1024 * 1024
  */
 export const APP_MESSAGE_PREFIX = '__app:'
 
+/**
+ * 확장 뒷단이 **앱인 척** 하는 메시지인가 — `type` 이 예약 접두사로 시작한다.
+ *
+ * 화면은 이 접두사를 「앱이 보냈다」로 읽는다(SDK). 뒷단이 그 모양을 보낼 수 있으면 그 약속이
+ * 거짓이 된다 — 가짜 `__app:theme`·`__app:rejected` 를 자기 화면에 띄울 수 있다. 앱만 보낸다.
+ */
+export function impersonatesApp(value: unknown): boolean {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return false
+  const type = (value as { type?: unknown }).type
+  return typeof type === 'string' && type.startsWith(APP_MESSAGE_PREFIX)
+}
+
 /** 앱 테마의 CSS 변수. 탭이 뜰 때와 테마를 바꿀 때 온다. 쓸지 말지는 확장이 정한다 (E6). */
 export const APP_THEME_MESSAGE = '__app:theme'
 

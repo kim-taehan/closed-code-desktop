@@ -107,7 +107,8 @@ export interface ExtensionManifest {
   /**
    * 이 확장이 요구하는 앱 버전의 **하한**. `"^0.5.0"` 처럼 적는다.
    *
-   * 지금은 **읽어두기만 하고 막지 않는다.** 비교할 앱 버전 기준이 아직 없다.
+   * 호스트 API 판(`electron/extensions/engineCheck.ts` 의 `EXTENSION_API_VERSION`)을 못 채우면
+   * **싣지 않는다** (`registry.ts`, 2026-09-22 부터). 그 전에는 읽어두기만 하고 막지 않았다.
    * 상한(IntelliJ 의 `until-build`)은 받지 않는다 — 적어두면 앱이 새 버전을 낼 때마다
    * 멀쩡한 확장이 전부 죽는다 (표준 문서 §2 교훈 2).
    */

@@ -1,4 +1,4 @@
-import { checkUiMessage } from '../../shared/extensions/uiMessage'
+import { APP_MESSAGE_PREFIX, checkUiMessage, impersonatesApp } from '../../shared/extensions/uiMessage'
 import { METHOD_UI_OPEN, METHOD_UI_POST } from './extensionApiMethods'
 import { requireString } from './serviceParse'
 import type { UiPorts } from './uiRouter'
@@ -33,7 +33,12 @@ export function dispatchUi(
   const extension = requireString(params['extension'], 'extension')
   const viewId = requireString(params['viewId'], 'viewId')
   const named = params['projectId']
-  const projectId = typeof named === 'string' && named !== '' ? named : envelope
+  // 적었는데 쓸 수 없는 값이면 **겉봉으로 떨어지지 않고 던진다.** 떨어지면 틀린 값을 적은 확장이
+  // 사유 없이 엉뚱한(겉봉) 프로젝트의 탭에 민다 (계약 대조 2026-09-22 실측: `''` → 겉봉).
+  if (named !== undefined && (typeof named !== 'string' || named === '')) {
+    throw new Error(`${method}: projectId 는 빈 칸이 아닌 문자열이어야 합니다`)
+  }
+  const projectId = typeof named === 'string' ? named : envelope
   if (projectId === null) {
     throw new Error(`${method}: 어느 프로젝트의 탭인지 모릅니다 — 명령·onMessage 안에서 부르거나 projectId 를 적으세요`)
   }
@@ -41,5 +46,6 @@ export function dispatchUi(
   // 자식도 보내기 전에 봤다. **프로세스 경계라 다시 본다** — 자식은 확장 코드와 한 프로세스다
   const checked = checkUiMessage(params['message'])
   if (!checked.ok) throw new Error(`${method}: ${checked.reason}`)
+  if (impersonatesApp(params['message'])) throw new Error(`${method}: '${APP_MESSAGE_PREFIX}' 로 시작하는 type 은 앱만 보냅니다`)
   return ports.post(extension, viewId, params['message'], projectId)
 }
