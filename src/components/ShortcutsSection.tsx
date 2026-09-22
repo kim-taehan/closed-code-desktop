@@ -66,6 +66,8 @@ const SHORTCUTS: { group: string; items: Shortcut[] }[] = [
     items: [
       { keys: 'Ctrl + Tab', what: '다음 탭 — 대화 → 파일들 → 로그 순환', where: '창 전체' },
       { keys: 'Ctrl + Shift + Tab', what: '이전 탭', where: '창 전체' },
+      { keys: `${MOD} + Alt + ↓`, what: '다음 탭', where: '창 전체' },
+      { keys: `${MOD} + Alt + ↑`, what: '이전 탭', where: '창 전체' },
       { keys: `${MOD} + W`, what: '탭 닫기 — 대화 탭에서는 무시 (창을 닫지 않습니다)', where: '창 전체' },
     ],
   },

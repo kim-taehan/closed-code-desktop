@@ -40,6 +40,18 @@ const SHELL_DRAWER_KEYS = Prec.highest(
   ]),
 )
 
+/**
+ * ⌘⌥↑/⌘⌥↓ 는 **본문 탭 이동이다** (`useShortcuts.ts`) — 위 ⌘↑/⌘↓ 와 같은 이유로 여기서 삼킨다.
+ * `defaultKeymap` 이 이 조합에 커서 추가(addCursorAbove/Below)를 건다 (`@codemirror/commands` 실측) —
+ * 안 삼키면 커서가 하나 늘면서 동시에 탭이 넘어간다. 그래서 편집기의 커서 추가 단축키는 빠진다.
+ */
+const TAB_SWITCH_KEYS = Prec.highest(
+  keymap.of([
+    { key: 'Mod-Alt-ArrowUp', run: () => true },
+    { key: 'Mod-Alt-ArrowDown', run: () => true },
+  ]),
+)
+
 export interface CodeEditorProps {
   /** 언어 판별에 쓴다 (확장자) */
   path: string
@@ -89,6 +101,7 @@ export function CodeEditor({
           history(),
           drawSelection(),
           SHELL_DRAWER_KEYS,
+          TAB_SWITCH_KEYS,
           // 파일 안에서 찾기 — ⌘F 로 패널을 연다 (davis-code-desktop `680678a` 에서 가져왔다).
           // 창 전역 단축키는 ⌘F 를 **일부러 흘려보낸다** (`useShortcuts.ts` — ⌘⇧F 는 프로젝트 전체 검색).
           // 패널은 편집기 위에 띄운다: 아래에 두면 입력창과 겹쳐 가려진다.

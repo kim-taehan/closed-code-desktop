@@ -30,7 +30,7 @@ export interface ShortcutHandlers {
   onSettings: () => void
   /** ⌘/Ctrl+W — 활성 파일/로그 탭 닫기. 닫을 탭이 없으면 무시(창 닫기 금지, 사용자 결정). */
   onCloseTab: () => void
-  /** Ctrl+Tab / Ctrl+Shift+Tab — 본문 탭 순환 (크롬 관례라 macOS 도 Ctrl 이다) */
+  /** Ctrl+Tab / Ctrl+Shift+Tab — 본문 탭 순환 (크롬 관례라 macOS 도 Ctrl 이다). ⌘⌥↓ / ⌘⌥↑ 도 같다 */
   onNextTab: () => void
   onPrevTab: () => void
   /** ⌘/Ctrl + Alt + → / ← — 프로젝트 탭 전환 (크롬 macOS 탭 전환 조합) */
@@ -109,6 +109,15 @@ export function useShortcuts(
       if ((key === 'arrowleft' || key === 'arrowright') && event.altKey) {
         event.preventDefault()
         ;(key === 'arrowright' ? handlers.onNextProject : handlers.onPrevProject)()
+        return
+      }
+      // 본문 탭 이동 ⌘⌥↑ / ⌘⌥↓ — ⌃Tab 과 같은 경로다 (사용자 결정 2026-09-22).
+      // 프로젝트(⌘⌥←·→)와 같은 ⌘⌥ 층에 축만 세로로 둔다. 입력창에서 이 조합은 임자가 없다.
+      // 편집기에서는 CodeMirror 의 커서 추가(addCursorAbove/Below)를 밀어낸다 — `CodeEditor.tsx`.
+      // ⇧ 가 끼면 손대지 않는다.
+      if ((key === 'arrowup' || key === 'arrowdown') && event.altKey && !event.shiftKey) {
+        event.preventDefault()
+        ;(key === 'arrowdown' ? handlers.onNextTab : handlers.onPrevTab)()
         return
       }
       // 프로젝트 직행. **⌥ 를 안 본다** — 화살표 쪽과 달리 이 조합에는 임자가 없다.

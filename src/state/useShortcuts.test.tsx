@@ -140,6 +140,22 @@ describe('단축키 — 켜져 있을 때', () => {
     expect(handlers.onPrevTab).toHaveBeenCalledTimes(1)
   })
 
+  it('Cmd+Alt+↓ 는 다음 탭, Cmd+Alt+↑ 는 이전 탭 — 셸 칸(⌘↓/⌘↑)은 안 건드린다', () => {
+    mount()
+    expect(press({ key: 'ArrowDown', metaKey: true, altKey: true })).toBe(true)
+    expect(handlers.onNextTab).toHaveBeenCalledTimes(1)
+    expect(press({ key: 'ArrowUp', metaKey: true, altKey: true })).toBe(true)
+    expect(handlers.onPrevTab).toHaveBeenCalledTimes(1)
+    expect(handlers.onShellDown).not.toHaveBeenCalled()
+    expect(handlers.onShellUp).not.toHaveBeenCalled()
+  })
+
+  it('Cmd+Alt+Shift+↓ 는 손대지 않는다', () => {
+    mount()
+    expect(press({ key: 'ArrowDown', metaKey: true, altKey: true, shiftKey: true })).toBe(false)
+    expect(handlers.onNextTab).not.toHaveBeenCalled()
+  })
+
   it('Cmd+Tab(Ctrl 아님)은 탭 순환이 아니다 — OS 앱 전환에 맡긴다', () => {
     mount()
     press({ key: 'Tab', metaKey: true })

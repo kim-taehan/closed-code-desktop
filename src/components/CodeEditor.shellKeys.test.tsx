@@ -104,3 +104,22 @@ describe('편집기에서의 셸 칸 단축키', () => {
     expect(view.state.selection.main.head).toBe(view.state.doc.length)
   })
 })
+
+// ⌘⌥↑/↓ 는 본문 탭 이동이다 (`TAB_SWITCH_KEYS`). `defaultKeymap` 은 이 조합에 커서 추가를 건다.
+//
+// ⚠️ **커서 개수로 재면 헛초록이다.** jsdom 에는 레이아웃이 없어 `addCursorBelow` 가
+// `getClientRects is not a function` 으로 던지고, CodeMirror 는 그 키를 **처리 안 한 것**으로
+// 돌린다 — 삼키든 안 삼키든 커서는 하나다 (실측: 삼키기를 빼도 초록이었다). 그래서
+// **편집기가 키를 가져갔는가**(`defaultPrevented`)로 잰다: 삼키기가 없으면 false 다.
+describe('편집기에서의 탭 이동 단축키', () => {
+  it('⌘⌥↓ 는 편집기가 삼키고(커서 추가 안 함), 이벤트는 창까지 올라간다', async () => {
+    const { content } = await mount('1\n2\n3')
+    const seen = vi.fn()
+    window.addEventListener('keydown', seen)
+    const event = press(content, { key: 'ArrowDown', metaKey: true, altKey: true })
+    window.removeEventListener('keydown', seen)
+
+    expect(event.defaultPrevented).toBe(true)
+    expect(seen).toHaveBeenCalled()
+  })
+})
