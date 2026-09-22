@@ -29,9 +29,9 @@ export default defineConfig({
       forks: { execArgv },
       threads: { execArgv },
     },
-    // 확장(`extensions/`)의 시험은 **확장 옆에** 산다 — 호스트가 특정 확장을 알면 안 되고,
-    // 확장이 옮겨 갈 때 시험도 같이 가야 한다.
-    include: ['{src,electron,shared,tests,extensions}/**/*.test.{ts,tsx}'],
+    // 확장의 시험은 **확장 옆에** 산다 — 호스트가 특정 확장을 알면 안 된다. 그래서 확장이
+    // `desktop-extensions/` 레포로 갈라 나갈 때(2026-09-22) 시험도 같이 갔다.
+    include: ['{src,electron,shared,tests}/**/*.test.{ts,tsx}'],
     coverage: {
       provider: 'v8',
       // 실제 소스만 본다. 테스트·타입 선언·엔트리/부트스트랩·순수 배럴은 제외한다

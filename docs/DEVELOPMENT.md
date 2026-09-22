@@ -446,4 +446,4 @@ system 없이 캐주얼하게 물으면 도구 대신 "확인 중입니다…" �
 - ~~`docs/reference/`·`docs/superpowers/`~~ — **public 전환 때 제거했다 (2026-08-25).** 코드 주석이 인용하던
   실측 근거 문서들이 여기 있었다 — 끊긴 인용을 만나면 이 줄이 그 사연이다
 - `shared/protocol/*` 의 주석에 남은 davis 런타임 실측 근거 — 사실이 아니게 되면 지우지 말고 **고쳐 쓴다**
-- 확장 스크립트 (`ext:pack`·`ext:registry`) — 쓸지 미정
+- 확장 배포처 스크립트 (`ext:registry`) — 쓸지 미정. 포장(`pack`)은 2026-09-22 에 확장 레포(`desktop-extensions/`)로 갔다

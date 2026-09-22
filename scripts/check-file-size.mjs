@@ -15,7 +15,7 @@ import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 
 const MAX_LINES = 300
-const ROOTS = ['src', 'electron', 'shared', 'tests', 'extensions']
+const ROOTS = ['src', 'electron', 'shared', 'tests']
 // `vendor` — 확장이 싣는 남의 산출물(문법 wasm·런타임). 우리가 쓴 코드가 아니다
 const SKIP = new Set(['node_modules', 'dist', 'dist-electron', 'vendor'])
 

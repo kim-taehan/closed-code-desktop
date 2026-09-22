@@ -13,8 +13,9 @@
 
 ```bash
 npm run ext:registry              # http://localhost:4321
-npm run ext:pack extensions/line-checker   # dist-extensions/line-checker-0.1.0.axcx
 ```
+
+패키지(`.axcx`)는 **확장 레포**(`desktop-extensions/`)에서 만든다: `npm run pack code-map` → `dist-extensions/code-map-0.1.0.axcx`.
 
 브라우저로 `http://localhost:4321` 을 열고 `.axcx` 를 끌어다 놓으면 올라간다.
 포트를 바꾸려면 `PORT=5000 npm run ext:registry`.
@@ -80,5 +81,5 @@ README 가 없는 패키지는 목록에 `readme` 를 싣지 않는다 (앱이 �
 `curl` 로 왕복을 돌려 봤다: 빈 목록 → 업로드 → 버전 2개 쌓임 → 최신 판정 →
 내려받기(바이트 일치) → 같은 버전 덮어쓰기(`replaced: true`) → 아카이브 아닌 것 거부 → 지우기.
 
-`scripts/pack-extension.mjs` 가 만든 패키지(`zip` CLI, deflate)가 앱의
+확장 레포의 `scripts/pack-extension.mjs` 가 만든 패키지(`zip` CLI, deflate)가 앱의
 `installPackage` 로 설치되는 것도 시험으로 잠갔다 (`electron/extensions/install.test.ts`).
