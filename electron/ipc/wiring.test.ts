@@ -140,6 +140,7 @@ describe('IPC 배선', () => {
       window,
       service: { webview: async () => ({ ok: false, reason: '없음' }), uiMessage: async () => {} },
       router: new ExtensionUiRouter(new ExtensionUiServer()),
+      activeProjectId: () => null,
     })
 
     // 셸 드로어. 서버에 닿지 않는다 — 이 시험이 보는 것은 채널 등록/해제뿐이다.

@@ -1610,3 +1610,10 @@ textarea.ext-ask__field {
   width: 100%;
   border: 0;
 }
+
+/* 사이드바 웹뷰(하이닉스 H2). 사이드바 본문(`.dc-sidebar__body`)은 flex 가 아니라 스크롤 칸이라
+   `flex: 1` 로는 높이가 안 선다 — 칸 높이를 통째로 쓴다. 스크롤은 앞단 문서가 자기 안에서 낸다.
+   감추는 것은 위 `.ext-webview--hidden` 그대로다 (내리면 앞단이 다시 뜬다). */
+.ext-webview--sidebar {
+  height: 100%;
+}

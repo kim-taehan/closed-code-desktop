@@ -26,9 +26,10 @@ export interface ComposerProps {
   disabled?: boolean
   /**
    * 밖에서 끼워 넣을 텍스트. 값이 바뀔 때마다(nonce) 반영된다.
-   * 기본은 현재 입력 뒤에 붙이기(파일 경로 등), replace 면 입력창을 통째로 채운다(대기열 되돌리기).
+   * 기본은 현재 입력 뒤에 붙이기(파일 경로 등), replace 면 입력창을 통째로 채운다(대기열 되돌리기),
+   * block 이면 **빈 줄 하나 띄워** 뒤에 붙인다(확장의 `chat.post` — 문단째 오는 글이라 쓰던 글과 갈라 둔다).
    */
-  insert?: { text: string; nonce: number; replace?: boolean }
+  insert?: ComposerInsert
   /** 상자 안쪽 아래 줄. 왼쪽에 놓인다 (추가 버튼 등). */
   left?: React.ReactNode
   /** 상자 안쪽 아래 줄. 전송 버튼 앞에 놓인다 (모드 선택기 등). */
@@ -50,6 +51,8 @@ export interface ComposerProps {
    */
   stop?: { pending: boolean; onPress: () => void }
 }
+
+export interface ComposerInsert { text: string; nonce: number; replace?: boolean; block?: boolean }
 
 export function Composer({
   onSubmit,
@@ -147,6 +150,7 @@ export function Composer({
   useEffect(() => {
     if (!insert || insert.text === '') return
     if (insert.replace) setValue(insert.text)
+    else if (insert.block) setValue((current) => (current.trim() === '' ? insert.text : `${current.trimEnd()}\n\n${insert.text}`))
     else setValue((current) => (current === '' ? insert.text : `${current.trimEnd()} ${insert.text}`))
     setHistIndex(null)
     textareaRef.current?.focus()

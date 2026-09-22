@@ -39,7 +39,7 @@ async function bed() {
     uiMessage: vi.fn(async () => {}),
   }
   const router = new ExtensionUiRouter(new ExtensionUiServer(() => 'tok'))
-  const bridge = new ExtensionUiBridge({ window: window as never, service, router })
+  const bridge = new ExtensionUiBridge({ window: window as never, service, router, activeProjectId: () => 'P' })
   bridge.register()
   const invoke = (channel: string, payload: unknown) => Promise.resolve(handlers.get(channel)!({}, payload))
   return { bridge, router, service, sent, invoke }
@@ -92,5 +92,15 @@ describe('웹뷰 탭 채널', () => {
     expect(handlers.size).toBe(0)
     expect(router.server.binding('tok')).toBeNull()
     expect(router.post('webview-fixture', 'board', 1, 'P')).toBe(false)
+  })
+
+  // 하이닉스 H2 K-3 — 입력칸은 화면의 프로젝트 하나에만 있다 (`bed` 의 화면 프로젝트는 P)
+  it('chat.post 는 화면에 떠 있는 프로젝트에만 겉봉을 달아 보내고, 아니면 「먼저 여세요」로 거부한다', async () => {
+    const { router, sent } = await bed()
+
+    router.chatPost('P', '설계서')
+    expect(() => router.chatPost('Q', '남의 것')).toThrow('먼저 여세요')
+
+    expect(sent).toEqual([{ channel: Channel.EXTENSION_CHAT_POST, payload: { projectId: 'P', payload: { text: '설계서' } } }])
   })
 })

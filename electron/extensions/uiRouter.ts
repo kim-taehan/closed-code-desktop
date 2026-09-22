@@ -15,6 +15,8 @@ export interface UiSinks {
   toTab(token: string, message: unknown): void
   /** 그 프로젝트에서 이 뷰의 탭을 열라고 화면에 알린다. 열 수 없는 뷰(꺼짐·없음)면 사유와 함께 거부한다 */
   openTab(projectId: string, extension: string, viewId: string): Promise<void>
+  /** 그 프로젝트의 채팅 입력칸에 글을 넣는다 (`code.chat.post`). 그 프로젝트가 화면에 없으면 사유와 함께 던진다 */
+  chatPost(projectId: string, text: string): void
 }
 
 /** 확장 호스트(`serviceDispatch`)가 보는 표면 */
@@ -22,6 +24,7 @@ export interface UiPorts {
   /** 열린 탭이 하나라도 있어 실어 보냈으면 true */
   post(extension: string, viewId: string, message: unknown, projectId: string): boolean
   open(extension: string, viewId: string, projectId: string): Promise<void>
+  chatPost(projectId: string, text: string): void
 }
 
 export class ExtensionUiRouter implements UiPorts {
@@ -55,5 +58,11 @@ export class ExtensionUiRouter implements UiPorts {
   async open(extension: string, viewId: string, projectId: string): Promise<void> {
     if (this.sinks === null) throw new Error('웹뷰 탭을 열 창이 없습니다')
     await this.sinks.openTab(projectId, extension, viewId)
+  }
+
+  /** 입력칸도 창 수명이다 — 웹뷰 탭과 같은 길로 싣는다. 창이 없으면 넣을 칸이 없다 */
+  chatPost(projectId: string, text: string): void {
+    if (this.sinks === null) throw new Error('채팅 입력칸이 있는 창이 없습니다')
+    this.sinks.chatPost(projectId, text)
   }
 }

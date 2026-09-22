@@ -31,6 +31,11 @@ export interface ExtensionUiBridgeOptions {
   window: BrowserWindow
   service: ExtensionUiSource
   router: ExtensionUiRouter
+  /**
+   * 화면에 떠 있는 프로젝트 (`ProjectRegistry.active`). `code.chat.post` 는 이 프로젝트에만 넣는다 —
+   * 입력칸은 화면의 프로젝트 하나에만 있고, 뒤에 숨은 프로젝트로 넣으면 받을 칸이 없어 조용히 사라진다.
+   */
+  activeProjectId: () => string | null
 }
 
 /** `ipcMain.handle` 로 붙이는 것 전부. `dispose` 가 이 목록으로 푼다 */
@@ -67,6 +72,14 @@ export class ExtensionUiBridge {
         const found = await service.webview(extension, viewId, projectId)
         if (!found.ok) throw new Error(found.reason)
         this.send(Channel.EXTENSION_UI_OPEN, { projectId, payload: { extension, viewId, title: found.title } })
+      },
+      // 겉봉을 달아 보낸다 — 여기서 본 뒤 도착 전에 사용자가 프로젝트를 옮기면 받는 입력칸이 한 번 더 거른다.
+      // 그때는 글이 버려지고 확장은 성공으로 안다 (IPC 한 번 사이의 틈 — 되받는 왕복은 두지 않았다)
+      chatPost: (projectId, text) => {
+        if (this.options.activeProjectId() !== projectId) {
+          throw new Error('그 프로젝트가 화면에 없습니다 — 그 프로젝트를 먼저 여세요')
+        }
+        this.send(Channel.EXTENSION_CHAT_POST, { projectId, payload: { text } })
       },
     })
   }

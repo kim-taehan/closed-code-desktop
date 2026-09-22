@@ -97,6 +97,7 @@ describe('main — 받는 자리 (dispatchUi)', () => {
       open: async (...args) => {
         opened.push(args)
       },
+      chatPost: () => {},
     }
     return { posted, opened, value }
   }

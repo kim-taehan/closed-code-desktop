@@ -12,7 +12,9 @@ import type { ExtensionEntry } from './extensionRows'
 // 그대로다. 한 칸에 모이는 것은 **한 확장의 뷰들**이지 여러 확장이 아니다.
 //
 // 명령을 선언했지만 **뷰가 없는 확장은 여기 나오지 않는다.** 그려 줄 화면이 없어서다.
-// 그런 확장은 설정 창의 설치 목록에만 산다. 웹뷰 뷰만 가진 3판 확장도 같다 — 설치 목록의 「열기」로 연다.
+// 그런 확장은 설정 창의 설치 목록에만 산다. 본문 웹뷰만 가진 3판 확장도 같다 — 설치 목록의 「열기」로 연다.
+// **사이드바 웹뷰(`location: 'sidebar'`)를 선언한 3판 확장은 나온다** (하이닉스 H2) — 고르면 그 `ui/` 가
+// 사이드바 칸에 뜬다 (`SidebarWebviewStack.tsx`).
 
 /** 사이드바 패널 id 중 확장이 등록한 것. 내장 셋(`files`·`git`·`history`)과 섞이지 않는다. */
 export type ExtensionPanelId = `ext:${string}`
@@ -37,8 +39,10 @@ export interface ExtensionPanelTarget {
   /** 선택기에 뜰 이름. 매니페스트의 표시 이름이라 **번역하지 않는다.** */
   title: string
   extension: ExtensionEntry
-  /** 이 확장이 선언한 뷰 전부. 패널 안에서 **탭**이 된다. 선언 순서 그대로다. */
+  /** 이 확장이 선언한 뷰 전부(웹뷰 빼고). 패널 안에서 **탭**이 된다. 선언 순서 그대로다. */
   views: ExtensionView[]
+  /** 3판의 사이드바 웹뷰 (확장마다 하나 — `manifestViews.ts` 의 `toViews`). 있으면 패널이 곧 이 화면이다 */
+  sidebarWebview?: ExtensionView
 }
 
 /**
@@ -49,11 +53,14 @@ export interface ExtensionPanelTarget {
  */
 export function extensionPanelTargets(extensions: ExtensionEntry[]): ExtensionPanelTarget[] {
   return extensions.flatMap((extension) => {
-    // **웹뷰(3판)는 사이드바에 오지 않는다** — 본문 탭으로 열린다 (확장 재설계 §2-2). 사이드바 칸 자체가
-    // 6단계에서 사라지고, 그 전까지 여기 두면 빈 탭 껍데기만 선택기 한 줄을 차지한다
-    const views = (extension.contributes?.views ?? []).filter((view) => view.kind !== 'webview')
-    if (views.length === 0) return []
+    // **본문 웹뷰(3판)는 사이드바에 오지 않는다** — 본문 탭으로 열린다 (확장 재설계 §2-2). 여기 두면 빈 탭
+    // 껍데기만 선택기 한 줄을 차지한다. 사이드바 웹뷰는 탭이 아니라 패널 자체라 따로 든다 (하이닉스 H2)
+    const declared = extension.contributes?.views ?? []
+    const views = declared.filter((view) => view.kind !== 'webview')
+    const sidebarWebview = declared.find((view) => view.kind === 'webview' && view.location === 'sidebar')
+    if (views.length === 0 && sidebarWebview === undefined) return []
     // 표시 이름이 비어 있으면 디렉터리 이름으로 버틴다 — 이름 없는 칸은 고를 수가 없다
-    return [{ id: extensionPanelId(extension.name), title: extension.displayName || extension.name, extension, views }]
+    const title = extension.displayName || extension.name
+    return [{ id: extensionPanelId(extension.name), title, extension, views, ...(sidebarWebview ? { sidebarWebview } : {}) }]
   })
 }

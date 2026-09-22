@@ -87,4 +87,9 @@ export const EXTENSION_CHANNELS = {
   EXTENSION_UI_MESSAGE: 'extension:uiMessage',
   /** main → renderer: 이 프로젝트에서 이 뷰의 탭을 열어라 (`code.ui.open`). 프로젝트 겉봉을 쓴다 */
   EXTENSION_UI_OPEN: 'extension:uiOpen',
+  /**
+   * main → renderer: 이 프로젝트의 채팅 입력칸에 글을 넣어라 (`code.chat.post`, 하이닉스 H2). **보내지 않는다.**
+   * 프로젝트 겉봉을 쓴다 — 입력칸이 붙은 프로젝트가 아니면 받는 쪽이 버린다 (`useComposerSendBridges`).
+   */
+  EXTENSION_CHAT_POST: 'extension:chatPost',
 } as const

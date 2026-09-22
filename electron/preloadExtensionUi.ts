@@ -1,6 +1,7 @@
 import { ipcRenderer } from 'electron'
 import { Channel, type DesktopBridge, type ProjectHandler } from '../shared/ipc/channels'
 import type {
+  ExtensionChatPostPayload,
   ExtensionUiMessagePayload,
   ExtensionUiOpenPayload,
   ExtensionUiOpenViewResult,
@@ -15,7 +16,7 @@ type Subscribe = <T>(channel: string, handler: ProjectHandler<T>) => () => void
 
 type ExtensionUiBridge = Pick<
   DesktopBridge,
-  'openExtensionUi' | 'closeExtensionUi' | 'sendExtensionUi' | 'onExtensionUiMessage' | 'onExtensionUiOpen'
+  'openExtensionUi' | 'closeExtensionUi' | 'sendExtensionUi' | 'onExtensionUiMessage' | 'onExtensionUiOpen' | 'onExtensionChatPost'
 >
 
 export function extensionUiBridge(subscribe: Subscribe): ExtensionUiBridge {
@@ -34,5 +35,7 @@ export function extensionUiBridge(subscribe: Subscribe): ExtensionUiBridge {
     },
     onExtensionUiOpen: (handler: ProjectHandler<ExtensionUiOpenPayload>) =>
       subscribe<ExtensionUiOpenPayload>(Channel.EXTENSION_UI_OPEN, handler),
+    onExtensionChatPost: (handler: ProjectHandler<ExtensionChatPostPayload>) =>
+      subscribe<ExtensionChatPostPayload>(Channel.EXTENSION_CHAT_POST, handler),
   }
 }

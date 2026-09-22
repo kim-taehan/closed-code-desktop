@@ -89,3 +89,22 @@ describe('설치 목록을 패널 목록으로', () => {
     expect(panels[1]?.views.map((view) => view.title)).toEqual(['ㅎ', 'ㄴ'])
   })
 })
+
+// 하이닉스 H2 K-1 — 3판은 사이드바 웹뷰(`location: 'sidebar'`)가 있을 때만 선택기에 나온다
+describe('사이드바 웹뷰', () => {
+  const v3 = (views: NonNullable<ExtensionEntry['contributes']>['views']): ExtensionEntry => ({
+    name: 'hynix', displayName: '요구사항', version: '1.0.0', dir: '/확장/hynix', enabled: true, contributes: { views },
+  })
+  const sidebar = { id: 'list', title: '결재함', kind: 'webview' as const, entry: 'ui/list.html', location: 'sidebar' as const }
+  const main = { id: 'detail', title: '일감', kind: 'webview' as const, entry: 'ui/detail.html' }
+
+  it('사이드바 웹뷰가 있으면 패널이 되고, 그 뷰를 든다 — 본문 웹뷰는 탭이 되지 않는다', () => {
+    expect(extensionPanelTargets([v3([sidebar, main])])).toEqual([
+      { id: 'ext:hynix', title: '요구사항', extension: v3([sidebar, main]), views: [], sidebarWebview: sidebar },
+    ])
+  })
+
+  it('본문 웹뷰만 있으면 여전히 선택기에 안 나온다 — 설치 목록의 「열기」로 연다', () => {
+    expect(extensionPanelTargets([v3([main])])).toEqual([])
+  })
+})

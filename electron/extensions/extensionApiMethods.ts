@@ -145,6 +145,21 @@ export const METHOD_SECRETS_GET = 'secrets.get'
 export const METHOD_SECRETS_SET = 'secrets.set'
 export const METHOD_SECRETS_DELETE = 'secrets.delete'
 /**
+ * **사용자 채팅 입력칸에 글을 넣기만 한다 — 보내지 않는다** (하이닉스 H2 결정 K-3). 사람이 보고 보낸다.
+ *
+ * `chat.ask`(사용자 대화에 턴을 만든다)와 다르다. 확장 AI(`ai.run`)는 읽기 전용이라, 코드를 고치는 일은
+ * 이 길로 **사람을 거쳐** 메인 AI 에 넘긴다 (확장 재설계 §2-3).
+ *
+ * - 프로젝트 규칙·켜짐은 `METHOD_UI_POST` 와 같다 — 적은 `projectId` → 겉봉, 둘 다 없으면 거부.
+ * - 그 프로젝트가 **화면에 떠 있을 때만** 넣는다. 아니면 「그 프로젝트를 먼저 여세요」로 거부된다 —
+ *   입력칸은 화면에 뜬 프로젝트 하나에만 있다.
+ * - 쓰던 글이 있으면 **덮지 않고 빈 줄 하나 띄워 뒤에 붙인다.** 채팅 탭으로 옮기고 입력칸에 커서를 둔다.
+ * - 글은 빈 칸이 아닌 문자열, `CHAT_POST_MAX_BYTES`(UTF-8 바이트)까지.
+ */
+export const METHOD_CHAT_POST = 'chat.post'
+/** `chat.post` 한 번에 넣을 수 있는 글 — UTF-8 **바이트**로 잰다 (한글은 3바이트) */
+export const CHAT_POST_MAX_BYTES = 100 * 1024
+/**
  * **웹뷰 앞단에 메시지를 민다** (매니페스트 3판, 확장 재설계 §2-1). 앞단은 `message` 이벤트로 받는다.
  *
  * `view.setHtml` 을 대신하는 자리다. 저쪽은 문서를 통째로 갈아끼워 갱신마다 화면이 다시 떴고

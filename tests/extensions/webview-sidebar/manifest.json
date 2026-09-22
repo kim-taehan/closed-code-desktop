@@ -1,0 +1,15 @@
+{
+  "manifestVersion": 3,
+  "name": "sidebar-fixture",
+  "displayName": "사이드바 시험 확장",
+  "version": "0.0.1",
+  "main": "main.js",
+  "engines": { "code": "^0.1.0" },
+  "contributes": {
+    "commands": [{ "id": "sidebarFixture.chat", "title": "채팅에 넣기" }],
+    "views": [
+      { "id": "list", "title": "결재함", "kind": "webview", "entry": "ui/list.html", "location": "sidebar" },
+      { "id": "detail", "title": "일감", "kind": "webview", "entry": "ui/detail.html" }
+    ]
+  }
+}

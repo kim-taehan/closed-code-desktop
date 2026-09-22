@@ -31,7 +31,15 @@ export interface ExtensionView {
    * `kind: 'webview'` 에만 있다.
    */
   entry?: string
+  /**
+   * 웹뷰가 뜨는 자리 (하이닉스 H2). **적지 않으면 본문 탭**이고, `'sidebar'` 일 때만 이 칸이 실린다.
+   * 사이드바 웹뷰는 **확장마다 하나**다 — 선택기 한 줄이 곧 확장 하나라서다 (`extensionPanels.ts`).
+   */
+  location?: WebviewLocation
 }
+
+/** 웹뷰 자리. 재설계 3단계에서 사이드바 칸을 없앴다가 하이닉스 H2 에서 3판 웹뷰 하나로 되살렸다 */
+export type WebviewLocation = 'sidebar' | 'main'
 
 /** 2판이 받는 뷰 종류. 3판을 더하면서 **그대로** 뒀다 — 2판 확장이 오늘처럼 돌아야 한다. */
 const V2_VIEW_KINDS: ExtensionViewKind[] = ['table', 'tree', 'list', 'html']
@@ -50,11 +58,33 @@ export function toView(value: unknown, manifestVersion: number): ExtensionView |
     // 3판은 웹뷰만. 문서 자리가 `ui/` 밖이면 서빙할 수 없으므로 뷰째 버린다
     if (kind !== 'webview') return null
     const entry = webviewEntry(source['entry'])
-    return entry === null ? null : { id, title, kind, entry }
+    const location = source['location']
+    // 모르는 자리는 뷰째 버린다 — `entry` 와 같은 규칙 (본문으로 눙치면 사이드바에 적은 뜻이 조용히 사라진다)
+    if (entry === null || (location !== undefined && location !== 'sidebar' && location !== 'main')) return null
+    return { id, title, kind, entry, ...(location === 'sidebar' ? { location } : {}) }
   }
   // 앱이 못 그리는 kind 는 담아둬도 쓸 데가 없다
   if (!V2_VIEW_KINDS.some((known) => known === kind)) return null
   return { id, title, kind: kind as ExtensionViewKind }
+}
+
+/**
+ * 뷰 목록. **사이드바 웹뷰는 처음 것 하나만** 남기고 뒤엣것은 버린다 (하이닉스 H2 결정 K-1).
+ *
+ * 선택기 한 줄 = 확장 하나라, 둘째 사이드바 뷰는 그릴 자리가 없다. 본문으로 옮겨 담지 않는다 —
+ * 적은 사람은 사이드바에 뜰 줄 알고, 목록에서 사라지는 것이 그 착오를 가장 빨리 알린다.
+ */
+export function toViews(values: unknown[], manifestVersion: number): ExtensionView[] {
+  let sidebar = false
+  return values.flatMap((value) => {
+    const view = toView(value, manifestVersion)
+    if (view === null) return []
+    if (view.location === 'sidebar') {
+      if (sidebar) return []
+      sidebar = true
+    }
+    return [view]
+  })
 }
 
 /**

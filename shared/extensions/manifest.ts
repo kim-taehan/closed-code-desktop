@@ -21,7 +21,7 @@
 // "왜 버렸는지"를 돌려주지 않는다. 확장은 사람이 직접 설치하므로 **조용히 삼키면 왜 안 뜨는지
 // 알 길이 없다.** 사유를 같이 돌려준다. 이 모양의 선례는 `electron/projects/projectFs.ts` 다.
 
-import { toView, type ExtensionView } from './manifestViews'
+import { toViews, type ExtensionView } from './manifestViews'
 import { toNetwork } from './manifestNetwork'
 
 /**
@@ -40,7 +40,7 @@ import { toNetwork } from './manifestNetwork'
 export const SUPPORTED_MANIFEST_VERSIONS = [2, 3] as const
 
 // 뷰의 타입과 파서는 `manifestViews.ts` 에 있다 (판마다 모양이 달라 갈라냈다). 여기서 다시 낸다.
-export type { ExtensionView, ExtensionViewKind } from './manifestViews'
+export type { ExtensionView, ExtensionViewKind, WebviewLocation } from './manifestViews'
 
 /**
  * 명령이 앉을 자리.
@@ -241,7 +241,7 @@ function toContributes(value: unknown, manifestVersion: number): ExtensionContri
       ? { commands: commands.map(toCommand).filter((c): c is ExtensionCommand => c !== null) }
       : {}),
     ...(Array.isArray(views)
-      ? { views: views.map((view) => toView(view, manifestVersion)).filter((v): v is ExtensionView => v !== null) }
+      ? { views: toViews(views, manifestVersion) }
       : {}),
   }
 }

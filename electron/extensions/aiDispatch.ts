@@ -1,7 +1,7 @@
 import { METHOD_AI_CANCEL, METHOD_AI_RUN } from './extensionApiMethods'
 import { NOTICE_AI_TEXT } from './rpc'
 import { requireString } from './serviceParse'
-import { resolveProject } from './uiDispatch'
+import { requireEnabled, resolveProject } from './uiDispatch'
 
 // 자식이 부른 `code.ai.run`·`ai.cancel` 을 받는다. `serviceDispatch.ts` 의 두 갈래가 여기로 온다 —
 // 저쪽이 300줄 상한에 붙어 있고, 프로젝트 규칙을 웹뷰와 **한 벌로** 나눠 써야 해서다 (`resolveProject`).
@@ -28,6 +28,23 @@ export interface ExtensionAiPort {
 export const REFUSE_AI: ExtensionAiPort = {
   run: () => Promise.reject(new Error('AI 세션을 쓸 수 없는 호스트입니다 (배선 없음)')),
   cancel: () => {},
+}
+
+/**
+ * 켜짐을 보고 → 돌린다. 겉봉은 **부르는 쪽이 한 번 읽은 값**이다 — 판정한 프로젝트와 묻는 프로젝트가
+ * 같아야 한다 (하이닉스 H2 결정 K-4, `uiDispatch.ts` 의 `dispatchUiEnabled` 와 같은 자리).
+ * 취소는 막지 않는다 — 켜짐이 바뀐 뒤에도 이미 도는 것은 끊을 수 있어야 한다.
+ */
+export async function dispatchAiEnabled(
+  port: ExtensionAiPort,
+  method: typeof METHOD_AI_RUN | typeof METHOD_AI_CANCEL,
+  params: Record<string, unknown>,
+  envelope: string | null,
+  notifyChild: (method: string, params: unknown) => void,
+  allowedIn: (projectId: string) => Promise<readonly string[] | undefined>,
+): Promise<unknown> {
+  if (method === METHOD_AI_RUN) await requireEnabled(method, params, envelope, allowedIn)
+  return dispatchAi(port, method, params, envelope, notifyChild)
 }
 
 /**

@@ -48,3 +48,24 @@ describe('2판은 그대로', () => {
     expect(views(2, [{ id: 'b', title: 'B', kind: 'webview', entry: 'ui/index.html' }])).toEqual([])
   })
 })
+
+// 하이닉스 H2 K-1 — 웹뷰 자리
+describe('3판 웹뷰의 location', () => {
+  const webview = (id: string, location?: unknown) => ({ id, title: id, kind: 'webview', entry: 'ui/index.html', ...(location === undefined ? {} : { location }) })
+
+  it("'sidebar' 만 실리고, 적지 않거나 'main' 이면 본문이다 (칸이 없다)", () => {
+    expect(views(3, [webview('a', 'sidebar'), webview('b', 'main'), webview('c')])).toEqual([
+      { id: 'a', title: 'a', kind: 'webview', entry: 'ui/index.html', location: 'sidebar' },
+      { id: 'b', title: 'b', kind: 'webview', entry: 'ui/index.html' },
+      { id: 'c', title: 'c', kind: 'webview', entry: 'ui/index.html' },
+    ])
+  })
+
+  it('모르는 자리는 그 뷰를 버린다 — 본문으로 눙치지 않는다', () => {
+    expect(views(3, [webview('a', 'panel'), webview('b', 1)])).toEqual([])
+  })
+
+  it('사이드바 웹뷰는 확장마다 하나 — 처음 것만 남는다', () => {
+    expect(views(3, [webview('a', 'sidebar'), webview('b'), webview('c', 'sidebar')])!.map((view) => view.id)).toEqual(['a', 'b'])
+  })
+})

@@ -19,6 +19,7 @@ import { asPathOrNull, asTextOrNull, type ActiveFile } from './extensionApiParse
 export * from './extensionApiMethods'
 import {
   METHOD_CHAT_ASK,
+  METHOD_CHAT_POST,
   METHOD_EXPORT_SAVE,
   METHOD_PROGRESS,
   METHOD_SET_HTML,
@@ -105,6 +106,11 @@ export interface ExtensionApi {
      * 사용자가 끊으면 `cancelled`, 보낼 곳이 없으면 `rejected` 다. **던지지 않는다.**
      */
     ask(prompt: string): Promise<AskResult>
+    /**
+     * 사용자 채팅 입력칸에 **넣기만** 한다 — 보내지 않는다 (`METHOD_CHAT_POST`). 쓰던 글이 있으면 빈 줄 뒤에 붙는다.
+     * 프로젝트 규칙은 `ui.post` 와 같고, 그 프로젝트가 화면에 없으면 거부된다.
+     */
+    post(text: string, target?: ProjectTarget): Promise<void>
   }
   ui: {
     /**
@@ -197,6 +203,10 @@ export function createExtensionApi(
     },
     chat: {
       ask: async (prompt) => (await call(METHOD_CHAT_ASK, { prompt })) as AskResult,
+      // `extension` 을 여기서 채운다 — 부모가 켜짐을 판정한다. `target` 은 `projectId` 하나만 꺼낸다 (`ui.post` 주석)
+      post: async (text, target) => {
+        await call(METHOD_CHAT_POST, { ...projectOf(target), extension: extensionName, text })
+      },
     },
     ui: {
       askText: async (options) =>

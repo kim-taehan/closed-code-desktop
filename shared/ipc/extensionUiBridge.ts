@@ -1,6 +1,6 @@
 import type { ProjectHandler } from './desktopBridge'
 
-// 웹뷰 탭(매니페스트 3판) 표면 — 탭 띄우기·놓기·메시지 양방향·탭 열기 요청.
+// 웹뷰 탭(매니페스트 3판) 표면 — 탭 띄우기·놓기·메시지 양방향·탭 열기 요청, 그리고 채팅 입력칸에 넣기(H2).
 // `desktopBridge.ts` 가 300줄 상한에 붙어 갈라냈고 그쪽이 상속한다 (`extensionBridgeSurface.ts` 와 같은 자리).
 //
 // **메시지는 토큰으로 다닌다.** 탭(iframe)이 누구인지는 main 이 토큰에서 푼다 — 확장·뷰·프로젝트를
@@ -32,6 +32,11 @@ export interface ExtensionUiOpenPayload {
   title: string
 }
 
+/** 채팅 입력칸에 넣을 글 (`code.chat.post`). 프로젝트는 겉봉에 있다. **넣기만 하고 보내지 않는다** */
+export interface ExtensionChatPostPayload {
+  text: string
+}
+
 export interface ExtensionUiBridgeSurface {
   /** 탭이 마운트될 때 **한 번.** 토큰은 탭이 사는 동안 그대로다 */
   openExtensionUi(target: ExtensionUiTarget): Promise<ExtensionUiOpenViewResult>
@@ -42,4 +47,6 @@ export interface ExtensionUiBridgeSurface {
   /** 뒷단이 민 한 통. **자기 토큰의 것만** 받아야 한다 — 거르는 것은 받는 탭이다 */
   onExtensionUiMessage(handler: (payload: ExtensionUiMessagePayload) => void): () => void
   onExtensionUiOpen(handler: ProjectHandler<ExtensionUiOpenPayload>): () => void
+  /** 확장이 입력칸에 넣으라고 한 글. **그 입력칸의 프로젝트 것만** 받아야 한다 */
+  onExtensionChatPost(handler: ProjectHandler<ExtensionChatPostPayload>): () => void
 }

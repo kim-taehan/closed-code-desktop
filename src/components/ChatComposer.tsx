@@ -5,7 +5,7 @@ import { ContextUsageBar } from './ContextUsageBar'
 import { WorkingDirBar } from './WorkingDirBar'
 import type { WorkingDirPayload } from '../../shared/ipc/channels'
 import { AttachmentChips } from './AttachmentChips'
-import { Composer } from './Composer'
+import { Composer, type ComposerInsert } from './Composer'
 import { ComposerAdd } from './ComposerAdd'
 import { SkillPicker } from './SkillPicker'
 import { PermissionModeSwitch } from './PermissionModeSwitch'
@@ -88,9 +88,9 @@ export function ChatComposer(props: ChatComposerProps) {
   const opencodeCommands = useOpencodeCommands(props.project?.id ?? null)
   // 입력창에 밖에서 글을 넣는 통로는 하나로 합친다 — 파일 픽·스킬·대기열 되돌리기가
   // 각자 nonce 를 가지면 "가장 최근 것" 을 못 가려 이전 것에 영영 가린다.
-  const [insert, setInsert] = useState({ text: '', nonce: 0, replace: false })
-  const push = (text: string, replace = false) =>
-    setInsert(({ nonce }) => ({ text, nonce: nonce + 1, replace }))
+  const [insert, setInsert] = useState<ComposerInsert>({ text: '', nonce: 0 })
+  const push = (text: string, how: Pick<ComposerInsert, 'replace' | 'block'> = {}) =>
+    setInsert(({ nonce }) => ({ text, nonce: nonce + 1, ...how }))
 
   // App 이 파일 트리에서 고른 경로를 이 통로로 넘긴다
   useEffect(() => {
@@ -107,6 +107,7 @@ export function ChatComposer(props: ChatComposerProps) {
     projectId: props.project?.id ?? null,
     submit: queue.submit,
     modelPatch,
+    onPost: (text) => { props.onSelectTab('chat'); push(text, { block: true }) },
   })
 
   // `/models` 슬래시 — 툴바 스위처와 **같은 선택 상태**를 공유한다. 뜰 조건일 때만 등록 (fail-closed).
@@ -131,7 +132,7 @@ export function ChatComposer(props: ChatComposerProps) {
 
   function restoreQueue(): void {
     const merged = queue.take()
-    if (merged) push(merged.query, true)
+    if (merged) push(merged.query, { replace: true })
   }
 
   function submit(text: string): void {

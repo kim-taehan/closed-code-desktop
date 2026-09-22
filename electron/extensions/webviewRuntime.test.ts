@@ -61,6 +61,7 @@ async function bed() {
       if (!found.ok) throw new Error(found.reason)
       opened.push({ projectId, extension, viewId })
     },
+    chatPost: () => {},
   })
   service.start()
 

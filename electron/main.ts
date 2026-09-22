@@ -212,7 +212,7 @@ async function createWindow(): Promise<void> {
       projects: appProjectExtensions(() => registry, () => settings), // 켜기는 프로젝트마다 — 상태는 이 레지스트리에 산다
     })
     extensionIpc.register()
-    extensionUiIpc = new ExtensionUiBridge({ window, service: extensions, router: extensionUi })
+    extensionUiIpc = new ExtensionUiBridge({ window, service: extensions, router: extensionUi, activeProjectId: () => registry.active?.id ?? null })
     extensionUiIpc.register()
   }
 

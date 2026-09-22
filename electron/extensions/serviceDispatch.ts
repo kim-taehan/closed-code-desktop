@@ -1,6 +1,7 @@
 import type { AskResult } from './chatAsk'
 import {
   METHOD_CHAT_ASK,
+  METHOD_CHAT_POST,
   METHOD_EXPORT_SAVE,
   METHOD_STORAGE_GET,
   METHOD_STORAGE_SET,
@@ -26,8 +27,8 @@ import { dispatchWorkspace } from './workspaceDispatch'
 import { dispatchHttpSecrets } from './httpSecretsDispatch'
 import { REFUSE_SECRETS, type ExtensionSecrets } from './secretStore'
 import type { ExtensionManifest } from '../../shared/extensions/manifest'
-import { dispatchUi, REFUSE_UI, requireEnabled } from './uiDispatch'
-import { dispatchAi, REFUSE_AI, type ExtensionAiPort } from './aiDispatch'
+import { dispatchUiEnabled, REFUSE_UI } from './uiDispatch'
+import { dispatchAiEnabled, REFUSE_AI, type ExtensionAiPort } from './aiDispatch'
 import type { UiPorts } from './uiRouter'
 import { asCount, asProgressKind, asProgressLanes, asRecord, requireString } from './serviceParse'
 import type { ExtensionProgressPayload } from '../../shared/ipc/extensionPayloads'
@@ -70,7 +71,7 @@ export interface DispatchDeps {
   ask: ExtensionAsk
   askText: ExtensionAskText
   storage: ExtensionStorage
-  /** 웹뷰 탭 — 메시지 밀기·탭 열기 (`uiRouter.ts`) */
+  /** 웹뷰 탭 — 메시지 밀기·탭 열기, 그리고 채팅 입력칸에 넣기 (`uiRouter.ts`) */
   ui: UiPorts
   /** 확장 전용 AI 세션 (`aiDispatch.ts`) */
   ai: ExtensionAiPort
@@ -270,17 +271,16 @@ export async function dispatchExtensionApi(deps: DispatchDeps, request: RpcReque
         multiline: params['multiline'] === true,
       })
     }
-    // 웹뷰 두 갈래는 프로젝트 규칙을 나눠 쓴다 — `uiDispatch.ts`
+    // 웹뷰 두 갈래와 채팅 입력칸은 프로젝트 규칙을 나눠 쓴다 — `uiDispatch.ts`.
+    // **겉봉은 여기서 한 번만 읽는다** (K-4) — 켜짐 판정(await)과 행선지가 같은 프로젝트를 봐야 한다
     case METHOD_UI_POST:
     case METHOD_UI_OPEN:
-      await requireEnabled(request.method, params, deps.projectId(), deps.allowedIn)
-      return dispatchUi(deps.ui, request.method, params, deps.projectId())
-    // AI 두 갈래도 같은 프로젝트 규칙이다 — `aiDispatch.ts`
+    case METHOD_CHAT_POST:
+      return dispatchUiEnabled(deps.ui, request.method, params, deps.projectId(), deps.allowedIn)
+    // AI 두 갈래도 같은 프로젝트 규칙이다 — `aiDispatch.ts`. 취소는 켜짐을 안 본다 (저쪽 머리말)
     case METHOD_AI_RUN:
     case METHOD_AI_CANCEL:
-      // 취소는 막지 않는다 — 켜짐이 바뀐 뒤에도 이미 도는 것은 끊을 수 있어야 한다
-      if (request.method === METHOD_AI_RUN) await requireEnabled(request.method, params, deps.projectId(), deps.allowedIn)
-      return dispatchAi(deps.ai, request.method, params, deps.projectId(), deps.notifyChild)
+      return dispatchAiEnabled(deps.ai, request.method, params, deps.projectId(), deps.notifyChild, deps.allowedIn)
     default:
       throw new Error(`알 수 없는 메서드: ${request.method}`)
   }
