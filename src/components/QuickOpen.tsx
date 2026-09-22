@@ -1,10 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { fuzzyMatch } from '../state/fuzzy'
+import { hasWildcard, likeMatch } from '../state/likeMatch'
 
 // 빠른 열기 (Cmd/Ctrl + P).
 //
 // 트리를 펼쳐 내려가는 것보다 빠르다. 목록은 열 때 한 번만 받아 온다 —
 // 글자를 칠 때마다 다시 훑으면 큰 저장소에서 멈춘다.
+//
+// 좁히는 법은 둘이고 **쿼리가 고른다**: `*`·`?` 가 있으면 like(`likeMatch`),
+// 없으면 종전 퍼지(`fuzzy`). 퍼지를 like 로 갈아치우지 않는 이유는 짧은 약어로 찾는
+// 주 경로가 퍼지이기 때문이다 (`apps` → `App.tsx`). (davis-code-desktop `0d2bc59` 에서 가져왔다)
 
 const MAX_SHOWN = 40
 
@@ -30,12 +35,13 @@ export function QuickOpen({ onOpen, onClose }: QuickOpenProps) {
 
   const hits = useMemo(() => {
     if (files === null) return []
-    if (query.trim() === '') return files.slice(0, MAX_SHOWN)
+    const q = query.trim()
+    if (q === '') return files.slice(0, MAX_SHOWN)
 
     return files
-      .map((file) => ({ file, match: fuzzyMatch(query.trim(), file) }))
-      .filter((entry) => entry.match !== null)
-      .sort((a, b) => b.match!.score - a.match!.score)
+      .map((file) => ({ file, score: scoreOf(q, file) }))
+      .filter((entry) => entry.score !== null)
+      .sort((a, b) => b.score! - a.score!)
       .slice(0, MAX_SHOWN)
       .map((entry) => entry.file)
   }, [files, query])
@@ -109,4 +115,10 @@ export function QuickOpen({ onOpen, onClose }: QuickOpenProps) {
 
 function baseName(path: string): string {
   return path.split('/').pop() ?? path
+}
+
+/** 안 맞으면 null. 와일드카드가 있으면 like, 없으면 퍼지 점수. */
+function scoreOf(query: string, file: string): number | null {
+  if (hasWildcard(query)) return likeMatch(query, file)
+  return fuzzyMatch(query, file)?.score ?? null
 }

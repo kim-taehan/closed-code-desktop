@@ -145,3 +145,59 @@ describe('QuickOpen — 클릭/백드롭', () => {
     expect(onClose).toHaveBeenCalledTimes(1)
   })
 })
+
+// `*`·`?` 가 있으면 like, 없으면 종전 퍼지. 규칙 자체는 `likeMatch.test.ts` 가 잠그고,
+// 여기서는 **그 갈림길이 실제로 걸려 있는가**를 본다.
+describe('QuickOpen — like 검색', () => {
+  const LIKE_FILES = [
+    'src/user.controller.ts',
+    'src/FooController.java',
+    'src/App.tsx',
+    'README.md',
+  ]
+
+  function open() {
+    stubDavis({ listFiles: () => Promise.resolve({ files: LIKE_FILES, dirs: [], truncated: false }) })
+    render(<QuickOpen onOpen={() => {}} onClose={() => {}} />)
+  }
+
+  function shown(): string[] {
+    return [...document.querySelectorAll('.dc-palette__path')].map((node) => node.textContent ?? '')
+  }
+
+  // 사용자가 실제로 친 쿼리. 퍼지는 `*` 를 글자로 찾아 "맞는 파일이 없습니다" 가 떴다.
+  it('`*.controller` 가 두 표기를 모두 잡는다', async () => {
+    open()
+    await waitFor(() => screen.getByText('App.tsx'))
+
+    fireEvent.change(input(), { target: { value: '*.controller' } })
+    await waitFor(() => expect(shown()).toHaveLength(2))
+    expect(shown()).toContain('src/user.controller.ts')
+    expect(shown()).toContain('src/FooController.java')
+  })
+
+  // 와일드카드가 없을 때까지 like 로 보내면 짧은 약어로 찾는 주 경로가 죽는다
+  it('와일드카드가 없으면 퍼지 그대로다 — `apps` 가 `App.tsx` 를 잡는다', async () => {
+    open()
+    await waitFor(() => screen.getByText('App.tsx'))
+
+    fireEvent.change(input(), { target: { value: 'apps' } })
+    await waitFor(() => expect(shown()).toEqual(['src/App.tsx']))
+  })
+
+  it('`?` 는 한 자다', async () => {
+    open()
+    await waitFor(() => screen.getByText('App.tsx'))
+
+    fireEvent.change(input(), { target: { value: 'A?p' } })
+    await waitFor(() => expect(shown()).toEqual(['src/App.tsx']))
+  })
+
+  it('맞는 것이 없으면 안내를 보인다 — 잘못된 패턴으로 죽지 않는다', async () => {
+    open()
+    await waitFor(() => screen.getByText('App.tsx'))
+
+    fireEvent.change(input(), { target: { value: '*.zzz(' } })
+    await waitFor(() => screen.getByText('맞는 파일이 없습니다'))
+  })
+})
