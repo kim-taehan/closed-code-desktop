@@ -43,6 +43,7 @@ import {
 } from './extensionApiMethods'
 import { APP_MESSAGE_PREFIX, checkUiMessage, impersonatesApp } from '../../shared/extensions/uiMessage'
 import type { UiHandlers, UiMessageHandler } from './uiHandlers'
+import { createAiApi, type AiStreams, type ExtensionAiApi } from './aiRunClient'
 
 
 /** 확장이 만드는 트리의 마디. 화면 쪽 `ExtensionTreeNodePayload` 와 같은 모양이다. */
@@ -138,6 +139,8 @@ export interface ExtensionApi {
     /** 웹뷰 탭을 연다 (`METHOD_UI_OPEN`). 프로젝트 규칙은 `post` 와 같다 */
     open(viewId: string, target?: { projectId: string }): Promise<void>
   }
+  /** 확장 전용 AI 세션 (`METHOD_AI_RUN`) — 사용자 대화에 안 섞인다. 계약은 `aiRunClient.ts` */
+  ai: ExtensionAiApi
   storage: {
     /** 넣은 적 없는 키는 `undefined`. `null` 은 일부러 넣은 값이라 구분된다. */
     get(key: string): Promise<unknown>
@@ -169,6 +172,7 @@ export function createExtensionApi(
   extensionName: string,
   extensionLabel?: string,
   uiHandlers?: UiHandlers,
+  aiStreams?: AiStreams,
 ): ExtensionApi {
   return {
     workspace: {
@@ -265,6 +269,7 @@ export function createExtensionApi(
         await call(METHOD_UI_OPEN, { ...projectOf(target), extension: extensionName, viewId })
       },
     },
+    ai: createAiApi(call, extensionName, aiStreams),
     storage: {
       // `extension` 을 여기서 채운다 — 확장이 실어 보내면 남의 칸을 읽을 수 있다
       get: (key) => call(METHOD_STORAGE_GET, { extension: extensionName, key }),

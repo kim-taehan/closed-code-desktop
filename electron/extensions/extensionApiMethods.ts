@@ -138,3 +138,19 @@ export const METHOD_UI_POST = 'ui.post'
  * 그 명령이 이것으로 탭을 연다. 다른 하나의 문은 설정 창 확장 목록의 「열기」다 (E5).
  */
 export const METHOD_UI_OPEN = 'ui.open'
+/**
+ * **확장 전용 AI 세션으로 묻는다** (확장 재설계 §2-3). `chat.ask` 와 달리 사용자 대화에 턴을 만들지 않는다.
+ *
+ * (확장 × 프로젝트)마다 opencode 세션 하나를 처음 쓸 때 만들어 계속 쓴다. 그 세션은 **읽기 전용**이다 —
+ * 만들 때 권한 규칙으로 `read`·`glob`·`grep` 만 열고 나머지(편집·셸·질문·하위 작업)는 막는다
+ * (`electron/opencode/extensionRun.ts`). 그래도 승인·질문 요청이 오면 곧바로 거절한다.
+ * 세션은 대화 이력에 안 뜬다 (`electron/opencode/extensionSessions.ts`).
+ *
+ * 프로젝트 규칙은 `METHOD_UI_POST` 와 같다 — 적은 `projectId` → 겉봉, 둘 다 없으면 거부.
+ * 한 세션에 한 번에 하나만 돈다. 도는 중에 또 부르면 **busy** 사유로 거부된다.
+ *
+ * 글 조각은 응답이 아니라 통지(`NOTICE_AI_TEXT`)로 내려온다 — 왕복 하나에 답이 여럿일 수 없다.
+ */
+export const METHOD_AI_RUN = 'ai.run'
+/** 도는 `ai.run` 을 끊는다 (확장이 준 `signal` 이 abort 됐다). 그 세션의 턴을 중단하고 `ai.run` 은 취소 사유로 거부된다 */
+export const METHOD_AI_CANCEL = 'ai.cancel'

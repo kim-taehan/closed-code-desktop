@@ -47,6 +47,13 @@ opencode 어댑터(`electron/opencode/`)는 davis 봉투(`kind`/`action`)를 흉
 물리적으로 안전했던 자리다 — 그 감각으로 만지면 남의 대화가 화면에 샌다.
 **「우리 세션」은 지금 보는 세션, 없으면 살아 있는 턴의 세션이다** — 세션이 null 일 때 열어 두던
 예전 판정은 보던 대화를 턴 도중에 지우면 남의 승인·질문 카드를 통과시켰다 (2026-09-22 실측).
+**확장 AI 세션(`code.ai.run`)도 이 스트림에 선다** — 사용자 대화와 같은 서버·같은 디렉토리의 다른
+세션이다. 사용자 채팅 쪽은 위 `admits` 가 고치지 않은 그대로 버리고(`extensionIsolation.test.ts` 가
+실측 원문 한 턴으로 잠근다), 확장 쪽은 `electron/opencode/extensionRun.ts` 가 **제 세션 id 가 실린
+것만** 받는다(fail-closed). 격리가 두 갈래가 됐다 — 한쪽만 고치면 반대 방향으로 샌다.
+⚠️ 「서버 전역」은 정확히는 **인스턴스(디렉토리) 단위**다 — `?directory=` 없는 `/event` 는 서버 cwd 의
+세션만 싣는다 (2026-09-22 실측: 다른 디렉토리 세션의 한 턴이 `/event` 0건 · `/event?directory=` 25건).
+우리 서버는 프로젝트 루트를 cwd 로 뜨므로(`serverPool.ts`) 사용자 채팅은 지금 이 조건 위에서 맞다.
 
 > **`electron/opencode/transport.ts` 는 300줄 상한에 닿아 있었다 (2026-08-16).**
 > (위 문단의 `electron/ws/transport.ts` 와 다른 파일이다 — 그쪽은 인터페이스 정의부 61줄.)

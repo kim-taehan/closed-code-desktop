@@ -73,6 +73,15 @@ export const METHOD_ACTIVE_FILE = 'host.activeFile'
  */
 export const METHOD_UI_MESSAGE = 'host.uiMessage'
 
+/**
+ * 부모 → 자식 **통지**. `code.ai.run` 의 글 조각 한 개 — `{ runId, text }`.
+ *
+ * 요청이 아니라 통지인 이유: 한 번의 `ai.run` 왕복에 조각이 여럿 온다. 응답으로 보내면
+ * `PendingRequests` 가 첫 조각에서 풀려 버린다. 같은 통로라 순서는 지켜진다 — 조각이 다 내려간 뒤에
+ * `ai.run` 의 응답이 간다 (`aiRunClient.ts`).
+ */
+export const NOTICE_AI_TEXT = 'host.aiText'
+
 
 /** 응답을 기다리는 호출. 양방향으로 흐른다 (부모→자식: 명령 / 자식→부모: 확장 API). */
 export interface RpcRequest {

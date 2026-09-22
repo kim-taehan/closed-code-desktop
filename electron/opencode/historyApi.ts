@@ -25,6 +25,8 @@
 // 로 부르면 0건. `/event` 가 서버 전역인 것과 같은 성질이고(`sessionFilter.ts` 의 sessionID
 // 필터), 여기서 막는 것은 이 질의 하나뿐이다. 빼면 **남의 프로젝트 대화 목록이 뜬다.**
 
+import { isExtensionSession } from './extensionSessions'
+
 /** `client.ts` 의 private `get` 을 빌려 온다 (`mcpApi.ts` 와 같은 방식). */
 export type Getter = <T>(path: string) => Promise<T>
 /** DELETE·PATCH 용. `post` 로는 못 부른다 — 이 표면에만 필요해 `client.ts` 가 따로 연다. */
@@ -83,7 +85,9 @@ export async function listSessions(
   if (search) params.set('search', search)
   const query = params.toString()
   const sessions = await get<OpencodeSession[]>(`/session${query ? `?${query}` : ''}`)
-  return Array.isArray(sessions) ? sessions : []
+  // **확장 전용 세션은 뺀다** (확장 재설계 U-A 안 B) — 우리가 만들어 장부에 적은 id 다
+  // (`extensionSessions.ts`). opencode 의 `roots`·`parentID` 에 기대지 않는다
+  return Array.isArray(sessions) ? sessions.filter((session) => !isExtensionSession(session.id)) : []
 }
 
 /**

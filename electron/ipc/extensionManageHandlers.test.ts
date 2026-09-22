@@ -6,6 +6,7 @@ import { setExtensionEnabled, uninstallInstalled, type ManageDeps } from './exte
 import { createProjectExtensions } from '../extensions/projectExtensions'
 import { ProjectRegistry } from '../projects/projectRegistry'
 import { ProjectStore } from '../projects/projectStore'
+import { ExtensionSessionStore, isExtensionSession, useExtensionSessionStore } from '../opencode/extensionSessions'
 
 // 켜고 끄기·지우기 핸들러. 켜기는 **프로젝트마다**, 지우기는 **앱 전체**다 (확장 재설계 §3).
 // 레지스트리는 진짜를 쓴다 — 무엇이 `projects.json` 에 남는지가 이 핸들러의 결과다.
@@ -20,6 +21,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  useExtensionSessionStore(null)
   await rm(workDir, { recursive: true, force: true })
 })
 
@@ -86,5 +88,21 @@ describe('지우기', () => {
     expect(result).toEqual({ ok: true })
     expect(await stored()).toEqual({ p1: ['code-map'], p2: ['code-map'] })
     expect(manage.service.reload).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('지우기 — AI 세션 장부', () => {
+  it('지운 확장의 세션 줄을 빼되 이력 숨김은 남기고, 남의 확장 줄은 그대로 둔다', async () => {
+    const manage = deps(await oldProjects())
+    const sessions = new ExtensionSessionStore(join(workDir, 'extension-ai-sessions.json'))
+    useExtensionSessionStore(sessions)
+    sessions.set('todo', 'p1', 'ses_todo')
+    sessions.set('code-map', 'p1', 'ses_map')
+
+    await uninstallInstalled(manage, { dir: join(extensionsDir, 'todo') })
+
+    expect(sessions.get('todo', 'p1'), '다시 깔면 새 세션으로 시작해야 한다').toBeUndefined()
+    expect(sessions.get('code-map', 'p1')).toBe('ses_map')
+    expect(isExtensionSession('ses_todo'), '지운 확장의 세션이 사용자 이력에 튀어나온다').toBe(true)
   })
 })

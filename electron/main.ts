@@ -254,6 +254,7 @@ void app.whenReady().then(async () => {
     askText: (options) => extensionIpc?.askText(options) ?? null,
     settings: () => appSettings,
     ui: extensionUi,
+    servers: opencodeServers,
   })
   await createWindow()
 

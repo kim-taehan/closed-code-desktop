@@ -90,7 +90,7 @@ function translateToolResult(props: ToolResultProps, ctx: TranslateContext, succ
   ]
 }
 
-function errorMessage(props: Record<string, unknown>): string {
+export function errorMessage(props: Record<string, unknown>): string {
   const error = props['error']
   if (error === null || typeof error !== 'object') {
     return typeof error === 'string' ? error : '알 수 없는 오류'

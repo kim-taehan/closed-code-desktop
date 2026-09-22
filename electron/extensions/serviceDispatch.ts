@@ -15,8 +15,11 @@ import {
   METHOD_UI_ASK_TEXT,
   METHOD_UI_OPEN,
   METHOD_UI_POST,
+  METHOD_AI_RUN,
+  METHOD_AI_CANCEL,
 } from './extensionApi'
 import { dispatchUi, REFUSE_UI } from './uiDispatch'
+import { dispatchAi, REFUSE_AI, type ExtensionAiPort } from './aiDispatch'
 import type { UiPorts } from './uiRouter'
 import { asProgressKind, asProgressLanes, asRecord, requireString } from './serviceParse'
 import type { ExtensionProgressPayload } from '../../shared/ipc/extensionPayloads'
@@ -59,6 +62,8 @@ export interface DispatchDeps {
   storage: ExtensionStorage
   /** 웹뷰 탭 — 메시지 밀기·탭 열기 (`uiRouter.ts`) */
   ui: UiPorts
+  /** 확장 전용 AI 세션 (`aiDispatch.ts`) */
+  ai: ExtensionAiPort
   /** 행·화면이 어느 프로젝트 것인지. 도는 명령이 없거나 겹치면 null(모름) */
   projectId: () => string | null
   /**
@@ -83,7 +88,8 @@ export interface DispatchDeps {
    * 자식에게 **응답 없는 통지**를 보낸다.
    *
    * 응답으로 못 보내는 것들의 자리다 — 왕복 하나에 답이 여럿이면 `PendingRequests` 가
-   * 깨진다. 지금 쓰는 곳은 어시스턴트 활동 하나뿐이다.
+   * 깨진다. 지금 쓰는 곳은 `ai.run` 의 글 조각 하나뿐이다 (`aiDispatch.ts`). 예전에 쓰던
+   * 어시스턴트 활동 중계는 `chat.ask` 가 사용자 대화의 턴이 되며(2026-08-13) 없어졌다.
    */
   notifyChild: (method: string, params: unknown) => void
 }
@@ -107,6 +113,8 @@ export interface DispatchPorts {
   storage?: ExtensionStorage
   /** 웹뷰 탭(3판). 창 쪽 배선이 붙기 전에는 탭이 없다고 답한다 (`uiRouter.ts`) */
   ui?: UiPorts
+  /** 확장 전용 AI 세션 (`code.ai.run`). 없으면 사유와 함께 거절된다 */
+  ai?: ExtensionAiPort
   /**
    * 지금 보고 있는 파일. **배선을 안 하면 늘 null 이다.**
    *
@@ -138,6 +146,7 @@ export function portsOf(
     askText: ports.askText ?? refuseAskText,
     storage: ports.storage ?? REFUSE_STORAGE,
     ui: ports.ui ?? REFUSE_UI,
+    ai: ports.ai ?? REFUSE_AI,
     ...envelope,
   }
 }
@@ -255,6 +264,10 @@ export async function dispatchExtensionApi(deps: DispatchDeps, request: RpcReque
     case METHOD_UI_POST:
     case METHOD_UI_OPEN:
       return dispatchUi(deps.ui, request.method, params, deps.projectId())
+    // AI 두 갈래도 같은 프로젝트 규칙이다 — `aiDispatch.ts`
+    case METHOD_AI_RUN:
+    case METHOD_AI_CANCEL:
+      return dispatchAi(deps.ai, request.method, params, deps.projectId(), deps.notifyChild)
     default:
       throw new Error(`알 수 없는 메서드: ${request.method}`)
   }

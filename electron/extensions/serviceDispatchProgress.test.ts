@@ -1,4 +1,5 @@
 import { REFUSE_UI } from './uiDispatch'
+import { REFUSE_AI } from './aiDispatch'
 import { describe, expect, it } from 'vitest'
 import { createExtensionApi, METHOD_PROGRESS } from './extensionApi'
 import { dispatchExtensionApi, REFUSE_STORAGE, refuseAsk, refuseAskText, refuseExport } from './serviceDispatch'
@@ -27,6 +28,7 @@ function bedFor(projectId: string | null) {
     askText: refuseAskText,
     storage: REFUSE_STORAGE,
     ui: REFUSE_UI,
+    ai: REFUSE_AI,
     activeFile: () => null,
     projectId: () => projectId,
     emitRows: () => {},

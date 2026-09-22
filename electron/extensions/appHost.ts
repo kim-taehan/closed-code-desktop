@@ -7,6 +7,7 @@ import type { AskResult } from './chatAsk'
 import type { ExtensionAskText } from './serviceDispatch'
 import type { ProjectExtensionsPort } from './projectExtensions'
 import type { UiPorts } from './uiRouter'
+import type { ExtensionAiPort } from './aiDispatch'
 
 // 확장 호스트를 **띄우는** 자리. `main.ts` 에서 갈라냈다 — `appPorts.ts` 와 같은 이유로,
 // 저쪽은 배선만 하는 자리인데 300줄 상한에 닿았다.
@@ -38,6 +39,8 @@ export interface AppHostDeps {
   projects: ProjectExtensionsPort
   /** 웹뷰 탭(3판)의 행선지. 앱 수명이고 창은 붙었다 떨어진다 (`uiRouter.ts`) */
   ui?: UiPorts
+  /** 확장 전용 AI 세션 (`code.ai.run`). 앱 수명 — 서버 풀과 같다 (`opencode/extensionRun.ts`) */
+  ai?: ExtensionAiPort
   log: (line: string) => void
 }
 
@@ -63,6 +66,7 @@ export function startExtensionHost(deps: AppHostDeps): {
     ...ports,
     projects: deps.projects,
     ...(deps.ui === undefined ? {} : { ui: deps.ui }),
+    ...(deps.ai === undefined ? {} : { ai: deps.ai }),
   })
   service.onLog((line) => deps.log(`[확장 호스트] ${line.trim()}`))
   service.onExit((code) => deps.log(`[확장 호스트] 종료 code=${code}`))

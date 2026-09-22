@@ -13,6 +13,7 @@ import {
   createNotice,
   createRequest,
   errorResponse,
+  NOTICE_AI_TEXT,
   NOTICE_READY,
   NOTICE_SHUTDOWN,
   okResponse,
@@ -24,6 +25,7 @@ import type { RpcRequest } from './rpc'
 import { createExtensionApi } from './extensionApi'
 import { createChildHandler } from './childHandlers'
 import { UiHandlers } from './uiHandlers'
+import { AiStreams } from './aiRunClient'
 
 const port = process.parentPort
 const pending = new PendingRequests()
@@ -38,10 +40,12 @@ function call(method: string, params?: unknown): Promise<unknown> {
 
 // 웹뷰 앞단 메시지의 처리기 표. **한 장을 둘에 준다** — 확장이 거는 쪽(`code`)과 배달하는 쪽.
 const ui = new UiHandlers()
+// `code.ai.run` 의 글 조각 표. 부모의 통지(`NOTICE_AI_TEXT`)를 여기로 배달한다 (`aiRunClient.ts`)
+const aiStreams = new AiStreams()
 
 // **확장마다 따로 만든다** — 하나를 돌려 쓰면 storage 가 어느 확장 것인지 알 수 없다.
 const handle = createChildHandler(
-  (name, label) => createExtensionApi(call, name, label, ui),
+  (name, label) => createExtensionApi(call, name, label, ui, aiStreams),
   {
     // 확장은 앱 번들 밖(~/.open-code)에 있어 번들러가 손대지 않는다. 런타임 require 그대로다.
     requireModule: (absolutePath) => require(absolutePath),
@@ -61,6 +65,7 @@ port.on('message', (event) => {
   }
   if (message.kind === 'notice') {
     if (message.method === NOTICE_SHUTDOWN) shutdown()
+    if (message.method === NOTICE_AI_TEXT) aiStreams.deliver(message.params)
     return
   }
   void respond(message)

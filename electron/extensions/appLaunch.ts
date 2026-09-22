@@ -8,6 +8,9 @@ import type { SettingsStore } from '../settings/settingsStore'
 import type { ProjectRegistry } from '../projects/projectRegistry'
 import { createProjectExtensions, type ProjectExtensionsPort } from './projectExtensions'
 import type { UiPorts } from './uiRouter'
+import type { OpencodeServerPool } from '../opencode/serverPool'
+import { ExtensionAiRuns } from '../opencode/extensionRun'
+import { ExtensionSessionStore, useExtensionSessionStore } from '../opencode/extensionSessions'
 
 // 확장 호스트 기동. 판단은 전부 `appHost.ts` 에 있고 여기서는 앱 상태만 잇는다.
 // `main.ts` 가 300줄 상한에 닿아 그대로 옮겨 왔다 — **판단은 하나도 오지 않았다.**
@@ -28,9 +31,14 @@ export interface ExtensionHostDeps {
   settings: () => SettingsStore | null
   /** 웹뷰 탭의 행선지. **앱 수명이라 값으로 받는다** — 창 쪽은 붙었다 떨어진다 (`uiRouter.ts`) */
   ui: UiPorts
+  /** 프로젝트마다 띄우는 opencode 서버. `ui` 와 같은 이유로 값이다 — 앱 수명이다 */
+  servers: Pick<OpencodeServerPool, 'urlFor'>
 }
 
 export function launchExtensionHost(deps: ExtensionHostDeps): ExtensionService | null {
+  // 확장 AI 세션 장부. 이력 숨김·지우기 정리도 같은 장부를 본다 — 그래서 앱에 하나를 건다
+  const sessions = new ExtensionSessionStore(path.join(app.getPath('userData'), 'extension-ai-sessions.json'))
+  useExtensionSessionStore(sessions)
   const started = startExtensionHost({
     userDataDir: app.getPath('userData'),
     entryPath: path.join(__dirname, 'hostEntry.js'),
@@ -51,6 +59,16 @@ export function launchExtensionHost(deps: ExtensionHostDeps): ExtensionService |
     askText: (options) => deps.askText(options) ?? Promise.reject(new Error('물어볼 창이 없습니다')),
     projects: appProjectExtensions(deps.registry, deps.settings),
     ui: deps.ui,
+    ai: new ExtensionAiRuns({
+      sessions,
+      // 그 프로젝트의 서버에 묻는다. 레지스트리에 없는 프로젝트면 던진다 — 루트를 모르면 세션을 못 세운다
+      server: async (projectId) => {
+        const project = deps.registry()?.all.find((candidate) => candidate.id === projectId)
+        if (project === undefined) throw new Error(`ai.run: 모르는 프로젝트입니다: ${projectId}`)
+        return { url: await deps.servers.urlFor(project.id, project.root), directory: project.root }
+      },
+      log: (line) => console.log(line),
+    }),
     log: (line) => console.log(line),
   })
   return started.service
