@@ -127,7 +127,7 @@ function toChat(session: OpencodeSession, empty: Set<string>): Record<string, un
  * 이미 새 세션을 만들어 뒀다 (`workspace.ts`) — 여기서 무조건 만들면 **연결마다 세션이 둘씩
  * 생기고, 어댑터는 나중 것으로 갈아탄다.** 그런데 그 갈아타기는 `createSession` 응답을
  * 기다리는 동안 일어나서, 그 사이에 보낸 첫 질문은 **먼저 만든 세션으로 나간다.**
- * 그러면 답이 오는 이벤트의 sessionID 가 우리 것과 달라 `transport.ts` 의 격리 필터가
+ * 그러면 답이 오는 이벤트의 sessionID 가 우리 것과 달라 `sessionFilter.ts` 의 격리 필터가
  * 전부 버린다 — **화면이 영원히 답을 못 받는다.** (`multiSession.test.ts` 가 이걸 잡았다.
  * 증상은 "다른 프로젝트 이벤트가 샌다" 의 정확히 반대편, "내 이벤트가 나한테 안 온다" 였다.)
  *

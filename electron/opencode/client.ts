@@ -105,7 +105,7 @@ export class OpencodeClient {
    *
    * `?directory=` 는 붙이지 않는다. 스트림은 세션보다 먼저 열려 그 시점에 디렉토리를
    * 모르고, `/event` 는 **서버 전역**이라 붙일 데도 없다 — 남의 세션을 거르는 것은
-   * `transport.ts` 의 sessionID 필터 하나다 (`multiSession.test.ts`).
+   * `sessionFilter.ts` 의 sessionID 필터 하나다 (`multiSession.test.ts`).
    */
   get eventUrl(): string {
     return `${this.baseUrl}/event`

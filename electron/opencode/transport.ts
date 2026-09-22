@@ -10,6 +10,7 @@ import { replyApproval, replyUserAnswer } from './replies'
 import { SessionModel } from './models'
 import { applyPermissionMode } from './agents'
 import { mcpConfigFrame } from './mcpConfig'
+import { admits } from './sessionFilter'
 import { nextSession, reusableSession, type SessionState } from './sessionSwitch'
 import { SseStream } from './sse'
 import { isErrorFrame, translate, type TranslateContext } from './translate'
@@ -42,6 +43,8 @@ export class OpencodeTransport implements Transport {
   /** 세션이 선 프로젝트 디렉토리. MCP 질의가 프로젝트별이라 여기서도 붙잡는다 (`mcpConfig.ts`). */
   private directory: string | null = null
   private streamId: string | null = null
+  /** 살아 있는 턴이 선 세션. 그 대화를 지워도 턴의 종료 신호는 받아야 한다 (`sessionFilter.ts`). */
+  private turnSessionId: string | null = null
   /** 지금 세션에 아직 아무 말도 안 걸었는가. 「새 대화」가 세션을 또 만들지 않는 근거 (`chatHistory.ts`). */
   private emptySession = false
   /** 이 턴에 interrupt 를 보냈는가. `step.failed` 를 취소로 읽는 유일한 근거다. */
@@ -196,6 +199,7 @@ export class OpencodeTransport implements Transport {
       return
     }
     this.streamId = randomUUID()
+    this.turnSessionId = sessionId
     // 새 턴은 취소 기억 없이 시작한다. 앞 턴의 중단이 종료 이벤트를 못 받고 끝났을 때
     // (프롬프트 접수 직후 interrupt 는 opencode 가 아무 이벤트도 안 낸다 — 실측)
     // 플래그가 남아 다음 턴의 진짜 실패를 취소로 삼켜 버린다.
@@ -270,17 +274,9 @@ export class OpencodeTransport implements Transport {
     await interruptTurn(this.client, sessionId)
   }
 
-  /**
-   * SSE 이벤트 처리.
-   *
-   * `/event` 는 **서버 전역**이라 다른 세션의 이벤트도 흘러온다. sessionID 가 실린 이벤트는
-   * 우리 세션 것만 통과시킨다 — 안 거르면 다른 창의 대화가 이 화면에 섞여 렌더된다.
-   * 없으면 통과시킨다(fail-open). 안전한 근거는 종료 신호(`session.idle`·`session.error`)도
-   * sessionID 를 싣는다는 실측이다 — 안 실었다면 남의 idle 이 내 턴을 닫는다.
-   */
+  /** SSE 이벤트 처리. `/event` 는 **서버 전역**이다 — 격리 필터와 그 실측 근거는 `sessionFilter.ts`. */
   private onEvent(event: OpencodeEvent): void {
-    const eventSession = (event.properties as Record<string, unknown> | undefined)?.['sessionID']
-    if (typeof eventSession === 'string' && this.sessionId && eventSession !== this.sessionId) return
+    if (!admits(event, this.sessionId ?? this.turnSessionId)) return
 
     // 턴이 없는 동안 온 스트림 프레임은 버린다 — system 과 **오류**만 통과시킨다.
     // 없으면 종료 신호가 겹칠 때 stream_end 가 두 번 나가 이미 닫힌 턴을 또 닫는다
@@ -292,6 +288,7 @@ export class OpencodeTransport implements Transport {
       // 턴이 닫히면 취소 기억도 함께 푼다 — 다음 턴의 진짜 실패를 취소로 오독하지 않도록.
       if (frame['action'] === Action.STREAM_END) {
         this.streamId = null
+        this.turnSessionId = null
         this.cancelling = false
       }
     }

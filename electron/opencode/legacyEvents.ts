@@ -41,7 +41,7 @@ import { OpencodeEventType, type OpencodeEvent } from './events'
 //   session.idle · session.error · permission.asked · question.asked → 이름이 같다 (그대로 통과)
 //
 // **턴 종결자의 세션 격리 근거 (2026-08-15 실측, 1.18.18 원시 프레임):** 이 전환으로 턴을
-// 닫는 권한이 session.idle 로 옮겨 갔는데, transport 의 sessionID 필터는 필드가 없으면
+// 닫는 권한이 session.idle 로 옮겨 갔는데, sessionID 필터(`sessionFilter.ts`)는 필드가 없으면
 // 통과시키는(fail-open) 구조다. 그래서 원시 프레임을 떠서 확인했다 — 둘 다 싣는다:
 //   {"type":"session.idle","properties":{"sessionID":"ses_ffc4cf317ffe…"}}
 //   {"type":"session.error","properties":{"sessionID":"ses_ffc4cf70fff…","error":{…}}}

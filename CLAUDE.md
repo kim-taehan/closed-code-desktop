@@ -41,15 +41,19 @@ opencode 어댑터(`electron/opencode/`)는 davis 봉투(`kind`/`action`)를 흉
 `session/*` 를 고쳐야 할 것 같으면, 먼저 어댑터에서 번역으로 풀 수 있는지 본다.
 
 **세션 격리를 깨뜨리지 말 것.** `/api/event` 는 **서버 전역**이라 다른 프로젝트 세션의 이벤트가
-같은 스트림으로 들어온다. 막는 것은 `transport.ts` 의 sessionID 필터 하나뿐이고,
-`electron/session/multiSession.test.ts` 가 그걸 겨눈다. davis 때는 프로젝트마다 소켓이 갈려
+같은 스트림으로 들어온다. 막는 것은 `electron/opencode/sessionFilter.ts` 의 `admits` 하나뿐이고
+(`transport.ts` 의 `onEvent` 첫 줄이 부른다), `electron/session/multiSession.test.ts` 와
+`electron/opencode/sessionFilter.test.ts` 가 그걸 겨눈다. davis 때는 프로젝트마다 소켓이 갈려
 물리적으로 안전했던 자리다 — 그 감각으로 만지면 남의 대화가 화면에 샌다.
+**「우리 세션」은 지금 보는 세션, 없으면 살아 있는 턴의 세션이다** — 세션이 null 일 때 열어 두던
+예전 판정은 보던 대화를 턴 도중에 지우면 남의 승인·질문 카드를 통과시켰다 (2026-09-22 실측).
 
-> **`electron/opencode/transport.ts` 는 300줄 상한에 정확히 닿아 있다 (2026-08-16).**
-> (위 문단의 `electron/ws/transport.ts` 와 다른 파일이다 — 그쪽은 인터페이스 정의부 61줄.) 다음 `kind` 를 더하는
-> 사람은 한 줄을 못 넣고 게이트에서 멈춘다 — **그게 신호다.** 그때 갈라야 할 다음 후보는
-> 인바운드(`onEvent`)이고 순수 전이로 뽑힌다. 다만 **그것이 위 격리 필터라 옮기는 순간 이
-> 문단이 거짓이 된다** — 옮긴다면 이 문서를 같은 커밋에서 함께 고치고 격리를 다시 재라.
+> **`electron/opencode/transport.ts` 는 300줄 상한에 닿아 있었다 (2026-08-16).**
+> (위 문단의 `electron/ws/transport.ts` 와 다른 파일이다 — 그쪽은 인터페이스 정의부 61줄.)
+> 그때 적어 둔 다음 추출 후보가 인바운드(`onEvent`)의 격리 필터였고, **2026-09-22 에 옮겼다** —
+> 줄 수 때문이 아니라 위 누출을 막는 **행동 변경**(턴의 세션을 기준에 더함)이 이 파일에 한 줄도
+> 못 들어가서다. 필터는 `sessionFilter.ts` 의 순수 판정이 됐고 위 문단을 같은 변경에서 고쳤다.
+> 남은 인바운드(턴 밖 프레임 버리기·`stream_end` 로 턴 닫기)는 아직 `onEvent` 에 있다.
 > 줄 수를 벌려고 옮기지는 마라. 그 거래는 이 레포가 계속 거절해 온 것이다.
 
 **프로토콜 정본은 opencode 의 OpenAPI 다.** 추측하지 말고 뜬다:

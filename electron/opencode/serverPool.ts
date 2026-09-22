@@ -19,7 +19,7 @@ import type { ServerStatusPayload } from '../../shared/ipc/diagnosticsTypes'
 // ⚠️ **격리는 절반이다.** 서버가 갈리면 **MCP 등록**(instance 수명)과 설정 캐시는 갈리지만,
 // **세션 저장소는 서버끼리 공유된다** (실측 — A 에서 만든 대화를 B 가 즉시 본다).
 // 그래서 이것을 "프로젝트 격리" 라고 부르면 안 된다. 대화가 새지 않게 막는 것은
-// 여전히 `transport.ts` 의 sessionID 필터 하나뿐이다.
+// 여전히 `sessionFilter.ts` 의 sessionID 필터 하나뿐이다.
 //
 // ⚠️ **우리가 띄운 것만 끈다.** 표에 있는 자식만 kill 한다 — 사용자가 손으로 띄운 서버가
 // 같은 기계에 살아 있을 수 있고, `pkill -f opencode` 류의 넓은 종료는 그것까지 죽인다.

@@ -22,7 +22,7 @@
 //
 // ⚠️ **`GET /session` 에서 `?directory=` 를 빼면 서버가 아는 세션이 전부 온다** — 다른
 // 프로젝트 것까지. 실측: 없이 부르면 32건(전부 `atworks-renew-ui`), `directory=closed-code`
-// 로 부르면 0건. `/event` 가 서버 전역인 것과 같은 성질이고(`transport.ts` 의 sessionID
+// 로 부르면 0건. `/event` 가 서버 전역인 것과 같은 성질이고(`sessionFilter.ts` 의 sessionID
 // 필터), 여기서 막는 것은 이 질의 하나뿐이다. 빼면 **남의 프로젝트 대화 목록이 뜬다.**
 
 /** `client.ts` 의 private `get` 을 빌려 온다 (`mcpApi.ts` 와 같은 방식). */
