@@ -31,6 +31,7 @@ function bedFor(projectId: string | null) {
     ai: REFUSE_AI,
     activeFile: () => null,
     projectId: () => projectId,
+    allowedIn: async () => undefined,
     emitRows: () => {},
     emitHtml: () => {},
     emitTree: () => {},

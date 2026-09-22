@@ -32,6 +32,7 @@ function dispatcher(ai: ExtensionAiPort | undefined, envelope: string | null) {
   const ports: DispatchPorts = { workspace: new ExtensionWorkspace(() => null), ...(ai ? { ai } : {}) }
   const deps = portsOf(ports, {
     projectId: () => envelope,
+    allowedIn: async () => undefined,
     emitRows: () => {},
     emitHtml: () => {},
     emitTree: () => {},

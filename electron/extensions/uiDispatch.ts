@@ -42,6 +42,27 @@ export function dispatchUi(
 }
 
 /**
+ * 그 프로젝트에서 **켜진 확장만** 웹뷰·AI 를 쓴다 (2단계 게이트를 이 두 API 까지 넓힌다).
+ *
+ * 명령은 켜진 프로젝트에서만 돌지만, 명시 `projectId` 를 적으면 명령 밖에서도 부를 수 있다 —
+ * 그 길로 **꺼진 프로젝트의 탭에 밀거나 그 프로젝트의 opencode 서버를 띄울 수 있었다**
+ * (4단계 보고 2026-09-22). `allowedIn` 이 `undefined` 면 정책이 배선되지 않은 것이라 안 본다.
+ */
+export async function requireEnabled(
+  method: string,
+  params: Record<string, unknown>,
+  envelope: string | null,
+  allowedIn: (projectId: string) => Promise<readonly string[] | undefined>,
+): Promise<void> {
+  const extension = requireString(params['extension'], 'extension')
+  const projectId = resolveProject(method, params, envelope)
+  const allowed = await allowedIn(projectId)
+  if (allowed !== undefined && !allowed.includes(extension)) {
+    throw new Error(`${method}: 이 프로젝트에서 켜지 않은 확장입니다 (${extension})`)
+  }
+}
+
+/**
  * 확장이 적은 `projectId` → 겉봉 순으로 프로젝트를 정한다. 둘 다 없으면 **던진다** (위 `dispatchUi` 머리말).
  * `code.ai.run` 도 같은 규칙을 쓴다 (`aiDispatch.ts`) — 한 벌로 둬야 두 API 의 행선지가 안 갈린다.
  */
