@@ -37,6 +37,18 @@ export interface ExtensionChatPostPayload {
   text: string
 }
 
+/**
+ * 편집기 탭으로 열 파일 (`code.workspace.openFile`). 프로젝트는 겉봉에 있다.
+ *
+ * 경로는 **프로젝트 루트 상대경로**다 — 탭 식별자가 그 값이고(`OpenFile.path`), 절대경로를 실으면
+ * 같은 파일이 두 탭이 된다.
+ */
+export interface ExtensionOpenFilePayload {
+  path: string
+  /** 1-based. 없으면 맨 위 — 탭의 `revealLine` 이 되는 값이다 */
+  line?: number
+}
+
 export interface ExtensionUiBridgeSurface {
   /** 탭이 마운트될 때 **한 번.** 토큰은 탭이 사는 동안 그대로다 */
   openExtensionUi(target: ExtensionUiTarget): Promise<ExtensionUiOpenViewResult>
@@ -49,4 +61,6 @@ export interface ExtensionUiBridgeSurface {
   onExtensionUiOpen(handler: ProjectHandler<ExtensionUiOpenPayload>): () => void
   /** 확장이 입력칸에 넣으라고 한 글. **그 입력칸의 프로젝트 것만** 받아야 한다 */
   onExtensionChatPost(handler: ProjectHandler<ExtensionChatPostPayload>): () => void
+  /** 확장이 열라고 한 파일. 입력칸과 같은 규칙 — **지금 보고 있는 프로젝트 것만** 받는다 */
+  onExtensionOpenFile(handler: ProjectHandler<ExtensionOpenFilePayload>): () => void
 }

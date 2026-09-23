@@ -8,6 +8,7 @@ import {
   METHOD_ACTIVE_FILE,
   METHOD_GET_PROJECT_PATH,
   METHOD_LIST_FILES,
+  METHOD_OPEN_FILE,
   METHOD_READ_FILE,
   METHOD_SET_HTML,
   METHOD_SET_ROWS,
@@ -30,7 +31,7 @@ import type { ExtensionManifest } from '../../shared/extensions/manifest'
 import { dispatchUiEnabled, REFUSE_UI } from './uiDispatch'
 import { dispatchAiEnabled, REFUSE_AI, type ExtensionAiPort } from './aiDispatch'
 import type { UiPorts } from './uiRouter'
-import { asCount, asProgressKind, asProgressLanes, asRecord, requireString } from './serviceParse'
+import { asRecord, progressPayload, requireString } from './serviceParse'
 import type { ExtensionProgressPayload } from '../../shared/ipc/extensionPayloads'
 import {
   REFUSE_STORAGE,
@@ -71,7 +72,7 @@ export interface DispatchDeps {
   ask: ExtensionAsk
   askText: ExtensionAskText
   storage: ExtensionStorage
-  /** 웹뷰 탭 — 메시지 밀기·탭 열기, 그리고 채팅 입력칸에 넣기 (`uiRouter.ts`) */
+  /** 창이 쥔 것들 — 웹뷰 탭 밀기·열기, 채팅 입력칸에 넣기, 편집기 탭 열기 (`uiRouter.ts`) */
   ui: UiPorts
   /** 확장 전용 AI 세션 (`aiDispatch.ts`) */
   ai: ExtensionAiPort
@@ -177,10 +178,11 @@ export async function dispatchExtensionApi(deps: DispatchDeps, request: RpcReque
   const params = asRecord(request.params)
 
   switch (request.method) {
-    // 파일 읽기·저장소는 **어느 프로젝트인가**가 규칙의 전부라 한곳에 뒀다 — `workspaceDispatch.ts` (G-1·G-2)
+    // 파일 읽기·열기·저장소는 **어느 프로젝트인가**를 같은 규칙으로 답해 한곳에 뒀다 — `workspaceDispatch.ts` (G-1·G-2)
     case METHOD_GET_PROJECT_PATH:
     case METHOD_LIST_FILES:
     case METHOD_READ_FILE:
+    case METHOD_OPEN_FILE:
     case METHOD_STORAGE_GET:
     case METHOD_STORAGE_SET:
       return dispatchWorkspace(deps, request.method, params)
@@ -203,31 +205,11 @@ export async function dispatchExtensionApi(deps: DispatchDeps, request: RpcReque
       return undefined
     }
 
-    case METHOD_PROGRESS: {
-      // 글 말고는 다 선택이다. **수를 지어내지 않는다** — 분모를 모르는 단계에서
-      // 억지로 퍼센트를 만들면 화면이 거짓말을 한다.
-      //
-      // 확장 이름은 **문자열이 아니면 던진다** (`storage` 와 같은 규칙). 눙쳐서 흘리면
-      // 주인 없는 줄이 되어 어느 바에도 안 뜨고, 확장 개발자는 사유를 못 본다.
-      const text = params['text']
-      const done = asCount(params['done'])
-      const total = asCount(params['total'])
-      const kind = asProgressKind(params['kind'])
-      const lanes = asProgressLanes(params['lanes'])
-      // `undefined` 인 칸은 **아예 싣지 않는다** — 화면이 「있음/없음」으로 가르는 값이다
-      deps.emitProgress(
-        {
-          extension: requireString(params['extension'], 'extension'),
-          text: typeof text === 'string' ? text : null,
-          ...(done === undefined ? {} : { done }),
-          ...(total === undefined ? {} : { total }),
-          ...(kind === undefined ? {} : { kind }),
-          ...(lanes === undefined ? {} : { lanes }),
-        },
-        deps.projectId(),
-      )
+    case METHOD_PROGRESS:
+      // 인자를 한 통으로 빚는 규칙(수를 지어내지 않는다·이름은 던진다)은 `serviceParse.ts` 의
+      // `progressPayload` 에 있다. 여기 남는 판단은 **어느 프로젝트의 줄인가** 하나다.
+      deps.emitProgress(progressPayload(params), deps.projectId())
       return undefined
-    }
     case METHOD_SET_HTML:
       // 행과 달리 **빈 값으로 눙치지 않고 던진다** — 표는 0행이 정상 결과지만,
       // HTML 자리에 문자열이 아닌 것이 온 것은 확장의 실수다. 조용히 빈 화면을 그리면

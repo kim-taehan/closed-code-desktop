@@ -3,9 +3,11 @@ import { join } from 'node:path'
 import { createChildHandler } from '../../electron/extensions/childHandlers'
 import { createExtensionApi } from '../../electron/extensions/extensionApi'
 import { UiHandlers } from '../../electron/extensions/uiHandlers'
+import { AiStreams } from '../../electron/extensions/aiRunClient'
 import {
   createNotice,
   createRequest,
+  NOTICE_AI_TEXT,
   NOTICE_SHUTDOWN,
   errorResponse,
   NOTICE_READY,
@@ -41,6 +43,8 @@ export class LiveChild implements HostChild {
   private toParent: ((message: unknown) => void) | null = null
   private toExit: ((code: number) => void) | null = null
   private readonly pending = new PendingRequests()
+  /** `code.ai.run` 의 글 조각 표. 실제 자식과 같이 **자식 하나에 한 장**이다 (`hostEntry.ts`) */
+  private readonly aiStreams = new AiStreams()
   private readonly handle: (request: ReturnType<typeof createRequest>) => Promise<unknown>
 
   constructor() {
@@ -54,7 +58,7 @@ export class LiveChild implements HostChild {
     // 웹뷰 처리기 표도 실제 자식처럼 한 장을 둘에 준다 (`hostEntry.ts`)
     const ui = new UiHandlers()
     this.handle = createChildHandler(
-      (name) => createExtensionApi(call, name, undefined, ui),
+      (name, label) => createExtensionApi(call, name, label, ui, this.aiStreams),
       {
         requireModule: (absolutePath) => nodeRequire(absolutePath),
         log: (line) => this.logs.push(line),
@@ -77,10 +81,13 @@ export class LiveChild implements HostChild {
   postMessage(message: unknown): void {
     const parsed = parseRpcMessage(message)
     if (!parsed) return
-    // 실제 자식은 이 통지를 받으면 `process.exit(0)` 한다 (`hostEntry.ts`).
-    // 흉내내지 않으면 부모의 유예 종료가 매번 타임아웃까지 기다린다.
-    if (parsed.kind === 'notice' && parsed.method === NOTICE_SHUTDOWN) {
-      this.exit(0)
+    if (parsed.kind === 'notice') {
+      // 실제 자식은 이 통지를 받으면 `process.exit(0)` 한다 (`hostEntry.ts`).
+      // 흉내내지 않으면 부모의 유예 종료가 매번 타임아웃까지 기다린다.
+      if (parsed.method === NOTICE_SHUTDOWN) this.exit(0)
+      // 글 조각도 **실제 자식과 같은 길**로 배달한다. 안 걸면 `onText` 를 준 확장이
+      // 부르기도 전에 던져(`aiRunClient.ts`), 그런 확장은 진짜 호스트 시험을 아예 못 돈다
+      if (parsed.method === NOTICE_AI_TEXT) this.aiStreams.deliver(parsed.params)
       return
     }
     if (parsed.kind === 'response') {

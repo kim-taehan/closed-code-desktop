@@ -32,8 +32,9 @@ export interface ExtensionUiBridgeOptions {
   service: ExtensionUiSource
   router: ExtensionUiRouter
   /**
-   * 화면에 떠 있는 프로젝트 (`ProjectRegistry.active`). `code.chat.post` 는 이 프로젝트에만 넣는다 —
-   * 입력칸은 화면의 프로젝트 하나에만 있고, 뒤에 숨은 프로젝트로 넣으면 받을 칸이 없어 조용히 사라진다.
+   * 화면에 떠 있는 프로젝트 (`ProjectRegistry.active`). `code.chat.post`·`code.workspace.openFile` 은
+   * 이 프로젝트에만 보낸다 — 입력칸도 본문 탭도 화면의 프로젝트 하나에만 있고, 뒤에 숨은 프로젝트로
+   * 보내면 받을 자리가 없어 조용히 사라진다.
    */
   activeProjectId: () => string | null
 }
@@ -80,6 +81,17 @@ export class ExtensionUiBridge {
           throw new Error('그 프로젝트가 화면에 없습니다 — 그 프로젝트를 먼저 여세요')
         }
         this.send(Channel.EXTENSION_CHAT_POST, { projectId, payload: { text } })
+      },
+      // 입력칸과 같은 자리·같은 사유다 (위 주석) — 본문 탭도 화면의 프로젝트 하나에만 있다.
+      // 경로가 루트 안의 있는 파일인지는 여기가 아니라 `workspaceDispatch` 가 봤다 (`uiRouter.openFile`)
+      openFile: (projectId, path, line) => {
+        if (this.options.activeProjectId() !== projectId) {
+          throw new Error('그 프로젝트가 화면에 없습니다 — 그 프로젝트를 먼저 여세요')
+        }
+        this.send(Channel.EXTENSION_OPEN_FILE, {
+          projectId,
+          payload: { path, ...(line === undefined ? {} : { line }) },
+        })
       },
     })
   }

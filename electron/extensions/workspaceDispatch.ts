@@ -1,6 +1,7 @@
 import {
   METHOD_GET_PROJECT_PATH,
   METHOD_LIST_FILES,
+  METHOD_OPEN_FILE,
   METHOD_READ_FILE,
   METHOD_STORAGE_GET,
   METHOD_STORAGE_SET,
@@ -22,6 +23,7 @@ import type { DispatchDeps } from './serviceDispatch'
 export type WorkspaceMethod =
   | typeof METHOD_GET_PROJECT_PATH
   | typeof METHOD_LIST_FILES
+  | typeof METHOD_OPEN_FILE
   | typeof METHOD_READ_FILE
   | typeof METHOD_STORAGE_GET
   | typeof METHOD_STORAGE_SET
@@ -54,7 +56,28 @@ export async function dispatchWorkspace(
       return deps.workspace.listFiles(projectId, requireString(params['glob'], 'glob'))
     case METHOD_READ_FILE:
       return deps.workspace.readFile(projectId, requireString(params['path'], 'path'))
+    // **여기서는 경계만 잰다.** 여는 것은 창이고(`uiRouter.openFile`), 그 프로젝트가 화면에 있나는
+    // 창 쪽이 본다 — 루트를 아는 것과 화면에 무엇이 떠 있나는 서로 다른 지식이다 (`chat.post` 와 같은 갈래).
+    case METHOD_OPEN_FILE: {
+      const path = requireString(params['path'], 'path')
+      await deps.workspace.requireOpenable(projectId, path)
+      return deps.ui.openFile(projectId, path, asLine(params['line']))
+    }
   }
+}
+
+/**
+ * 갈 줄 — **1 이상의 정수**만. 없으면 `undefined` (파일만 연다).
+ *
+ * 모양이 아니면 **던진다.** 조용히 무시하면 확장 개발자는 「줄 번호가 안 먹는다」로 읽고,
+ * 0-based 로 잘못 센 것(흔한 실수)도 사유 없이 한 줄 어긋난 채 지나간다.
+ */
+function asLine(value: unknown): number | undefined {
+  if (value === undefined) return undefined
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 1) {
+    throw new Error(`${METHOD_OPEN_FILE}: line 은 1 이상의 정수여야 합니다`)
+  }
+  return value
 }
 
 /**

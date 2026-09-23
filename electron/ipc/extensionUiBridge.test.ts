@@ -103,4 +103,26 @@ describe('웹뷰 탭 채널', () => {
 
     expect(sent).toEqual([{ channel: Channel.EXTENSION_CHAT_POST, payload: { projectId: 'P', payload: { text: '설계서' } } }])
   })
+
+  // `workspace.openFile` — 본문 탭도 화면의 프로젝트 하나에만 있다 (입력칸과 같은 사유)
+  it('openFile 은 화면에 떠 있는 프로젝트에만 보내고, 아니면 「먼저 여세요」로 거부한다', async () => {
+    const { router, sent } = await bed()
+
+    router.openFile('P', 'src/app.ts', 42)
+    expect(() => router.openFile('Q', 'src/app.ts')).toThrow('먼저 여세요')
+
+    expect(sent).toEqual([
+      { channel: Channel.EXTENSION_OPEN_FILE, payload: { projectId: 'P', payload: { path: 'src/app.ts', line: 42 } } },
+    ])
+  })
+
+  it('줄 번호가 없으면 `line` 칸을 **싣지 않는다** — 받는 쪽이 「있음/없음」으로 가른다', async () => {
+    const { router, sent } = await bed()
+
+    router.openFile('P', 'src/app.ts')
+
+    expect(sent).toEqual([
+      { channel: Channel.EXTENSION_OPEN_FILE, payload: { projectId: 'P', payload: { path: 'src/app.ts' } } },
+    ])
+  })
 })

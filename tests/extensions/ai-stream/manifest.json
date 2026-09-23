@@ -1,0 +1,11 @@
+{
+  "manifestVersion": 3,
+  "name": "ai-stream-fixture",
+  "displayName": "AI 조각 시험 확장",
+  "version": "0.0.1",
+  "main": "main.js",
+  "engines": { "code": "^0.1.0" },
+  "contributes": {
+    "commands": [{ "id": "aiStreamFixture.ask", "title": "묻기" }]
+  }
+}

@@ -33,6 +33,8 @@ const SEEDS: Record<string, unknown> = {
   // 프로젝트 목록이 비면 App 이 런처 화면으로 일찍 되돌아가 입력창도 대화 화면도 안 그려진다
   listProjects: { all: [PROJECT], open: [PROJECT], activeId: PROJECT.id },
   readDir: { entries: [] },
+  // 탭을 열면 내용을 읽는다 — 없으면 `toFile` 이 `result.ok` 를 풀다 터진다 (`App.openFile.test.tsx`)
+  readFile: { ok: true, text: '', mtimeMs: 0 },
   listCommands: { commands: [] },
   // 빈 모양을 손으로 짓지 않는다 — 앱이 쓰는 그 상수를 그대로 쓴다
   gitState: { state: EMPTY_GIT_STATE },

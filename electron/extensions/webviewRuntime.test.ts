@@ -62,6 +62,7 @@ async function bed() {
       opened.push({ projectId, extension, viewId })
     },
     chatPost: () => {},
+    openFile: () => {},
   })
   service.start()
 

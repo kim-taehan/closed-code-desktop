@@ -2,6 +2,7 @@ import {
   METHOD_ACTIVE_FILE,
   METHOD_GET_PROJECT_PATH,
   METHOD_LIST_FILES,
+  METHOD_OPEN_FILE,
   METHOD_PROGRESS,
   METHOD_READ_FILE,
 } from './extensionApiMethods'
@@ -21,10 +22,27 @@ export interface ProjectTarget {
   projectId: string
 }
 
+/**
+ * `openFile` 의 선택 인자. **`ProjectTarget` 을 넓히지 않는다** — 저쪽은 「어느 프로젝트」 하나만 말하는
+ * 자리이고 `line` 은 그 물음과 무관하다. 둘을 한 인터페이스에 담으면 `ui.post`·`ai.run` 의 `target` 에도
+ * `line` 이 보인다.
+ */
+export interface OpenFileOptions {
+  /** 1-based. 없으면 파일만 열고 맨 위를 보여준다 */
+  line?: number
+  /** 겉봉이 없는 자리에서 프로젝트를 직접 적을 때만 — `target.projectId` 와 같은 값이다 */
+  projectId?: string
+}
+
 export interface ExtensionWorkspaceApi {
   getProjectPath(target?: ProjectTarget): Promise<string>
   listFiles(glob: string, target?: ProjectTarget): Promise<string[]>
   readFile(relativePath: string, target?: ProjectTarget): Promise<string>
+  /**
+   * 그 파일을 **편집기 탭으로 연다** (`METHOD_OPEN_FILE`). 루트 밖·없는 파일·화면에 없는 프로젝트는 거부된다.
+   * 여는 것이지 읽는 것이 아니다 — 내용이 필요하면 `readFile` 이다.
+   */
+  openFile(relativePath: string, options?: OpenFileOptions): Promise<void>
   /** 지금 보고 있는 파일. 없으면 `null` — **빈 객체를 만들지 않는다.** */
   activeFile(): Promise<ActiveFile | null>
 }
@@ -66,6 +84,16 @@ export function createWorkspaceApi(call: RpcCall, extensionName: string): Extens
     },
     readFile: async (relativePath, target) =>
       asString(await call(METHOD_READ_FILE, { ...scoped(target), path: relativePath }), METHOD_READ_FILE),
+    // `options` 도 **펼치지 않는다** — 필요한 둘만 꺼낸다. 펼치면 확장이 `extension` 을 실어
+    // 위에서 채운 이름을 덮는다 (`projectOf` 머리말의 그 실측)
+    openFile: async (relativePath, options) => {
+      const target = options?.projectId === undefined ? undefined : { projectId: options.projectId }
+      await call(METHOD_OPEN_FILE, {
+        ...scoped(target),
+        path: relativePath,
+        ...(options?.line === undefined ? {} : { line: options.line }),
+      })
+    },
     activeFile: async () => asActiveFile(await call(METHOD_ACTIVE_FILE)),
   }
 }

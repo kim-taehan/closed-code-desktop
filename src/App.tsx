@@ -35,6 +35,7 @@ import { useOpenFiles } from './state/useOpenFiles'
 import { useOptimisticBusy } from './state/useOptimisticBusy'
 import { useActiveFileNotice } from './state/useActiveFileNotice'
 import { useExtensionViewOpen } from './state/useExtensionViewOpen'
+import { useExtensionOpenFile } from './state/useExtensionOpenFile'
 import { useDesktopMcpOpen } from './state/useDesktopMcpOpen'
 import { useMouseGesture } from './state/useMouseGesture'
 import { tabNavigation } from './state/tabCycle'
@@ -105,6 +106,7 @@ export function App() {
   // 보고 있는 파일을 확장에 알린다 (`useActiveFileNotice` 머리말)
   useActiveFileNotice(openFiles.chatContext)
   useExtensionViewOpen(projects.activeId, openFiles.openWebview) // 웹뷰 탭의 두 문 (`code.ui.open`·설정 「열기」)
+  useExtensionOpenFile(projects.activeId, openFiles.open) // 확장이 연 파일 (`code.workspace.openFile`)
   // 에이전트가 도구로 시킨 화면 조작 (`electron/mcp/`) — 지금 프로젝트 것만 받는다
   useDesktopMcpOpen(projects.activeId, openFiles.open, shell.showShell, shell.showPane)
   // /open 으로 고른 파일 열기 — pdf·zip 라우팅은 이 경로만 탄다 (트리·검색은 뷰어 그대로).

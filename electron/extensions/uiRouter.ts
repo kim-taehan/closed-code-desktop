@@ -17,6 +17,14 @@ export interface UiSinks {
   openTab(projectId: string, extension: string, viewId: string): Promise<void>
   /** 그 프로젝트의 채팅 입력칸에 글을 넣는다 (`code.chat.post`). 그 프로젝트가 화면에 없으면 사유와 함께 던진다 */
   chatPost(projectId: string, text: string): void
+  /**
+   * 그 프로젝트의 편집기 탭으로 파일을 연다 (`code.workspace.openFile`). `line` 은 1-based.
+   *
+   * **경로는 이미 걸러진 것이다** — 루트 안의 있는 파일인지는 `workspaceDispatch` 가 `ExtensionWorkspace`
+   * 로 본다 (경계 판정은 루트를 아는 쪽의 일이다). 여기서 보는 것은 입력칸과 같은 물음 하나,
+   * **그 프로젝트가 화면에 있나**뿐이다.
+   */
+  openFile(projectId: string, path: string, line?: number): void
 }
 
 /** 확장 호스트(`serviceDispatch`)가 보는 표면 */
@@ -25,6 +33,7 @@ export interface UiPorts {
   post(extension: string, viewId: string, message: unknown, projectId: string): boolean
   open(extension: string, viewId: string, projectId: string): Promise<void>
   chatPost(projectId: string, text: string): void
+  openFile(projectId: string, path: string, line?: number): void
 }
 
 export class ExtensionUiRouter implements UiPorts {
@@ -64,5 +73,11 @@ export class ExtensionUiRouter implements UiPorts {
   chatPost(projectId: string, text: string): void {
     if (this.sinks === null) throw new Error('채팅 입력칸이 있는 창이 없습니다')
     this.sinks.chatPost(projectId, text)
+  }
+
+  /** 본문 탭도 창 수명이다 (`chatPost` 와 같은 이유) */
+  openFile(projectId: string, path: string, line?: number): void {
+    if (this.sinks === null) throw new Error('파일을 열 창이 없습니다')
+    this.sinks.openFile(projectId, path, line)
   }
 }

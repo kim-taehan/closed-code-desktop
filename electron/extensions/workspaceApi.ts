@@ -1,4 +1,6 @@
+import { stat } from 'node:fs/promises'
 import { ProjectFs } from '../projects/projectFs'
+import { resolveInside } from '../fs/resolveInside'
 import { parseGlob } from './globFilter'
 
 // `code.workspace.*` 의 실제 구현. **main 안에서 돈다.**
@@ -103,6 +105,23 @@ export class ExtensionWorkspace {
     const result = await this.fs.readFile(project.id, relativePath)
     if (!result.ok) throw new Error(`파일을 읽을 수 없습니다 (${result.reason}): ${relativePath}`)
     return result.text
+  }
+
+  /**
+   * **편집기 탭으로 열 수 있는 경로인가** (`workspace.openFile`). 아니면 던진다.
+   *
+   * 읽지는 않는다 — 크기·바이너리 판정은 탭이 열린 뒤 뷰어가 한다 (`ProjectFs.readFile`). 여기서 막는 것은
+   * **경계와 없는 경로**뿐이다. `ProjectFs` 를 안 거치는 유일한 자리라 경계 판정(`resolveInside`)을 직접
+   * 부른다 — 저쪽 메서드는 전부 내용을 읽거나 쓰는 것이고, 여는 것은 그 어느 쪽도 아니다.
+   *
+   * 디렉토리도 거부한다. 열어 주면 뷰어가 `not_allowed` 로 빈 탭을 그리고 확장은 성공으로 안다.
+   */
+  async requireOpenable(projectId: string, relativePath: string): Promise<void> {
+    const project = this.requireOpen(projectId)
+    const target = await resolveInside(project.root, relativePath)
+    if (target === null) throw new Error(`프로젝트 안의 경로가 아니거나 없습니다: ${relativePath}`)
+    const info = await stat(target).catch(() => null)
+    if (info === null || !info.isFile()) throw new Error(`파일이 아닙니다: ${relativePath}`)
   }
 
   private requireOpen(projectId: string): { id: string; root: string } {

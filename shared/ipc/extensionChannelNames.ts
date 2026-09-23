@@ -92,4 +92,11 @@ export const EXTENSION_CHANNELS = {
    * 프로젝트 겉봉을 쓴다 — 입력칸이 붙은 프로젝트가 아니면 받는 쪽이 버린다 (`useComposerSendBridges`).
    */
   EXTENSION_CHAT_POST: 'extension:chatPost',
+  /**
+   * main → renderer: 이 프로젝트의 **편집기 탭으로 파일을 열어라** (`code.workspace.openFile`).
+   *
+   * 프로젝트 겉봉을 쓴다 — 본문 탭은 화면에 뜬 프로젝트 하나에만 있고, 그 사이 프로젝트를 옮겼으면
+   * 받는 쪽이 버린다 (`useExtensionOpenFile`). 경로가 루트 안의 있는 파일인지는 main 이 이미 봤다.
+   */
+  EXTENSION_OPEN_FILE: 'extension:openFile',
 } as const

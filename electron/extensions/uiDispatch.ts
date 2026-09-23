@@ -19,6 +19,9 @@ export const REFUSE_UI: UiPorts = {
   chatPost: () => {
     throw new Error('채팅 입력칸을 다룰 수 없는 호스트입니다 (배선 없음)')
   },
+  openFile: () => {
+    throw new Error('편집기 탭을 다룰 수 없는 호스트입니다 (배선 없음)')
+  },
 }
 
 /**

@@ -32,6 +32,7 @@ function dispatcher(
     post: (...args) => (reached.push(['post', ...args]), true),
     open: async (...args) => void reached.push(['open', ...args]),
     chatPost: (...args) => void reached.push(['chatPost', ...args]),
+    openFile: (...args) => void reached.push(['openFile', ...args]),
   }
   const ai: ExtensionAiPort = {
     run: async (request) => (reached.push(['run', request.projectId]), { text: '' }),
