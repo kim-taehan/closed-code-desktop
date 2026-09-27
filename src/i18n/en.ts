@@ -67,6 +67,18 @@ export const en: Record<string, string> = {
   '작업 완료 알림 (백그라운드)': 'Task-done notification (background)',
   '창이 비활성일 때 작업이 끝나면 OS 알림을 띄웁니다.':
     'Shows an OS notification when a task finishes while the window is inactive.',
+
+  // 원격(휴대폰) 설정 — `src/components/RemoteSection.tsx`
+  '원격 (휴대폰)': 'Remote (phone)',
+  '원격 허용': 'Allow remote',
+  '휴대폰이 블루투스로 붙어 대화를 볼 수 있게 합니다. 꺼 두면 광고도 하지 않습니다.':
+    'Lets a phone attach over Bluetooth to view the conversation. While off, the app does not even advertise.',
+  '휴대폰에서 승인 응답 허용': 'Allow approval responses from the phone',
+  '휴대폰이 도구 승인·질문·계획에 답할 수 있게 합니다. 이 PC 에서 명령이 실행됩니다.':
+    'Lets the phone answer tool approvals, questions and plans. Commands run on this PC.',
+  원격: 'Remote',
+  '준비 중': 'Coming soon',
+
   '공지사항 푸시 알림 수신': 'Receive announcement push notifications',
   '체크 해제 시 공지사항 배너를 표시하지 않습니다.': 'Unchecked hides the announcement banner.',
   '맞추기 완료': 'Matched',

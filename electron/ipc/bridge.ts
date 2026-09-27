@@ -1,12 +1,13 @@
 import { ipcMain, type BrowserWindow } from 'electron'
 import { describeError } from '../../shared/errors/describeError'
 import { ChatAskHub } from '../extensions/chatAskHub'
-import { Channel, type ProjectScoped, type SessionStatePayload } from '../../shared/ipc/channels'
+import { Channel, type SessionStatePayload } from '../../shared/ipc/channels'
 import { registerSessionHandlers, SESSION_CHANNELS } from './sessionHandlers'
 import type { ProjectRecord } from '../../shared/projects/projectRecord'
 import { ProjectSession } from '../session/projectSession'
 import type { OpencodeServerPool } from '../opencode/serverPool'
 import { diagnose, noEndpointDiagnostics } from '../runtime/diagnostics'
+import { FrameSink, type FrameMirror } from './frameSink'
 
 // IPC 배선과 라우팅만 책임진다. 프로토콜 판단도, 세션 수명 관리도 하지 않는다.
 //
@@ -19,16 +20,19 @@ import { diagnose, noEndpointDiagnostics } from '../runtime/diagnostics'
 // 만나는 유일한 자리**라서, 탭을 닫을 때 서버까지 거두는 판단도 이 클래스가 쥔다.
 
 /**
- * 세션이 opencode 에 **실제로 붙었다/떨어졌다**를 앱 단위 관심사에 알린다.
+ * 창 수명의 브리지가 **앱 수명의 관심사**에 알리는 자리.
  *
- * 지금 듣는 곳은 데스크톱 MCP 자동 등록 하나다 (`electron/mcp/desktopMcp.ts`).
- * opencode 의 MCP 등록이 instance 수명이라 **붙을 때마다 다시 등록해야** 하는데,
- * 그 신호를 낼 수 있는 곳이 여기다 — 여기만 프로젝트 신원(id·root)과 핸드셰이크
- * 상태를 동시에 안다. `electron/session/*` 은 이 흐름을 몰라도 된다.
+ * 처음에는 「붙었다/떨어졌다」 둘뿐이었고 듣는 곳도 데스크톱 MCP 자동 등록 하나였다
+ * (`electron/mcp/desktopMcp.ts`). opencode 의 MCP 등록이 instance 수명이라 **붙을 때마다 다시
+ * 등록해야** 하는데, 그 신호를 낼 수 있는 곳이 여기다 — 여기만 프로젝트 신원(id·root)과
+ * 핸드셰이크 상태를 동시에 안다. `electron/session/*` 은 이 흐름을 몰라도 된다.
+ * `onFrame`(계획 §4)이 셋째로 붙은 것도 듣는 쪽이 앱 수명(`electron/remote/`)이기 때문이다.
  */
 export interface SessionBridgeHooks {
   onSessionReady?(project: ProjectRecord): void
   onSessionLost?(projectId: string): void
+  /** 화면으로 나간 프레임을 그대로 한 번 더 본다 (`frameSink.ts`). 동기·무예외여야 한다 */
+  onFrame?: FrameMirror
 }
 
 const HANDLED_CHANNELS = [...SESSION_CHANNELS, Channel.SESSION_DIAGNOSE]
@@ -39,12 +43,17 @@ export class SessionBridge {
   private readonly starting = new Map<string, Promise<void>>()
   private activeId: string | null = null
 
+  /** 겉봉을 씌워 렌더러와 원격에 내보내는 자리 (`frameSink.ts`). 창을 쥐는 것도 이제 저쪽이다 */
+  private readonly frames: FrameSink
+
   constructor(
-    private readonly window: BrowserWindow,
+    window: BrowserWindow,
     /** 프로젝트별 opencode 서버. 세션보다 먼저 뜨고 세션보다 늦게 죽는다 */
     private readonly pool: OpencodeServerPool,
     private readonly hooks: SessionBridgeHooks = {},
-  ) {}
+  ) {
+    this.frames = new FrameSink(window, hooks.onFrame ?? null)
+  }
 
   register(): void {
     registerSessionHandlers(() => this.active)
@@ -75,8 +84,8 @@ export class SessionBridge {
    * **세션 생성**(그 턴을 되찾을 포트를 꽂는 자리).
    */
   private readonly chatAsk = new ChatAskHub((projectId, payload) => {
-    if (this.window.isDestroyed()) return false
-    this.push(Channel.EXTENSION_CHAT_ASK, projectId, payload)
+    if (!this.frames.alive) return false
+    this.frames.push(Channel.EXTENSION_CHAT_ASK, projectId, payload)
     return true
   })
 
@@ -126,7 +135,7 @@ export class SessionBridge {
     try {
       opencodeUrl = await this.pool.urlFor(project.id, project.root)
     } catch (error) {
-      this.push(Channel.SESSION_STATE, project.id, {
+      this.frames.push(Channel.SESSION_STATE, project.id, {
         handshake: {
           stage: 'failed',
           failure: {
@@ -150,21 +159,21 @@ export class SessionBridge {
       },
       {
         onState: (state) => {
-          this.push(Channel.SESSION_STATE, project.id, state)
+          this.frames.push(Channel.SESSION_STATE, project.id, state)
           // ready 를 오갈 때마다 알린다. 같은 상태가 여러 번 올라올 수 있으므로
           // 중복을 거르는 일은 듣는 쪽에 맡긴다 (여기서 걸면 이 클래스가 상태를 하나 더 진다).
           if (state.handshake.stage === 'ready') this.hooks.onSessionReady?.(project)
           else this.hooks.onSessionLost?.(project.id)
         },
-        onTurnEvent: (event) => this.push(Channel.TURN_EVENT, project.id, event),
-        onSnapshot: (snapshot) => this.push(Channel.CHAT_SNAPSHOT, project.id, snapshot),
-        onPermissionMode: (mode) => this.push(Channel.PERMISSION_MODE_CHANGED, project.id, { mode }),
-        onWorkingDir: (state) => this.push(Channel.WORKING_DIR_CHANGED, project.id, state),
-        onHistoryState: (state) => this.push(Channel.HISTORY_STATE, project.id, state),
-        onReviewState: (reviews) => this.push(Channel.REVIEW_STATE, project.id, { reviews }),
-        onMcpState: (state) => this.push(Channel.MCP_STATE, project.id, state),
-        onModelState: (state) => this.push(Channel.MODEL_STATE, project.id, state),
-        onNotification: (n) => this.push(Channel.NOTIFICATION, project.id, n),
+        onTurnEvent: (event) => this.frames.push(Channel.TURN_EVENT, project.id, event),
+        onSnapshot: (snapshot) => this.frames.push(Channel.CHAT_SNAPSHOT, project.id, snapshot),
+        onPermissionMode: (mode) => this.frames.push(Channel.PERMISSION_MODE_CHANGED, project.id, { mode }),
+        onWorkingDir: (state) => this.frames.push(Channel.WORKING_DIR_CHANGED, project.id, state),
+        onHistoryState: (state) => this.frames.push(Channel.HISTORY_STATE, project.id, state),
+        onReviewState: (reviews) => this.frames.push(Channel.REVIEW_STATE, project.id, { reviews }),
+        onMcpState: (state) => this.frames.push(Channel.MCP_STATE, project.id, state),
+        onModelState: (state) => this.frames.push(Channel.MODEL_STATE, project.id, state),
+        onNotification: (n) => this.frames.push(Channel.NOTIFICATION, project.id, n),
         binder: this.chatAsk.bookFor(project.id),
       },
     )
@@ -189,7 +198,7 @@ export class SessionBridge {
       await this.closeProject(project.id)
       // **끊겼다는 말을 화면에 해 준다.** 세션을 접기만 하면 마지막 상태(ready)가 그대로
       // 남아, 사용자가 방금 끈 서버를 화면은 살아 있다고 말한다.
-      this.push(Channel.SESSION_STATE, project.id, {
+      this.frames.push(Channel.SESSION_STATE, project.id, {
         handshake: { stage: 'idle' },
         connection: 'closed',
       } satisfies SessionStatePayload)
@@ -281,12 +290,5 @@ export class SessionBridge {
     await Promise.all(sessions.map((session) => session.dispose()))
     await this.pool.stopAll()
     for (const channel of HANDLED_CHANNELS) ipcMain.removeHandler(channel)
-  }
-
-  // 프로젝트 겉봉을 씌워 보낸다. 비활성 프로젝트 이벤트도 그대로 — 안 그려도 배지는 갱신해야 한다(§5).
-  private push(channel: string, projectId: string, payload: unknown): void {
-    if (this.window.isDestroyed()) return
-    const scoped: ProjectScoped<unknown> = { projectId, payload }
-    this.window.webContents.send(channel, scoped)
   }
 }

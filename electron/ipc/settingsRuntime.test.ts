@@ -38,6 +38,8 @@ const BASE: AppSettings = {
   developerMode: false,
   extensionRegistries: [],
   disabledExtensions: [],
+  remoteEnabled: false,
+  remoteApprovals: false,
 }
 
 describe('설정 저장', () => {

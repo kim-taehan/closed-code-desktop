@@ -3,6 +3,7 @@ import type { ThemeChoice } from '../state/useTheme'
 import type { AppSettings } from '../../shared/settings/appSettings'
 import { AgentSection, DisplaySection } from './SettingsSections'
 import { NotifySection } from './NotifySection'
+import { RemoteSection } from './RemoteSection'
 import { ShortcutsSection } from './ShortcutsSection'
 import { ExtensionsSection } from './ExtensionsSection'
 import { OpencodeConfigSection } from './OpencodeConfigSection'
@@ -21,6 +22,7 @@ export type SettingsSection =
   | 'display'
   | 'notify'
   | 'agent'
+  | 'remote'
   | 'opencode'
   | 'shortcuts'
   | 'extensions'
@@ -31,6 +33,8 @@ const SECTIONS: { id: SettingsSection; label: string; badge?: string }[] = [
   { id: 'display', label: '화면' },
   { id: 'notify', label: '알림' },
   { id: 'agent', label: '에이전트 연동' },
+  // 전송(BLE)이 아직 없어 켜도 붙을 자리가 없다 — 그래서 딱지를 붙여 둔다 (`RemoteSection.tsx`)
+  { id: 'remote', label: '원격', badge: '준비 중' },
   // 이 앱 설정이 아니라 **opencode 서버가 읽는 파일**이다 — 그래서 분류를 따로 뒀다
   { id: 'opencode', label: '오픈코드 설정' },
   { id: 'shortcuts', label: '단축키' },
@@ -97,6 +101,9 @@ export function SettingsDialog(props: SettingsDialogProps) {
             )}
             {section === 'agent' && (
               <AgentSection settings={props.settings} onSave={props.onSaveSettings} />
+            )}
+            {section === 'remote' && (
+              <RemoteSection settings={props.settings} onSave={props.onSaveSettings} />
             )}
             {section === 'opencode' && <OpencodeConfigSection />}
             {section === 'shortcuts' && (

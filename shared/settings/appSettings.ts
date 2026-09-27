@@ -75,6 +75,21 @@ export interface AppSettings {
    */
   extensionRegistries: string[]
   /**
+   * 휴대폰이 블루투스로 붙어 대화를 보는 것을 허용할지 (`electron/remote/`, 계획 §12 #4·5).
+   *
+   * **기본 꺼짐이고, 꺼져 있으면 아무 일도 안 한다** — 광고도 안 하고 프레임도 0건이다.
+   * 루트 `CLAUDE.md` 의 핵심 원칙이 그 근거다: mobile 이 하나도 없어도 desktop 은 온전히 돈다.
+   * 사용처(보안 심사·현장 정책)가 쓸지 정하는 기능이라, 켜는 것은 언제나 사용자의 손이어야 한다.
+   */
+  remoteEnabled: boolean
+  /**
+   * 휴대폰에서 **승인·질문·계획에 답하는 것**을 허용할지 (계획 §9 ⑩, `PROTOCOL.md` §4-1 `hello`).
+   *
+   * 기본 꺼짐. 휴대폰 승인은 화면을 보는 것과 다르다 — **PC 에서 명령을 실행하는 것**이다
+   * (계획 §3). 위 `remoteEnabled` 와 갈라 두는 이유가 그것이고, 응답 계열의 실제 처리는 P3 다.
+   */
+  remoteApprovals: boolean
+  /**
    * 꺼 둔 확장의 **이름**(매니페스트 `name`). 목록에는 남고 실리지만 않는다.
    *
    * 폴더 경로가 아니라 이름으로 적는다 — 확장은 폴더째 복사·심링크로도 설치돼서
@@ -90,6 +105,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   developerMode: false,
   extensionRegistries: [],
   disabledExtensions: [],
+  remoteEnabled: false,
+  remoteApprovals: false,
 }
 
 /**
@@ -109,6 +126,10 @@ export function normalizeSettings(parsed: unknown): AppSettings {
     developerMode: toBool(source['developerMode'], DEFAULT_SETTINGS.developerMode),
     extensionRegistries: toRegistries(source['extensionRegistries']),
     disabledExtensions: toNames(source['disabledExtensions']),
+    // 설정 파일이 망가졌으면 **꺼진 쪽으로** 떨어진다 — toBool 의 기본값이 false 라서다.
+    // 이 둘은 켜졌을 때 코드가 PC 밖으로 나가는 스위치라, 의심스러우면 꺼야 한다.
+    remoteEnabled: toBool(source['remoteEnabled'], DEFAULT_SETTINGS.remoteEnabled),
+    remoteApprovals: toBool(source['remoteApprovals'], DEFAULT_SETTINGS.remoteApprovals),
   }
 }
 

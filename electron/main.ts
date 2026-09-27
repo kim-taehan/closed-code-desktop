@@ -2,8 +2,8 @@ import { app, BrowserWindow, ipcMain, powerMonitor, protocol } from 'electron'
 import { installAppMenu } from './appMenu'
 import { claimSingleInstance } from './singleInstance'
 import * as path from 'node:path'
-import { Channel, type TaskNoticePayload } from '../shared/ipc/channels'
-import { showTaskDone } from './notify/taskNotifier'
+import { Channel } from '../shared/ipc/channels'
+import { installTaskDoneNotice } from './notify/taskDoneWiring'
 import { SessionBridge } from './ipc/bridge'
 import { ProjectBridge } from './ipc/projectBridge'
 import { ProjectRegistry } from './projects/projectRegistry'
@@ -28,6 +28,7 @@ import { ExtensionUiBridge } from './ipc/extensionUiBridge'
 import type { DesktopMcp } from './mcp/desktopMcp'
 import { createDesktopMcp } from './mcp/appWiring'
 import { PtyDrawerBridge } from './pty/drawerBridge'
+import { disposeRemote, remoteFrameMirror } from './remote/appWiring'
 
 // 무조건 하나만 뜬다 — 두 번째 실행은 먼저 뜬 창을 앞으로 가져오고 끝난다 (singleInstance.ts)
 const primaryInstance = claimSingleInstance()
@@ -111,18 +112,8 @@ async function createWindow(): Promise<void> {
   const settings = new SettingsStore(defaultSettingsPath(userData))
   appSettings = settings
 
-  // 창이 비활성일 때 작업 완료 알림 (renderer 가 비활성 여부를 판정해 send 한다).
-  // activate 로 창이 다시 만들어질 수 있어 이전 리스너를 지운 뒤 건다 (중복 알림 방지).
-  ipcMain.removeAllListeners(Channel.NOTIFY_TASK_DONE)
-  ipcMain.on(Channel.NOTIFY_TASK_DONE, async (_event, notice?: TaskNoticePayload) => {
-    if (!(await settings.load()).taskDoneNotify) return
-    // 이름은 **그 턴의 프로젝트**로 찾는다. 활성 프로젝트를 쓰면 배경에서 끝난 작업에
-    // 지금 보고 있는 프로젝트 이름이 찍힌다 (가이드 검토에서 드러남).
-    const source = notice?.projectId
-      ? registry.all.find((project) => project.id === notice.projectId)
-      : registry.active
-    showTaskDone(window, { ...notice, ...(source ? { project: source.name } : {}) })
-  })
+  // 창이 비활성일 때 작업 완료 알림 (renderer 가 비활성 여부를 판정해 send 한다)
+  installTaskDoneNotice({ window, registry, settings })
 
   // 세션은 프로젝트마다 하나다. 목록이 세션 수명을 이끈다 (설계 §3).
   // opencode 서버도 프로젝트마다 하나이고 **우리가 띄운다** (`opencode/serverPool.ts`).
@@ -145,6 +136,12 @@ async function createWindow(): Promise<void> {
       // opencode 의 MCP 등록은 instance 수명이라 **붙을 때마다** 다시 해야 한다
       onSessionReady: (project) => void mcp.onProjectReady(project),
       onSessionLost: (id) => mcp.onProjectLost(id),
+      // 화면으로 나가는 프레임을 원격 채널이 같이 본다 (`remote/appWiring.ts`). 배선이 저쪽에
+      // 있는 이유도, deps 가 전부 함수인 이유도 위 `desktopMcp` 와 같다 — 앱 수명이다
+      onFrame: remoteFrameMirror({
+        settings: () => (appSettings ?? settings).load(),
+        projects: () => projectRegistry?.openProjects ?? [],
+      }),
     },
   )
   bridge.register()
@@ -295,4 +292,6 @@ installQuitGuard(async () => {
   // 듣던 포트를 닫는다. opencode 쪽 등록은 우리가 지우지 않아도 instance 와 함께 사라진다.
   await desktopMcp?.dispose()
   desktopMcp = null
+  // 링크를 놓는다. 전송이 붙으면 끌 순서가 여기 들어온다 (`remote/appWiring.ts` 의 SIGABRT 경고)
+  disposeRemote()
 })
