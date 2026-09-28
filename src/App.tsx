@@ -173,6 +173,7 @@ export function App() {
         onActivate={projects.activate}
         onClose={projects.close}
         onRename={projects.rename}
+        onReorder={projects.reorder}
         onPick={() => setLauncher(true)}
         onSearchFiles={() => setPalette('quickOpen')}
         menu={{

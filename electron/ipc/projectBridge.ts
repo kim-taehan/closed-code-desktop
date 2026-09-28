@@ -6,6 +6,7 @@ import {
   type ProjectOpenPayload,
   type ProjectOpenResultPayload,
   type ProjectRenamePayload,
+  type ProjectReorderPayload,
   type ProjectStatePayload,
 } from '../../shared/ipc/channels'
 import { registerFsHandlers } from './projectFsHandlers'
@@ -68,6 +69,7 @@ const HANDLED_CHANNELS = [
   Channel.PROJECT_ACTIVATE,
   Channel.PROJECT_RENAME,
   Channel.PROJECT_FAVORITE,
+  Channel.PROJECT_REORDER,
   Channel.PROJECT_READ_DIR,
   Channel.PROJECT_LIST,
   Channel.PROJECT_READ_FILE,
@@ -130,6 +132,11 @@ export class ProjectBridge {
     })
     ipcMain.handle(Channel.PROJECT_FAVORITE, async (_event, payload: ProjectFavoritePayload) => {
       await this.registry.setFavorite(payload.id, payload.favorite)
+      this.pushState()
+    })
+    // 거절돼도 밀어 준다 — 화면이 낡은 순서를 그리고 있을 수 있어 진실로 되돌린다
+    ipcMain.handle(Channel.PROJECT_REORDER, async (_event, payload: ProjectReorderPayload) => {
+      await this.registry.reorder(payload.ids)
       this.pushState()
     })
     ipcMain.handle(Channel.SETTINGS_GET, () => this.settings.load())

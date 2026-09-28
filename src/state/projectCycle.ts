@@ -7,7 +7,8 @@ import type { ProjectsApi } from './useProjects'
 // `useShortcuts.ts:73` 이고 **Alt 가 필수**다. 맨 ⌘←→ 를 안 쓰는 이유는 그 자리 주석에
 // 있다: 입력창·코드 편집기에서 줄 처음/끝 이동이라 뺏으면 타이핑이 망가진다.
 //
-// 순서는 화면의 프로젝트 탭 줄과 같다 (projectRegistry 가 연 순서 그대로 준다).
+// 순서는 화면의 프로젝트 탭 줄과 같다 (projectRegistry.openProjects 순서 — 연 순서,
+// 끌어 옮겼으면 그 순서).
 // 본문 탭(tabCycle.ts)과 마찬가지로 양쪽으로 래핑한다.
 
 /** 다음/이전 프로젝트 id. 옮겨 갈 곳이 없으면 null — 탭이 하나뿐이거나 활성이 없을 때다. */

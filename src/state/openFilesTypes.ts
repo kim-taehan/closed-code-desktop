@@ -105,6 +105,11 @@ export interface OpenFilesApi {
   close: (path: string) => void
   /** 여러 탭을 한 번에 (탭 우클릭의 「나머지·왼쪽·오른쪽 모두 닫기」) */
   closeMany: (paths: string[]) => void
+  /**
+   * 탭 `from` 을 `to` 의 자리로 옮긴다 (끌어 옮기기, `reorder.ts`).
+   * **배열 자체를 바꾼다** — 좌/우 닫기(`tabCloseTargets`)와 ⌃Tab 이 이 순서를 그대로 따른다.
+   */
+  move: (from: string, to: string) => void
   select: (tab: ActiveTab) => void
   /** 편집 버퍼를 갱신한다. 타이핑이 멈추면 알아서 저장한다. */
   edit: (path: string, draft: string) => void

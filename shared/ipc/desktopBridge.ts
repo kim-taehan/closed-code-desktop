@@ -31,6 +31,7 @@ import type {
   ProjectOpenPayload,
   ProjectOpenResultPayload,
   ProjectRenamePayload,
+  ProjectReorderPayload,
   ProjectStatePayload,
   ReadDirPayload,
   ReadDirResultPayload,
@@ -132,6 +133,7 @@ export interface DesktopBridge
   activateProject(payload: ProjectIdPayload): Promise<void>
   renameProject(payload: ProjectRenamePayload): Promise<void>
   favoriteProject(payload: ProjectFavoritePayload): Promise<void>
+  reorderProjects(payload: ProjectReorderPayload): Promise<void>
   /** 라이선스를 바꾸면 그 프로젝트 세션이 다시 붙는다 */
   onProjectState(handler: (payload: ProjectStatePayload) => void): () => void
   /**

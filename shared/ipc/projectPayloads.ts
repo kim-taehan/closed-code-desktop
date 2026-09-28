@@ -32,6 +32,11 @@ export interface ProjectFavoritePayload {
   favorite: boolean
 }
 
+/** 열린 프로젝트 id 전체의 새 순서 */
+export interface ProjectReorderPayload {
+  ids: string[]
+}
+
 export interface ProjectOpenPayload {
   root: string
 }

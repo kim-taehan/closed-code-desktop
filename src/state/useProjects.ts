@@ -19,6 +19,8 @@ export interface ProjectsApi extends ProjectStatePayload {
   close: (id: string) => void
   rename: (id: string, name: string) => void
   favorite: (id: string, favorite: boolean) => void
+  /** 열린 프로젝트 id 전체의 새 순서. main 이 받아 밀어 준 목록으로 다시 그린다 */
+  reorder: (ids: string[]) => void
 }
 
 export function useProjects(): ProjectsApi {
@@ -68,6 +70,9 @@ export function useProjects(): ProjectsApi {
     }, []),
     favorite: useCallback((id: string, favorite: boolean) => {
       void window.davis.favoriteProject({ id, favorite })
+    }, []),
+    reorder: useCallback((ids: string[]) => {
+      void window.davis.reorderProjects({ ids })
     }, []),
   }
 }

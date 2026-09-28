@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ProjectRecord } from '../../shared/projects/projectRecord'
 import { STATUS_LABEL, type ProjectStatus } from '../state/projectStatus'
 import { projectBadges } from '../state/projectBadge'
+import { moveTo } from '../state/reorder'
+import { useDragReorder } from '../state/useDragReorder'
 import { AppMenu, type AppMenuProps } from './AppMenu'
 import { t } from '../i18n/messages'
 
@@ -28,6 +30,8 @@ export interface ProjectRailProps {
   onActivate: (id: string) => void
   onClose: (id: string) => void
   onRename: (id: string, name: string) => void
+  /** 칩을 끌어 옮긴 뒤 열린 id 전체의 새 순서. 화면은 main 이 밀어 준 목록으로만 바뀐다 */
+  onReorder: (ids: string[]) => void
   onPick: () => void
   /** 파일 이름으로 빠르게 열기 */
   onSearchFiles: () => void
@@ -42,6 +46,11 @@ export function ProjectRail(props: ProjectRailProps) {
     () => projectBadges(props.open.map((project) => project.name)),
     [props.open],
   )
+  // 이름을 고치는 칩은 끌리지 않는다 — 입력칸에서 글자를 긁어 고르는 손짓이 칩 끌기로 먹힌다
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const drag = useDragReorder((from, to) =>
+    props.onReorder(moveTo(props.open.map((project) => project.id), (id) => id, from, to)),
+  )
 
   return (
     <div className="project-rail">
@@ -54,9 +63,10 @@ export function ProjectRail(props: ProjectRailProps) {
           return (
             <span
               key={project.id}
-              className={`project-chip${active ? ' project-chip--active' : ''}`}
+              className={`project-chip${active ? ' project-chip--active' : ''}${dragClass(drag, project.id)}`}
               // 이름만으로는 어느 폴더인지 모른다 — 같은 이름을 다른 곳에서 열 수 있다
               title={`${project.name}\n${project.root}`}
+              {...drag.handlersFor(project.id, editingId !== project.id)}
             >
               <span
                 className="project-chip__badge"
@@ -75,6 +85,9 @@ export function ProjectRail(props: ProjectRailProps) {
                 active={active}
                 onActivate={() => props.onActivate(project.id)}
                 onRename={(name) => props.onRename(project.id, name)}
+                onEditingChange={(editing) =>
+                  setEditingId((current) => (editing ? project.id : current === project.id ? null : current))
+                }
               />
               <button
                 type="button"
@@ -122,11 +135,13 @@ function ChipLabel({
   active,
   onActivate,
   onRename,
+  onEditingChange,
 }: {
   project: ProjectRecord
   active: boolean
   onActivate: () => void
   onRename: (name: string) => void
+  onEditingChange: (editing: boolean) => void
 }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(project.name)
@@ -140,6 +155,7 @@ function ChipLabel({
 
   useEffect(() => {
     if (editing) inputRef.current?.select()
+    onEditingChange(editing)
   }, [editing])
 
   function commit(): void {
@@ -185,6 +201,11 @@ function ChipLabel({
       {project.name}
     </button>
   )
+}
+
+function dragClass(drag: { dragging: string | null; over: string | null }, id: string): string {
+  if (drag.dragging === id) return ' project-chip--dragging'
+  return drag.dragging !== null && drag.over === id ? ' project-chip--drop-target' : ''
 }
 
 /** 글리프(🔍)는 OS 마다 모양·크기가 달라 줄이 흔들린다. 획 굵기를 우리가 정한다. */

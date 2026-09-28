@@ -25,6 +25,7 @@ const activateProject = vi.fn(() => Promise.resolve())
 const closeProject = vi.fn(() => Promise.resolve())
 const renameProject = vi.fn(() => Promise.resolve())
 const favoriteProject = vi.fn(() => Promise.resolve())
+const reorderProjects = vi.fn(() => Promise.resolve())
 
 async function flush() {
   await act(async () => {
@@ -35,7 +36,7 @@ async function flush() {
 
 beforeEach(() => {
   handler = undefined
-  ;[unsub, listProjects, pickProject, openProject, activateProject, closeProject, renameProject, favoriteProject].forEach(
+  ;[unsub, listProjects, pickProject, openProject, activateProject, closeProject, renameProject, favoriteProject, reorderProjects].forEach(
     (m) => m.mockClear(),
   )
   listProjects.mockResolvedValue(state([]))
@@ -51,6 +52,7 @@ beforeEach(() => {
     closeProject,
     renameProject,
     favoriteProject,
+    reorderProjects,
   }
 })
 afterEach(() => vi.restoreAllMocks())
@@ -146,6 +148,16 @@ describe('프로젝트 목록', () => {
     expect(closeProject).toHaveBeenCalledWith({ id: 'p2' })
     expect(renameProject).toHaveBeenCalledWith({ id: 'p3', name: '새 이름' })
     expect(favoriteProject).toHaveBeenCalledWith({ id: 'p4', favorite: true })
+  })
+
+  // 낙관적 갱신이 없다 — 화면은 main 이 밀어 준 목록으로만 바뀐다 (거절되면 그대로)
+  it('reorder 는 새 순서 전체를 보내고 목록을 스스로 고치지 않는다', async () => {
+    listProjects.mockResolvedValue(state(['a', 'b'], 'a'))
+    const { result } = renderHook(() => useProjects())
+    await flush()
+    act(() => result.current.reorder(['b', 'a']))
+    expect(reorderProjects).toHaveBeenCalledWith({ ids: ['b', 'a'] })
+    expect(result.current.open.map((p) => p.id)).toEqual(['a', 'b'])
   })
 
   it('언마운트하면 구독을 끊는다', async () => {

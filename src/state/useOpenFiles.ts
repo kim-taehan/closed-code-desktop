@@ -7,6 +7,7 @@ import { activeEditorOf, chatContextOf, useEditorSelections } from './editorCont
 import { openTargetOf } from './externalOpen'
 import { REASON_TEXT, WRITE_REASON, toFile } from './fileReasons'
 import { isDirty } from './openFilesTypes'
+import { moveTo } from './reorder'
 import type { ActiveTab, OpenFile, OpenFilesApi } from './openFilesTypes'
 
 // 열린 파일들과 지금 보고 있는 것.
@@ -195,6 +196,10 @@ export function useOpenFiles(
 
   const close = useCallback((path: string) => closeMany([path]), [closeMany])
 
+  const move = useCallback((from: string, to: string) => {
+    setFiles((current) => moveTo(current, (file) => file.path, from, to))
+  }, [])
+
   const openDiff = useOpenDiffTab(projectId, setFiles, setActive)
   const openHtml = useOpenHtmlTab(setFiles, setActive)
   const openWebview = useOpenWebviewTab(setFiles, setActive)
@@ -213,6 +218,7 @@ export function useOpenFiles(
     openWebview,
     close,
     closeMany,
+    move,
     select: setActive,
     edit,
     flush,

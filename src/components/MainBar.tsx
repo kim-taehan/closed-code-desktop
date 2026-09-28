@@ -67,6 +67,7 @@ export function MainBar(props: MainBarProps) {
         onClose={openFiles.close}
         scrollRef={strip.ref}
         onContextMenu={(path, x, y) => setMenu({ path, x, y })}
+        onMove={openFiles.move}
         logs={logs}
         onCloseLogs={() => {
           onLogs(false)

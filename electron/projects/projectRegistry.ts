@@ -49,8 +49,8 @@ export class ProjectRegistry {
   }
 
   /**
-   * 연 순서 그대로 준다. **정렬하지 않는다** —
-   * 탭을 누를 때마다 lastOpenedAt 이 갱신되므로 최근순으로 정렬하면
+   * 사용자가 정한 순서로 준다 — 탭을 끌어 옮기면 그 순서(`reorder`), 안 옮겼으면 연 순서.
+   * **정렬하지 않는다** — 탭을 누를 때마다 lastOpenedAt 이 갱신되므로 최근순으로 정렬하면
    * 누를 때마다 탭이 자리를 옮겨 다음에 누를 곳을 예측할 수 없다.
    */
   get openProjects(): ProjectRecord[] {
@@ -173,6 +173,21 @@ export class ProjectRegistry {
     const project = this.projects.find((candidate) => candidate.id === id)
     if (!project) return false
     project.favorite = favorite
+    await this.persist()
+    return true
+  }
+
+  /**
+   * 열린 탭의 순서를 바꾼다. `ids` 가 지금 열린 것의 **순열**일 때만 받는다 —
+   * 그 사이 닫히거나 열린 것이 있으면 화면이 낡은 목록으로 보낸 것이라 버린다 (false).
+   * 활성은 건드리지 않는다.
+   */
+  async reorder(ids: readonly string[]): Promise<boolean> {
+    const open = new Set(this.openIds)
+    const permutation =
+      ids.length === this.openIds.length && new Set(ids).size === ids.length && ids.every((id) => open.has(id))
+    if (!permutation) return false
+    this.openIds = [...ids]
     await this.persist()
     return true
   }

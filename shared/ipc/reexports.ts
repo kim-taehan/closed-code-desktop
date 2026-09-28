@@ -25,6 +25,7 @@ import type {
   ProjectOpenPayload,
   ProjectOpenResultPayload,
   ProjectRenamePayload,
+  ProjectReorderPayload,
   ProjectStatePayload,
 } from './projectPayloads'
 
@@ -34,6 +35,7 @@ export type {
   ProjectOpenPayload,
   ProjectOpenResultPayload,
   ProjectRenamePayload,
+  ProjectReorderPayload,
   ProjectStatePayload,
 }
 export type * from './diagnosticsTypes'

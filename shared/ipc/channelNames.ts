@@ -105,6 +105,8 @@ const CORE_CHANNELS = {
   PROJECT_ACTIVATE: 'project:activate',
   PROJECT_RENAME: 'project:rename',
   PROJECT_FAVORITE: 'project:favorite',
+  /** 탭 끌어 옮기기 — 새 순서 전체를 보낸다. 열린 것의 순열이 아니면 main 이 버린다 */
+  PROJECT_REORDER: 'project:reorder',
   /** renderer → main: 지금 목록을 달라 (구독을 놓쳐도 화면이 비지 않게) */
   PROJECT_LIST: 'project:list',
   /** main → renderer: 프로젝트 목록 상태 */

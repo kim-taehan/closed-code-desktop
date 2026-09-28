@@ -52,6 +52,7 @@ import {
   type ProjectOpenPayload,
   type ProjectOpenResultPayload,
   type ProjectRenamePayload,
+  type ProjectReorderPayload,
   type ProjectScoped,
   type ProjectStatePayload,
   type DiagnosticsPayload,
@@ -154,6 +155,8 @@ const bridge: DesktopBridge = {
     ipcRenderer.invoke(Channel.PROJECT_RENAME, payload) as Promise<void>,
   favoriteProject: (payload: ProjectFavoritePayload) =>
     ipcRenderer.invoke(Channel.PROJECT_FAVORITE, payload) as Promise<void>,
+  reorderProjects: (payload: ProjectReorderPayload) =>
+    ipcRenderer.invoke(Channel.PROJECT_REORDER, payload) as Promise<void>,
   onProjectState: (handler: (payload: ProjectStatePayload) => void) =>
     subscribePlain<ProjectStatePayload>(Channel.PROJECT_STATE, handler),
   listProjects: () => ipcRenderer.invoke(Channel.PROJECT_LIST) as Promise<ProjectStatePayload>,

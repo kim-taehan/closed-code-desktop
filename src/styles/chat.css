@@ -5524,3 +5524,15 @@ body {
   font-size: 11px;
   color: var(--dc-text-muted);
 }
+
+/* 탭 끌어 옮기기 (`useDragReorder`). 끄는 탭은 흐리게, 놓을 자리는 테두리로 짚는다 —
+   놓으면 끌던 탭이 그 자리를 차지한다 (`reorder.ts`). */
+.main-tab--dragging,
+.project-chip--dragging {
+  opacity: 0.4;
+}
+
+.main-tab--drop-target,
+.project-chip--drop-target {
+  box-shadow: inset 0 0 0 1px var(--dc-accent);
+}

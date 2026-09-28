@@ -25,6 +25,7 @@ describe('프로젝트 레일', () => {
     onSearchFiles: () => {},
     onClose: () => {},
     onRename: () => {},
+    onReorder: () => {},
     menu: { onSettings: () => {}, onLogs: () => {}, onFeedback: () => {} },
   }
 
@@ -168,6 +169,7 @@ describe('칩에서 이름 고치기·닫기', () => {
     onSearchFiles: () => {},
     onClose: () => {},
     onRename: () => {},
+    onReorder: () => {},
     menu: { onSettings: () => {}, onLogs: () => {}, onFeedback: () => {} },
   }
 

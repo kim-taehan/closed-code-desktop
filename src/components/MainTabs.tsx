@@ -1,5 +1,6 @@
 import { isDirty, type ActiveTab, type OpenFile } from '../state/useOpenFiles'
 import { SCM_TAB } from '../state/useScmView'
+import { useDragReorder } from '../state/useDragReorder'
 
 // 본문 탭 — 대화가 기본이고 연 파일이 옆에 붙는다.
 //
@@ -20,6 +21,11 @@ export interface MainTabsProps {
    * 대화·로그·소스 관리 탭에는 걸지 않는다 — 닫기 갈래가 없거나 하나뿐이다.
    */
   onContextMenu?: (path: string, x: number, y: number) => void
+  /**
+   * 파일 탭을 끌어 다른 파일 탭 자리에 놓았을 때. 없으면 끌리지 않는다.
+   * 대화·로그·소스 관리 탭은 고정 자리라 끌리지도 놓을 자리가 되지도 않는다 (사용자 지시).
+   */
+  onMove?: (from: string, to: string) => void
   /** 로그를 열어 뒀는지. 파일과 같은 층의 탭으로 선다. */
   logs: boolean
   onCloseLogs: () => void
@@ -39,7 +45,9 @@ export function MainTabs({
   onCloseScm,
   scrollRef,
   onContextMenu,
+  onMove,
 }: MainTabsProps) {
+  const drag = useDragReorder((from, to) => onMove?.(from, to))
   // 대화 탭은 파일이 없어도 늘 보인다 — 지금 무엇을 보고 있는지가 항상 드러나야 한다
   return (
     <div className="main-tabs" role="tablist" aria-label="본문 탭" ref={scrollRef}>
@@ -56,8 +64,9 @@ export function MainTabs({
       {files.map((file) => (
         <span
           key={file.path}
-          className={`main-tab${active === file.path ? ' main-tab--active' : ''}`}
+          className={`main-tab${active === file.path ? ' main-tab--active' : ''}${dragClass(drag, file.path)}`}
           title={file.path}
+          {...drag.handlersFor(file.path, onMove !== undefined)}
           // 라벨 밖 여백을 눌러도 전환한다. 자식(라벨·×)에서 버블된 클릭은 제외 —
           // × 클릭까지 전환으로 받으면 닫히는 탭을 활성화하게 된다.
           onClick={(event) => {
@@ -141,6 +150,11 @@ export function MainTabs({
       )}
     </div>
   )
+}
+
+function dragClass(drag: { dragging: string | null; over: string | null }, id: string): string {
+  if (drag.dragging === id) return ' main-tab--dragging'
+  return drag.dragging !== null && drag.over === id ? ' main-tab--drop-target' : ''
 }
 
 function baseName(path: string): string {

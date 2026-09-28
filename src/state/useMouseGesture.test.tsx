@@ -92,6 +92,7 @@ describe('대화 영역 배선 — 이동만, ㄴ 은 조용히 무시', () => {
   openWebview: vi.fn(),
       close: vi.fn(),
       closeMany: vi.fn(),
+      move: vi.fn(),
       select: vi.fn(),
       edit: vi.fn(),
       flush: vi.fn(),
